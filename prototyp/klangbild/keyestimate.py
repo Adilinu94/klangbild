@@ -9,8 +9,18 @@ Referenzpapiere (Lizenz frei, kein Code uebernommen):
 - O'Brien & Lerch, „Genre-specific key profiles" (offen zugaenglich)
 - Peeters, „Chroma-based estimation of musical key" (IRCAM, offen)
 
-Genauigkeit wird in Phase 0.2 gegen GiantSteps gemessen
-(`ROADMAP-KLANGBILD.md`, Tor: exakt >= 50 %, inkl. Camelot-Nachbar >= 70 %).
+Exakte Trefferquote wird in Phase 0.2 gemessen (`ROADMAP-KLANGBILD.md`, Tor:
+exakt >= 50 %, inkl. Camelot-Nachbar >= 70 %). Die Beschaffung der Referenzdaten
+haengt an einem Lizenz-Gate (siehe report.py, Phase 0.2): Harmonix liefert nur
+Mel-Spektren und keine Tonart, GTZAN nur Genre bei umstrittener Herkunft,
+GiantSteps-Audio sind kommerzielle Beatport-Ausschnitte.
+
+Erste Messung 08.10.2026 (8 Tracks, Chroma + Krumhansl-Profil): die niedrige
+Tonart-Sicherheit (6/8 unter 0,3) ist eine Eigenschaft der Musik, nicht der
+Chroma-Aufloesung – Fein-Chroma, log-Kompression, Frame-Normierung und ein
+Stimmungsschaetzer wurden probiert und veraenderten die mittlere Sicherheit
+nicht (0,165). Ohne externe Labels prueft die synthetische Transpositionsprobe
+(tests/test_keyestimate.py) alle 12 Tonarten.
 """
 
 from __future__ import annotations
@@ -64,7 +74,18 @@ class Tonart:
 
 
 def chroma(signal: np.ndarray, rate: int, frame: int = 8192, hop: int = 2048) -> np.ndarray:
-    """Mittleres Chroma ueber das Signal (12 Klassen, summiert auf 1)."""
+    """Mittleres Chroma ueber das Signal (12 Klassen, summiert auf 1).
+
+    Bewusst die einfache Variante (Leistungsspektrum auf Halbton-Klassen
+    gerundet). Feinere Chroma-Varianten (log-Kompression, Frame-Normierung,
+    Hochton-Absenkung, eigener Stimmungsschaetzer) wurden 08.10.2026 ausprobiert
+    und verworfen: Auf den echten Tracks der Bibliothek aenderte sich die
+    mittlere Tonart-Sicherheit nicht (0,165 vor und nach), die niedrige
+    Sicherheit ist also keine Chroma-Aufloesung, sondern eine Eigenschaft der
+    Musik selbst. Ein Stimmungsschaetzer produziert bei wenigen Toenen sogar
+    Phantom-Korrekturen. Phase 0.2 in `ROADMAP-KLANGBILD.md` (Tor gegen
+    Referenzdaten) bleibt der Weg zur belastbaren Trefferquote.
+    """
     if len(signal) < frame:
         signal = np.pad(signal, (0, frame - len(signal)))
     fenster = np.hanning(frame).astype(np.float32)
