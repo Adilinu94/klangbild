@@ -264,6 +264,12 @@ def _parser() -> argparse.ArgumentParser:
     p_s.add_argument("--port", type=int, default=8765)
     p_s.set_defaults(funktion=None)
 
+    p_m = unter.add_parser(
+        "metronom", parents=[pfade],
+        help="Phase 0.2 · Vergleichslauf auf Metronomen (Messkette ohne Fremddaten)",
+    )
+    p_m.set_defaults(funktion=None)
+
     return parser
 
 
@@ -284,6 +290,11 @@ def main(argv: list[str] | None = None) -> int:
             return evaluate.bauen_text(args, unsinn=True)
         if args.befehl == "serve":
             return evaluate.serve(args)
+
+    if args.befehl == "metronom":
+        from . import phase02
+
+        return phase02.laufen(args)
 
     return int(args.funktion(args))
 

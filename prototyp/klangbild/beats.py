@@ -58,14 +58,23 @@ def _modell_laden():
     return _MODELL
 
 
+def analysieren_signal(signal: np.ndarray) -> SchlagAnalyse:
+    """Beats und Downbeats eines bereits dekodierten Mono-Signals (22,05 kHz).
+
+    Getrennt von `analysieren`, damit der Phase-0.2-Vergleichslauf synthetische
+    Signale (Metronom mit bekannter Ground-Truth) ohne Datei-Umweg pruefen kann.
+    """
+    modell = _modell_laden()
+    beats, downbeats = modell(signal.astype(np.float32))
+    return SchlagAnalyse(
+        beats=np.asarray(beats, dtype=float),
+        downbeats=np.asarray(downbeats, dtype=float),
+    )
+
+
 def analysieren(pfad: str | Path) -> SchlagAnalyse:
     """Beats und Downbeats einer Datei. Liest selbst und wandelt auf 22,05 kHz."""
     from .audioio import decodieren
 
     audio = decodieren(pfad, config.ABTASTRATE_ANALYSE)
-    modell = _modell_laden()
-    beats, downbeats = modell(audio.daten.astype(np.float32))
-    return SchlagAnalyse(
-        beats=np.asarray(beats, dtype=float),
-        downbeats=np.asarray(downbeats, dtype=float),
-    )
+    return analysieren_signal(audio.daten)

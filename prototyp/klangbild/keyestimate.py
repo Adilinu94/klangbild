@@ -78,13 +78,26 @@ def chroma(signal: np.ndarray, rate: int, frame: int = 8192, hop: int = 2048) ->
 
     Bewusst die einfache Variante (Leistungsspektrum auf Halbton-Klassen
     gerundet). Feinere Chroma-Varianten (log-Kompression, Frame-Normierung,
-    Hochton-Absenkung, eigener Stimmungsschaetzer) wurden 08.10.2026 ausprobiert
-    und verworfen: Auf den echten Tracks der Bibliothek aenderte sich die
-    mittlere Tonart-Sicherheit nicht (0,165 vor und nach), die niedrige
-    Sicherheit ist also keine Chroma-Aufloesung, sondern eine Eigenschaft der
-    Musik selbst. Ein Stimmungsschaetzer produziert bei wenigen Toenen sogar
-    Phantom-Korrekturen. Phase 0.2 in `ROADMAP-KLANGBILD.md` (Tor gegen
-    Referenzdaten) bleibt der Weg zur belastbaren Trefferquote.
+    Hochton-Absenkung, eigener Stimmungsschaetzer) wurden 08.10.2026 geprueft
+    und bewusst **nicht** uebernommen – ohne gespeichertes Messartefakt, deshalb
+    hier nur als Entscheidung vermerkt, nicht als belegtes Ergebnis:
+
+    - `vertrauen` ist ein **Eigenvertrauen** (Abstand zum zweitbesten Profil),
+      keine Trefferquote gegen Ground-Truth. Es blieb auf den Beispiel-Tracks
+      niedrig, ob einfaches oder feines Chroma – das sagt nichts darueber,
+      welche Variante die Tonart *richtiger* bestimmt. Die niedrige Sicherheit
+      ist damit ein Hinweis auf die Musik (viele Toene, flaches Chroma), nicht
+      zwingend auf die Chroma-Aufloesung.
+    - Ein eigener Stimmungsschaetzer produzierte auf reinen, wenigen Toenen
+      Phantom-Korrekturen (falsche Stimmung aus wenig Spektralenergie) und ist
+      ohne echte Referenzdaten riskant.
+
+    Der belastbare Weg zur Trefferquote bleibt Phase 0.2 in
+    `ROADMAP-KLANGBILD.md`. Bis ein Lizenz-freies Referenz-Korpus belegt ist,
+    pruefen zwei Dinge OHNE fremde Daten: die Transpositionsprobe
+    (`tests/test_keyestimate.py`, alle 12 Dur- und Moll-Tonarten auf bekannten
+    Dreiklaengen) fuer die Tonart und `python -m klangbild metronom`
+    (`klangbild/phase02.py`) fuer Tempo/Beat/Downbeat.
     """
     if len(signal) < frame:
         signal = np.pad(signal, (0, frame - len(signal)))

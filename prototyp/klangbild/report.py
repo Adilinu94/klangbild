@@ -75,8 +75,11 @@ def schreiben(conn, einstellungen: config.Einstellungen) -> Path:
 
     zeilen.append("\n## Phase 0.2 · Analysegenauigkeit\n")
     zeilen.append(
-        "Braucht Referenzdaten (Harmonix-Set, GTZAN, GiantSteps). Bis dahin hier nur die "
-        "Abdeckung aus der eigenen Analyse:\n"
+        "Die Beschaffung der Referenzdaten haengt an einem **Lizenz-Gate** (ADR-012): "
+        "Harmonix liefert nur Mel-Spektren (kein Audio) und keine Tonart-Labels, GTZAN nur "
+        "Genre bei umstrittener Herkunft, GiantSteps-Audio sind kommerzielle Beatport-"
+        "Ausschnitte. Bis ein Lizenz-freies Referenz-Korpus belegt ist, prueft "
+        "`python -m klangbild metronom` die Messkette auf synthetischer Ground-Truth.\n"
     )
     zeilen.append(_analyse_uebersicht(conn, einstellungen.analyse_version))
 

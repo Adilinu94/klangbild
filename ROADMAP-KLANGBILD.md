@@ -103,6 +103,17 @@ Ziel: die zwei Annahmen testen, an denen das Produkt hängt. Kein UI, nur Skript
 - **Externe Testsätze statt nur eigener Annotation:** Harmonix-Set (912 Titel mit
   Beats, Downbeats, Struktur), GTZAN (nur Beats – fair, weil Beat This! ohne GTZAN
   trainiert ist), GiantSteps (Tonart). Ergänzend 20 eigene Tracks.
+- **Lizenz-Gate (Recherche 08.10.2026, offen):** Keiner der drei Testsätze liefert
+  für eine **geschlossene** App lizenzfreies Audio mit Tonart-/Takt-Labels.
+  Harmonix stellt nur Mel-Spektren bereit (kein Audio) und hat keine Tonart-Labels;
+  GTZAN hat nur Genre bei umstrittener Herkunft; GiantSteps-Audio sind kommerzielle
+  Beatport-Ausschnitte. Ein Lader dagegen wird erst nach belegter, freier Lizenz
+  gebaut – bis dahin bleibt dieser Punkt **Recherche**, nicht Automatisierung.
+- **Messkette ohne Fremddaten prüfen (neu 08.10.2026):** `python -m klangbild
+  metronom` (`klangbild/phase02.py`) rechnet BPM, Beat-F1 und Downbeat auf
+  Metronomen mit bekannter Ground-Truth. Das belegt die Kette, ohne externe Labels.
+  Für die Tonart prüft die Transpositionsprobe (`tests/test_keyestimate.py`) alle
+  12 Dur- und Moll-Tonarten auf bekannten Dreiklängen.
 - **Metriken selbst rechnen** (kein mir_eval nötig, Lizenzlage unklar):
   Beat-F1 mit ±70 ms Toleranz, Downbeat innerhalb ±1 Takt, Tonart **exakt** und
   **Camelot-Nachbar** getrennt.
