@@ -101,8 +101,18 @@ Ziel: die zwei Annahmen testen, an denen das Produkt hängt. Kein UI, nur Skript
 ### 0.2 · Stimmt die Analyse? (Werkzeuge nach ADR-012)
 
 - **Externe Testsätze statt nur eigener Annotation:** Harmonix-Set (912 Titel mit
-  Beats, Downbeats, Struktur), GTZAN (nur Beats – fair, weil Beat This! ohne GTZAN
-  trainiert ist), GiantSteps (Tonart). Ergänzend 20 eigene Tracks.
+  Beats, Downbeats, Struktur), GTZAN (nur Genre – hat selbst keine Beat-Labels;
+  daher fair als Test, weil Beat This! ohne GTZAN trainiert ist), GiantSteps
+  (Tonart). Ergänzend 20 eigene Tracks.
+- **Branchen-Benchmark (neu 08.10.2026):** Der Standard für diese Aufgaben ist
+  **MIREX** (music-ir.org), nicht MAEB – MAEB bewertet Audio-*Embeddings* und ist
+  unter Phase 0.0 für EmbeddingGemma 2 vermerkt. MIREX führt die passenden Tasks
+  **Audio Beat Tracking**, **Audio Downbeat Estimation**, **Audio Tempo**, **Audio
+  Key Detection** und **Audio Structural Segmentation** mit festen Testsätzen
+  (SMC, GTZAN; Ballroom, Hainsworth). Unsere Metriken folgen dem MIREX-Standard:
+  Beat-Bewertung als **F-measure mit 70-ms-Fenster** (siehe `klangbild/metrics.py`),
+  Tonart über exakte Treffer und relative Dur/Moll. So ist ein späterer
+  MIREX-Vergleich direkt möglich, sobald ein Lizenz-freier Korpus belegt ist.
 - **Lizenz-Gate (Recherche 08.10.2026, offen):** Keiner der drei Testsätze liefert
   für eine **geschlossene** App lizenzfreies Audio mit Tonart-/Takt-Labels.
   Harmonix stellt nur Mel-Spektren bereit (kein Audio) und hat keine Tonart-Labels;
