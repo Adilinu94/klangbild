@@ -1,0 +1,23 @@
+# Sinnvolle Anfragen fuer die Textsuche (Phase 0.1).
+# Eine Anfrage je Zeile. Zeilen mit # werden ueberlesen.
+# Bezug: ROADMAP-KLANGBILD.md, Phase 0.1 (Tor: >= 60 % "passt/geht").
+ruhig
+treibend
+zum Einschlafen
+melancholisch
+fröhlich
+Gitarre
+Klavier
+ohne Gesang
+sphärisch
+warm
+dunkel
+sommerlich
+verregnet
+zum Lernen
+Fokus
+nachdenklich
+treibender Beat
+zarte Stimme
+Gute-Laune-Musik
+Nachtfahrt

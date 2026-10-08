@@ -1,0 +1,13 @@
+# Kontrollsatz: unsinnige Anfragen (Phase 0.1).
+# Hier duerfen hoechstens 20 % "passt/geht" herauskommen, sonst misst die
+# Textsuche nur die Aehnlichkeit innerhalb der Bibliothek und nicht den Inhalt.
+Elektrongaunersounds
+violetter Donut
+Kühlschrank aus Beton
+dreieckige Wolke
+Schraubenschlüssel-Sinfonie
+Bürokratie in Moll
+Suppe aus Kupfer
+schwebender Ziegelstein
+Montagsalgorithmus
+flüssiger Kalender

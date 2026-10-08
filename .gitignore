@@ -20,12 +20,8 @@
 *.litertlm
 prototyp/models/
 
-# Ausgaben des Prototyps: bleiben lokal, nur Berichte kommen ins Repo
-prototyp/ergebnisse/*.csv
-prototyp/ergebnisse/*.db
-prototyp/ergebnisse/*.wav
-prototyp/ergebnisse/*.mp3
-prototyp/ergebnisse/hoerprobe/
+# Ausgaben des Prototyps: bleiben lokal, nur der Code kommt ins Repo
+prototyp/ergebnisse/
 prototyp/klangbild.db
 
 # Audio-Cache der Blind-Bewertung

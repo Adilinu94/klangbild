@@ -1,0 +1,34 @@
+[project]
+name = "klangbild-prototyp"
+version = "0.1.0"
+description = "Phase 0.0/0.1: prueft, ob EmbeddingGemma 2 Musik sinnvoll einordnet (Klangbild)"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "soundfile>=0.12",
+    "soxr>=0.3",
+]
+
+[project.optional-dependencies]
+# Schwere Abhaengigkeiten: nur fuer die komplette Pipeline noetig.
+audio = [
+    "torch>=2.2",
+    "sentence-transformers>=6.1.0",
+    "beat-this>=0.2",
+    "einops",
+    "rotary-embedding-torch",
+]
+test = [
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["klangbild"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

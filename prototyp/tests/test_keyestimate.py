@@ -1,0 +1,51 @@
+"""Tests fuer die Tonart-Schaetzung (ADR-012) und das Camelot-Rad."""
+
+from __future__ import annotations
+
+import numpy as np
+
+from klangbild import keyestimate
+
+
+def _klang(frequenzen: list[float], sekunden: float = 6.0, rate: int = 22050) -> tuple[np.ndarray, int]:
+    t = np.arange(int(sekunden * rate)) / rate
+    signal = np.zeros_like(t)
+    for frequenz, staerke in frequenzen:
+        signal += staerke * np.sin(2 * np.pi * frequenz * t)
+    return signal.astype(np.float32), rate
+
+
+def test_chroma_summiert_auf_eins():
+    signal, rate = _klang([(261.63, 0.3), (329.63, 0.3), (392.0, 0.3)])
+    chroma = keyestimate.chroma(signal, rate)
+    assert abs(float(chroma.sum()) - 1.0) < 1e-6
+    assert chroma.shape == (12,)
+
+
+def test_c_dur_mit_grundton_wird_erkannt():
+    # C als Bass verankert die Tonart gegenueber der Moll-Parallele.
+    signal, rate = _klang([(130.81, 0.5), (261.63, 0.3), (329.63, 0.25), (392.0, 0.25)])
+    ergebnis = keyestimate.tonart_schaetzen(signal, rate)
+    assert ergebnis.name == "C"
+    assert ergebnis.camelot == "8B"
+    assert 0.0 <= ergebnis.vertrauen <= 1.0
+
+
+def test_a_moll_wird_erkannt():
+    signal, rate = _klang([(220.0, 0.5), (261.63, 0.25), (329.63, 0.25)])
+    ergebnis = keyestimate.tonart_schaetzen(signal, rate)
+    assert ergebnis.name == "Am"
+    assert ergebnis.camelot == "8A"
+
+
+def test_camelot_nachbarn():
+    nachbarn = keyestimate.camelot_nachbarn("8B")
+    assert nachbarn == {"7B", "8B", "9B", "8A"}
+    assert keyestimate.camelot_nachbarn("1A") == {"12A", "1A", "2A", "1B"}
+
+
+def test_unsicheres_signal_hat_low_vertrauen():
+    rng = np.random.default_rng(0)
+    signal = (rng.standard_normal(22050 * 4) * 0.1).astype(np.float32)
+    ergebnis = keyestimate.tonart_schaetzen(signal, 22050)
+    assert ergebnis.vertrauen <= 0.5  # Rauschen darf nicht "sicher" sein
