@@ -43,3 +43,8 @@ desktop.ini
 
 # Fremd-Repo mit eigener Historie (Reverse-Engineering-Studienmaterial), nicht unser Code
 poweramp-java-handover/
+
+# Eingeklonte Fremd-Werkzeuge mit eigener Git-Historie (nur optional genutzt,
+nicht unser Code). phase03.py bindet sie faul ein, falls vorhanden.
+prototyp/werkzeuge/
+

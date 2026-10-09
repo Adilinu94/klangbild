@@ -133,6 +133,41 @@ Ziel: die zwei Annahmen testen, an denen das Produkt hängt. Kein UI, nur Skript
   Wilson-Intervall. Tracks unter der Schwelle bekommen ein niedriges Vertrauen
   und werden im Auto-DJ **nur überblendet**.
 
+### 0.3 · Konsens-Pseudo-Labeling auf der eigenen Bibliothek (neu 08.10.2026)
+
+**Idee:** Kein Gold-Label verfügbar (Lizenz-Gate, siehe 0.2), aber eine große
+eigene Sammlung. Statt blockierter Fremddaten laufen **mehrere methodisch
+verschiedene, freie Modelle** über dieselbe Datei:
+
+- **eigener Schätzer** (`keyestimate.py`, Chroma + Key-Profile, reines numpy),
+- [`deezer/skey`](https://github.com/deezer/skey) (MIT, selbstüberwacht, State
+  of the Art ICASSP 2025) – *optional*,
+- [`rekordcloud/openkeyscan`](https://github.com/rekordcloud/openkeyscan-analyzer)
+  (MIT, CNN nach Korzeniowski, gibt Camelot/Open-Key) – *optional*,
+- für Beat ergänzend `madmom` (BSD) neben `beat_this` – *optional*.
+
+Wo Modelle sich **einig** sind (streng = identischer Camelot-Code, oder im
+Camelot-Umfeld), entsteht ein belastbares Silber-Label. Wo sie **abweichen**,
+sind genau die harten Fälle, die Phase 0.2 sucht. Das ist die etablierte
+**Weak-Supervision**-Methode ohne Gold-Labels.
+
+**Lizenz (ADR-012):** Interne Auswertung/Kalibrierung auf eigenen Dateien
+verletzt das Gate nicht – das Gate regelt die *Auslieferung*. Pseudo-Labels
+(„8A") sind Fakten, kein geschützter Inhalt; kein Audio wird ausgeliefert, kein
+GPL-Werk gebündelt. Für Beat existieren zudem echte, MIT-lizenzierte
+Annotationen ([beat_this_annotations](https://github.com/cpjku/beat_this_annotations):
+GTZAN, Ballroom, Harmonix, RWC, JAAH …).
+
+**Befehl:** `python -m klangbild konsens` (`klangbild/phase03.py`). Ohne
+schwere Abhängigkeiten lauffähig (dann nur eigener Schätzer, ehrlich vermerkt).
+Ergebnis: `ergebnisse/phase03-konsens.md` + `.json`, Abschnitt in
+`python -m klangbild report`.
+
+**Gemessen wird die Modell-Übereinstimmung, nicht die absolute Wahrheit.** Das
+ist bewusst kein MIREX-Gold-Tor; es sagt „mein Schätzer stimmt auf X % der
+Tracks mit zwei unabhängigen SOTA-Modellen überein". Für ein echtes MIREX-Tor
+(Phase 0.2) braucht es weiterhin einen belegten, freien Korpus.
+
 ---
 
 ## Phase 1 · Auto-DJ offline (PC)

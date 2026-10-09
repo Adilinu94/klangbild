@@ -270,6 +270,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_m.set_defaults(funktion=None)
 
+    p_k = unter.add_parser(
+        "konsens", parents=[pfade],
+        help="Phase 0.3 · Konsens-Pseudo-Labeling über die eigene Bibliothek",
+    )
+    p_k.set_defaults(funktion=None)
+
     return parser
 
 
@@ -295,6 +301,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import phase02
 
         return phase02.laufen(args)
+
+    if args.befehl == "konsens":
+        from . import phase03
+
+        return phase03.laufen(args)
 
     return int(args.funktion(args))
 

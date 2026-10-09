@@ -32,7 +32,7 @@ ca. 1,5 GB). Getestet wurde mit Python 3.13 auf Windows.
 
 ```bash
 cd prototyp
-python -m pytest                        # 44 Tests, alle ohne Modelldownload
+python -m pytest                        # 65 Tests, alle ohne Modelldownload
 
 python -m klangbild scan                # Sammlung einlesen und hashen (ADR-013)
 python -m klangbild analyze             # Tonart, Lautheit, Energie, Beats
@@ -48,6 +48,10 @@ python -m klangbild unsinn --queries beispiele/texte-unsinn.txt
 
 python -m klangbild serve               # blinde Bewertung im Browser
 python -m klangbild report              # Bericht mit Torpruefung
+
+# Phase 0.2 / 0.3 - Messkette und Konsens ohne Gold-Referenzdaten (Lizenz-Gate):
+python -m klangbild metronom            # BPM/Beat/Downbeat auf bekannten Metronomen
+python -m klangbild konsens             # Tonart-Konsens eigener + freier Modelle
 ```
 
 Alle Pfade sind überschreibbar: `--bibliothek`, `--datenbank`, `--cache`,

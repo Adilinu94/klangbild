@@ -82,6 +82,7 @@ def schreiben(conn, einstellungen: config.Einstellungen) -> Path:
         "`python -m klangbild metronom` die Messkette auf synthetischer Ground-Truth.\n"
     )
     zeilen.append(_analyse_uebersicht(conn, einstellungen.analyse_version))
+    zeilen.append(_konsens_uebersicht(einstellungen.ergebnisse))
 
     pfad = einstellungen.ergebnisse / "phase0-bericht.md"
     pfad.parent.mkdir(parents=True, exist_ok=True)
@@ -127,4 +128,36 @@ def _analyse_uebersicht(conn, analyse_version: str) -> str:
         zeilen.append("|---|---|")
         for zeile in untersuchung:
             zeilen.append(f"| {zeile['container']} | {zeile['n']} |")
+    return "\n".join(zeilen)
+
+
+def _konsens_uebersicht(ergebnisse: Path) -> str:
+    """Phase-0.3-Konsensergebnis einbetten, falls schon erzeugt."""
+    z = Path(ergebnisse) / "phase03-konsens.json"
+    if not z.exists():
+        return ("\n## Phase 0.3 · Konsens (eigene Bibliothek)\n\n"
+                "Noch kein Lauf. Erzeugen: `python -m klangbild konsens`.\n")
+    try:
+        daten = json.loads(z.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "\n## Phase 0.3 · Konsens (eigene Bibliothek)\n\nBericht nicht lesbar.\n"
+    zeilen = ["\n## Phase 0.3 · Konsens (eigene Bibliothek)\n"]
+    zeilen.append(
+        "Uebereinstimmung **zwischen** freien Modellen (kein Gold-Tor, "
+        "Lizenz-Gate ADR-012). Details: `ergebnisse/phase03-konsens.md`.\n")
+    zeilen.append("| Kennzahl | Wert |\n|---|---|")
+    zeilen.append(f"| aktive Schaetzer | {', '.join(daten.get('aktive_schaetzer', [])) or '–'} |")
+    zeilen.append(f"| Tracks gesamt | {daten.get('tracks_gesamt', 0)} |")
+    zeilen.append(f"| mehrere Schaetzer | {daten.get('tracks_mehrere_schaetzer', 0)} |")
+    n = daten.get("tracks_mehrere_schaetzer", 0)
+    if n:
+        streng = daten.get("einig_streng", {})
+        nachbar = daten.get("einig_nachbar", {})
+        zeilen.append(f"| alle exakt gleich | {streng.get('gesamt', 0)}/{n} "
+                      f"({streng.get('quote', 0) * 100:0.1f} %) |")
+        zeilen.append(f"| alle im Camelot-Umfeld | {nachbar.get('gesamt', 0)}/{n} "
+                      f"({nachbar.get('quote', 0) * 100:0.1f} %) |")
+        zeilen.append(f"| harte Faelle | {daten.get('hart', {}).get('gesamt', 0)} |")
+    else:
+        zeilen.append("| Hinweis | nur ein Schaetzer aktiv – kein Konsens messbar |")
     return "\n".join(zeilen)
