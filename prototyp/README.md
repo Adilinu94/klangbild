@@ -49,9 +49,11 @@ python -m klangbild unsinn --queries beispiele/texte-unsinn.txt
 python -m klangbild serve               # blinde Bewertung im Browser
 python -m klangbild report              # Bericht mit Torpruefung
 
-# Phase 0.2 / 0.3 - Messkette und Konsens ohne Gold-Referenzdaten (Lizenz-Gate):
+# Phase 0.2 / 0.3 / 0.4 - Tonart schrittweise belegen (Lizenz-Gate ADR-012):
 python -m klangbild metronom            # BPM/Beat/Downbeat auf bekannten Metronomen
-python -m klangbild konsens             # Tonart-Konsens eigener + freier Modelle
+python -m klangbild konsens             # Tonart-Konsens eigener + freier Modelle (Silber)
+python -m klangbild gold                # Tonart gegen FMAK-Expertenlabels (echtes Gold-Tor)
+python -m klangbild gold --fmak-remote --limit 20   # FMAK-Audio per Range laden, Stichprobe
 ```
 
 Alle Pfade sind überschreibbar: `--bibliothek`, `--datenbank`, `--cache`,

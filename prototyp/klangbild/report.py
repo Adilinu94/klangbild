@@ -83,6 +83,7 @@ def schreiben(conn, einstellungen: config.Einstellungen) -> Path:
     )
     zeilen.append(_analyse_uebersicht(conn, einstellungen.analyse_version))
     zeilen.append(_konsens_uebersicht(einstellungen.ergebnisse))
+    zeilen.append(_gold_uebersicht(einstellungen.ergebnisse))
 
     pfad = einstellungen.ergebnisse / "phase0-bericht.md"
     pfad.parent.mkdir(parents=True, exist_ok=True)
@@ -160,4 +161,40 @@ def _konsens_uebersicht(ergebnisse: Path) -> str:
         zeilen.append(f"| harte Faelle | {daten.get('hart', {}).get('gesamt', 0)} |")
     else:
         zeilen.append("| Hinweis | nur ein Schaetzer aktiv – kein Konsens messbar |")
+    return "\n".join(zeilen)
+
+
+def _gold_uebersicht(ergebnisse: Path) -> str:
+    """Phase-0.4-Goldtor gegen FMAK einbetten, falls schon erzeugt."""
+    z = Path(ergebnisse) / "phase04-gold.json"
+    if not z.exists():
+        return ("\n## Phase 0.4 · Gold-Tor Tonart (FMAK)\n\n"
+                "Noch kein Lauf. Erzeugen: `python -m klangbild gold`. "
+                "Details: `ergebnisse/phase04-gold.md`.\n")
+    try:
+        daten = json.loads(z.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "\n## Phase 0.4 · Gold-Tor Tonart (FMAK)\n\nBericht nicht lesbar.\n"
+    n = daten.get("tracks", 0)
+    zeilen = ["\n## Phase 0.4 · Gold-Tor Tonart (FMAK)\n"]
+    zeilen.append(
+        "Experten-annotierte Tonart (FMAK, CC BY 4.0) gegen unseren eigenen "
+        "Schaetzer – echte Trefferquote, nicht Modell-Uebereinstimmung. "
+        "Tor prueft die **Untergrenze** des Wilson-Intervalls (ADR-012, Phase 0.2).\n")
+    if not n:
+        zeilen.append(
+            "| Hinweis | keine Tracks ausgewertet (FMAK-Audio holen: "
+            "`python -m klangbild gold --fmak-remote`) |")
+        return "\n".join(zeilen)
+    zeilen.append("| Kennzahl | Treffer/N | Quote | Wilson 95 % | erreicht? |")
+    zeilen.append("|---|---|---|---|---|")
+    for name, schluessel in (("exakt gleiche Tonart", "exakt"),
+                             ("inkl. Camelot-Nachbar", "nachbar")):
+        t = daten.get(schluessel, {})
+        wilson = f"{t.get('wilson_unten', 0) * 100:0.1f}-{t.get('wilson_oben', 0) * 100:0.1f} %"
+        erreicht = "erfuellt" if t.get("erreicht") else "nicht erfuellt"
+        zeilen.append(
+            f"| {name} | {t.get('treffer', 0)}/{n} "
+            f"| {t.get('quote', 0) * 100:0.1f} % | {wilson} | {erreicht} |")
+    zeilen.append(f"| harte Faelle | {daten.get('hart', {}).get('gesamt', 0)} | – | – | – |")
     return "\n".join(zeilen)

@@ -28,6 +28,7 @@ AUDIO_ENDUNGEN = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".opus"}
 # --- Ablage -----------------------------------------------------------------
 ERGEBNISSE: Path = _pfad_aus_umgebung("KLANGBILD_ERGEBNISSE", PROTOTYP_WURZEL / "ergebnisse")
 CACHE: Path = _pfad_aus_umgebung("KLANGBILD_CACHE", PROTOTYP_WURZEL / "cache")
+DATEN: Path = _pfad_aus_umgebung("KLANGBILD_DATEN", PROTOTYP_WURZEL / "daten")
 DATENBANK: Path = ERGEBNISSE / "klangbild.db"
 
 # --- Analyse-Parameter (ADR-012) --------------------------------------------
@@ -64,6 +65,13 @@ TOR_02_DOWNBEAT_TAKTE = 1              # +-1 Takt
 TOR_02_DOWNBEAT_MIN = 0.80
 TOR_02_TONART_EXAKT_MIN = 0.50
 TOR_02_TONART_NACHBAR_MIN = 0.70
+
+# --- Gold-Tor Tonart (ROADMAP Phase 0.4, FMAK) -----------------------------
+# Untergrenze des Wilson-Intervalls muss das Tor erreichen (nicht bloss der
+# Mittelwert), damit die Aussage bei kleinem Subset belastbar bleibt.
+FMAK_LABELS = "fmakv2.csv"             # FMAKv2-Expertenlabels (CC BY 4.0)
+FMAK_INDEX = "fma_keys_index.json"     # track_id -> Audio-Pfad + md5
+FMAK_AUDIOZIP = "https://os.unil.cloud.switch.ch/fma/fma_small.zip"
 
 
 @dataclass(frozen=True)

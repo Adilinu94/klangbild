@@ -113,12 +113,13 @@ Ziel: die zwei Annahmen testen, an denen das Produkt hängt. Kein UI, nur Skript
   Beat-Bewertung als **F-measure mit 70-ms-Fenster** (siehe `klangbild/metrics.py`),
   Tonart über exakte Treffer und relative Dur/Moll. So ist ein späterer
   MIREX-Vergleich direkt möglich, sobald ein Lizenz-freier Korpus belegt ist.
-- **Lizenz-Gate (Recherche 08.10.2026, offen):** Keiner der drei Testsätze liefert
+- **Lizenz-Gate (Recherche 08.10.2026):** Keiner der drei Testsätze liefert
   für eine **geschlossene** App lizenzfreies Audio mit Tonart-/Takt-Labels.
   Harmonix stellt nur Mel-Spektren bereit (kein Audio) und hat keine Tonart-Labels;
   GTZAN hat nur Genre bei umstrittener Herkunft; GiantSteps-Audio sind kommerzielle
-  Beatport-Ausschnitte. Ein Lader dagegen wird erst nach belegter, freier Lizenz
-  gebaut – bis dahin bleibt dieser Punkt **Recherche**, nicht Automatisierung.
+  Beatport-Ausschnitte. **Gelöst über Phase 0.4 (FMAK):** echter Gold-Korpus mit
+  Experten-Tonart-Labels (CC BY 4.0) und forschungsfreiem Audio; interner
+  Vergleich verletzt das Gate nicht (Auslieferung, nicht Auswertung).
 - **Messkette ohne Fremddaten prüfen (neu 08.10.2026):** `python -m klangbild
   metronom` (`klangbild/phase02.py`) rechnet BPM, Beat-F1 und Downbeat auf
   Metronomen mit bekannter Ground-Truth. Das belegt die Kette, ohne externe Labels.
@@ -167,6 +168,53 @@ Ergebnis: `ergebnisse/phase03-konsens.md` + `.json`, Abschnitt in
 ist bewusst kein MIREX-Gold-Tor; es sagt „mein Schätzer stimmt auf X % der
 Tracks mit zwei unabhängigen SOTA-Modellen überein". Für ein echtes MIREX-Tor
 (Phase 0.2) braucht es weiterhin einen belegten, freien Korpus.
+
+### 0.4 · Echtes Gold-Tor gegen FMAK (Labels frei, Audio forschungsfrei) (neu 08.10.2026)
+
+**Idee (Nutzerwunsch):** Nicht nur Silber (Phase 0.3, Modellübereinstimmung),
+sondern **Gold** — die Tonart *wirklich* gegen von Expert:innen bestimmte
+Labels prüfen, um zu sehen, ob unser Weg das richtige Ergebnis trifft.
+
+Der passende Korpus ist **FMAK** (Wong & Hernández, ISMIR 2023): **5.489
+Lieder** (340 h, 17 Genres), Tonart von einem Konzertpianisten mit absolutem
+Gehör bestimmt, kreuzannotiert mit hoher Übereinstimmung. Die **Labels** stehen
+unter **CC BY 4.0**. Das Audio stammt aus der **Free Music Archive** — jede:r
+Künstler:in hat die Lizenz selbst gewählt (die Metadaten sind CC BY 4.0, das
+Audio „frei für nicht-kommerzielle Forschung").
+
+**Lizenz-Einordnung (ADR-012), ehrlich abgegrenzt:** Das Lizenz-Gate regelt die
+***Auslieferung***, nicht die **interne Auswertung**. Ein Gold-Tor lädt FMAK
+lokal, rechnet unsere Tonart dagegen und notiert nur eine Trefferquote — nichts
+wird ausgeliefert, kein GPL-Werk gebündelt, keine Audiodatei ins Repo. Genau so
+arbeitet die MIREX-Bewertung. **Die FMAK-Dateien bleiben lokal** und sind in
+`.gitignore` ausgeschlossen (nur Code + Ergebnis-Zahlen kommen ins Repo).
+
+**Warum FMAK und nicht die blockierten Sätze aus 0.2:** Harmonix hat kein Audio
+und keine Tonart, GTZAN nur Genre, GiantSteps-Audio ist kommerziell. FMAK ist
+der erste Korpus mit **echten Experten-Tonart-Labels** *und* verfügbarem Audio.
+
+**Datenformat (empirisch am echten Download belegt, mirdata-Referenz):**
+- Labels `fmakv2.csv`: Spalten `key_and_mode` (z. B. „F# Major", „Bb minor"),
+  `track_id` (Integer), `spotify_uri`. Kein separates Key/Mode — wird per
+  `key_and_mode.split(" ")` geparst (mirdata `fma_keys.py`).
+- Audio-Zuordnung `fma_keys_index.json`: `track_id → "<3 Ziffern>/<6-stellig
+  zero-padded>.mp3"` + md5. Audio liegt in Zenodo-Zips je ID-Bereich
+  (`000-019.zip` … `110-124.zip`); der kleinste Block (Ordner `000`) hat **51
+  Tracks** — ein handhabbares Gold-Subset.
+
+**Befehl:** `python -m klangbild gold` (`klangbild/phase04.py`). Lädt die
+Labels (CSV, ~293 kB) und den Index (~622 kB) automatisch, erwartet das
+**Audio-Subset lokal** (Pfad konfigurierbar), schätzt mit dem eigenen Chroma-
+Schätzer und misst **exakte** und **Camelot-Nachbar**-Treffer mit
+**Wilson-Intervall** gegen das 0.2-Tor (exakt ≥ 50 %, Nachbar ≥ 70 %). Ergebnis:
+`ergebnisse/phase04-gold.md` + `.json`, Abschnitt in `python -m klangbild
+report`.
+
+> Hinweis: FMAK-Musik ist teils „Internet-Lo-Fi"; das macht die Tonart-Erkennung
+> **schwerer** als bei Studio-Mastern. Ein guter Score dort ist aussagekräftiger,
+> nicht weniger. Fehlt Audio lokal, holt `gold --fmak-remote` es Track für Track
+> per **HTTP-Range** aus `fma_small.zip` (der Host erlaubt Ranges) und legt es
+> lokal ab – kein 7,6-GB-Volldownload nötig. Einmal geholt, bleibt es lokal.
 
 ---
 

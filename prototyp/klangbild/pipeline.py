@@ -276,6 +276,28 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_k.set_defaults(funktion=None)
 
+    p_g = unter.add_parser(
+        "gold", parents=[pfade],
+        help="Phase 0.4 · echtes Tonart-Tor gegen FMAK (interne Auswertung)",
+    )
+    p_g.add_argument(
+        "--fmak-audio", default=None,
+        help="Ordner mit entpackten FMAK-Audiodateien (Default: daten/fmak/audio)",
+    )
+    p_g.add_argument(
+        "--datenordner", default=None,
+        help="Ordner mit fmakv2.csv + fma_keys_index.json (Default: daten/fmak)",
+    )
+    p_g.add_argument(
+        "--fmak-remote", action="store_true",
+        help="Fehlendes Audio Track fuer Track per HTTP-Range aus der FMA-Small-ZIP holen",
+    )
+    p_g.add_argument(
+        "--limit", type=int, default=0,
+        help="Nur die ersten N Tracks auswerten (0 = alle verfuegbaren)",
+    )
+    p_g.set_defaults(funktion=None)
+
     return parser
 
 
@@ -306,6 +328,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import phase03
 
         return phase03.laufen(args)
+
+    if args.befehl == "gold":
+        from . import phase04
+
+        return phase04.laufen(args)
 
     return int(args.funktion(args))
 

@@ -48,3 +48,8 @@ poweramp-java-handover/
 nicht unser Code). phase03.py bindet sie faul ein, falls vorhanden.
 prototyp/werkzeuge/
 
+
+# FMAK-Recherchedaten (Labels + Audio, mehrere GB) – nur lokale Auswertung,
+nie ins Repo. Labels sind klein, aber Audio ist forschungsfremd und riesig.
+prototyp/daten/
+
