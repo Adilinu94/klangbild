@@ -288,8 +288,114 @@ Phase 0.3, der bereits auf der Bibliothek läuft). Das ist der ehrliche,
 belegte Befund statt einer Schein-Verbesserung.
 
 > Tor-Status unverändert: exakt 48,2 %, Nachbar 73,5 %. Phase 0.6 schließt die
-> Frage „reicht ein feineres Profil?" mit einem **gemessenen Nein** und lenkt
+> Frage „reicht ein feineres Profil? " mit einem **gemessenen Nein** und lenkt
 > den nächsten Schritt auf den trainierten Modell-Pfad.
+
+---
+
+## Phase 0.8 · skey (gelerntes Modell) gegen denselben FMAK-Goldsatz
+
+Phase 0.6 endete mit der These: „Die Tonart-Decke liegt nicht am Profil, sondern
+an der **Repräsentation** – ein *gelerntes* Modell könnte sie durchbrechen." Diese
+Phase prüft die These, statt sie zu behaupten. `skey` (Deezer, **MIT**) ist ein
+kleines CNN (VQT → ChromaNet), das seine Tonart-Gewichte *gelernt* hat statt
+handgeschriebene Profile zu nutzen.
+
+**Messkette 1:1 (ADR-012):** derselbe Goldsatz (FMAK, n=400), dieselbe Metrik,
+dieselben Tore, dasselbe Wilson-Intervall – nur der Schätzer ist skey statt unseres
+Chroma-Profils. Alles Wiederverwendete (Goldlader, Fehlerklassen, `auswerten`) kommt
+aus `phase04`. Damit ist „besser" belastbar, nicht anekdotisch.
+
+**Ergebnis (n=400, `python -m klangbild phase08`, auf CPU deterministisch):**
+
+| Kennzahl | unser Profil (Phase 0.5) | **skey (Phase 0.8)** | Δ | Tor | erreicht? |
+|---|---|---|---|---|---|
+| exakt | 48,2 % | **58,8 %** | **+10,6 pp** | 50 % (Wilson-UG ≥ 50 %) | **JA** (UG 53,9 %) |
+| Nachbar | 73,5 % | **82,2 %** | +8,8 pp | 70 % (Wilson-UG ≥ 70 %) | **JA** (UG 78,2 %) |
+
+**Belastbar:** Der Vergleich entscheidet nicht am Punktwert, sondern an der
+*Untergrenze* des Wilson-Intervalls (wie Phase 0.2/0.4). skey liegt mit **UG 53,9 %
+über der 50-%-Schwelle** und mit **UG 78,2 % klar über 70 %** – beide Tore sind
+nicht knapp, sondern mit Abstand erfüllt. Damit ist der trainierten-Modell-These
+aus Phase 0.6 **zum ersten Mal ein Messwert zugeordnet, der beide Tore reißt**.
+
+**Wo skey liegt (Fehlerklassen, n=400):** exakt 58,8 % · quint 15,5 % ·
+weit 11,0 % · diagonal 6,8 % · modus 8,0 %. Auch ein gelerntes Modell verwechselt
+vor allem Quint-Nachbarn und Modus – dieselben Schwierigkeiten wie unser Profil,
+nur auf deutlich höherem Niveau.
+
+**Lizenz & Abhängigkeiten (ADR-012, Lizenz-Gate):** skey = **MIT** (Deezer,
+permissiv, passiert das Gate). Abhängigkeiten: torch, torchaudio, tqdm, einops,
+**nnAudio**, soundfile – **kein librosa**, keine GPL-Nachbarschaft. skey liest per
+torchaudio mit soundfile-Backend (MP3-fähig) und berechnet die HCQT per nnAudio.
+Interner Messlauf; die Auslieferung regelt weiterhin das Lizenz-Gate.
+
+**Konsequenz für den Plan:** Phase 0.2 hat einen tragfähigen Tonart-Schätzer.
+Phase 1 kann auf **skey** als Produktions-Schätzer bauen (oder auf einen eigenen,
+später trainierten Ersatz). Unser eigenes Chroma-Profil bleibt als
+lizenz-/abhängigkeitsfreie Basis für PC-und-Android-Einheitlichkeit (ADR-012), aber
+die Genauigkeitsspitze kommt aus dem gelernten Modell.
+
+---
+
+## Phase 0.8 · skey (trainiertes Modell) gegen den Goldsatz
+
+Phase 0.6 zeigte messbar: Ein **feineres Chroma-Profil** bringt nichts mehr (Modus
+ist Verwechslung Dur/Moll, kein Profil-Feinjustierung-Problem). Der logische nächste
+Schritt ist daher ein **trainiertes Modell**. `skey` (Deezer, **MIT**, CC-freundlich
+→ passiert das Lizenz-Gate) ist ein kleines CNN (HCQT über nnAudio → ChromaNet), das
+Tonart nicht aus handgeschriebenen Profilen, sondern aus **gelernten Gewichten**
+bestimmt. Abhängigkeiten: numpy, torch, torchaudio, tqdm, einops, nnAudio,
+soundfile — **kein librosa, keine GPL-Nachbarschaft** (ADR-012-konform).
+
+**Messbedingung 1:1 mit Phase 0.4/0.5.** Damit der Vergleich belastbar ist, wurde
+**alles** wiederverwendet — derselbe FMAK-Goldsatz, dieselbe Metrik, dieselbe
+Fehlerklasseneinteilung, dieselben Tore, dasselbe Wilson-Intervall. Einzig der
+Schätzer ist getauscht:
+
+```
+phase04/0.5:  eigenes Chroma-Profil   ->  48,2 % exakt / 73,5 % Nachbar (n=400)
+phase08:      skey (gelerntes CNN)    ->  ??? exakt / ??? Nachbar (gleicher Goldsatz)
+```
+
+So ist n identisch, das Intervall identisch — nur die Vorhersage unterscheidet sich.
+Genau das macht „besser/schlechter als unser Profil" zu einer **Messaussage** statt
+einer Vermutung.
+
+Befehl (interne Auswertung, nichts ausgeliefert):
+
+```bash
+python -m klangbild phase08 --limit 5   # Rauchtest
+python -m klangbild phase08             # voller Lauf auf n=400
+```
+
+Ergebnisse landen in `ergebnisse/phase08-skey.{json,md,tracks.csv}`. Die Tore
+(exakt ≥ 50 %, Nachbar ≥ 70 %, als **Wilson-Untergrenze**) sind dieselben wie in
+Phase 0.2/0.4 — erfüllt nur, wenn die Untergrenze, nicht bloß der Punktwert, darüber
+liegt.
+
+**Echtes Ergebnis (voller Lauf, n=400, 207 s, lokal auf CPU, sr=22050):**
+
+| Kennzahl | skey (CNN) | eigenes Profil (Phase 0.5) | Δ | Tor (Wilson-UG) | erreicht? |
+|---|---|---|---|---|---|
+| exakt gleich | **58,8 %** (235/400) | 48,2 % | **+10,6 pp** | ≥ 50 % (UG 53,9 %) | **JA** |
+| inkl. Camelot-Nachbar | **82,2 %** (329/400) | 73,5 % | +8,7 pp | ≥ 70 % (UG 78,2 %) | **JA** |
+
+**Beide Phase-0.2-Tore sind erreicht** — und zwar an der **Untergrenze** des
+Wilson-Intervalls, nicht bloß am Punktwert. Das trainierte CNN schlägt unser
+handgeschriebenes Chroma-Profil deutlich und klar messbar. Der Fehlerschwerpunkt
+hat sich verschoben: Der vorher dominante **Modus** (Dur/Moll-Verwechslung) fiel auf
+8,0 %, während **Quint**-Nachbarn (15,5 %) und **weit** (11,0 %) jetzt den größeren
+Teil der Restfehler ausmachen — also eher „richtige Tonartverwandtschaft, falsche
+Nachbarstufe" als „falscher Modus". Genau das war die Hoffnung hinter dem
+Modell-Pfad, und sie ist eingetreten.
+
+> Tor-Status: exakt 58,8 % (UG 53,9 %) und Nachbar 82,2 % (UG 78,2 %) — **beide
+> Tore erfüllt**. skey (MIT, Deezer) ist damit der Nachfolger-Kandidat für die
+> Produktions-Tonartschätzung. Ausliefer-Entscheid (Lizenz-Gate ADR-012): MIT ist
+> permissiv, passiert das Gate; die Auslieferung selbst (Modelldatei 0,7 MB) ist
+> separat zu prüfen. Nächster Schritt: skey als Standard-Schätzer andocken und
+> das Chroma-Profil als Offline-Fallback behalten.
 
 ---
 
@@ -417,7 +523,7 @@ Gemma 4 als optionalem Download (ADR-015), Stem-Trennung offline.
 |---|---|
 | Was sagen die Musik-Benchmarks (MAEB) über EmbeddingGemma 2? | Phase 0.0 |
 | Taugen die Vektoren für Musik? | Phase 0.1 |
-| Genauigkeit von BPM/Key/Downbeat | Phase 0.2, Key vertieft in Phase 0.5 (FMAK n=400) |
+| Genauigkeit von BPM/Key/Downbeat | Phase 0.2, Key in Phase 0.5 vertieft + Phase 0.8 (skey erreicht Tor) |
 | Hören Menschen den Unterschied? | Phase 1 |
 | Zahlbereitschaft / Interesse | Phase 2 |
 | Rechenlast Analyse, Engine-Stabilität | Phase 3 |

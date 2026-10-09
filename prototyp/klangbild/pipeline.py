@@ -304,6 +304,28 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_g.set_defaults(funktion=None)
 
+    p_p8 = unter.add_parser(
+        "phase08", parents=[pfade],
+        help="Phase 0.8 · skey (ML, MIT) gegen denselben FMAK-Goldsatz messen",
+    )
+    p_p8.add_argument(
+        "--fmak-audio", default=None,
+        help="Ordner mit entpackten FMAK-Audiodateien (Default: daten/fmak/audio)",
+    )
+    p_p8.add_argument(
+        "--datenordner", default=None,
+        help="Ordner mit fmakv2.csv + fma_keys_index.json (Default: daten/fmak)",
+    )
+    p_p8.add_argument(
+        "--fmak-remote", action="store_true",
+        help="Fehlendes Audio Track fuer Track per HTTP-Range aus der FMA-Small-ZIP holen",
+    )
+    p_p8.add_argument(
+        "--limit", type=int, default=0,
+        help="Nur die ersten N Tracks auswerten (0 = alle verfuegbaren)",
+    )
+    p_p8.set_defaults(funktion=None)
+
     return parser
 
 
@@ -339,6 +361,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import phase04
 
         return phase04.laufen(args)
+
+    if args.befehl == "phase08":
+        from . import phase08
+
+        return phase08.laufen(args)
 
     return int(args.funktion(args))
 
