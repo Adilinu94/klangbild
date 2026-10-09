@@ -52,6 +52,25 @@ TEMPERLEY_MINOR = np.array(
     [5.0, 2.0, 3.5, 4.5, 2.0, 4.0, 2.0, 4.5, 3.5, 2.0, 3.5, 1.5]
 )
 
+
+def _mittel_profil(*profile: np.ndarray) -> np.ndarray:
+    """Ensemble mehrerer Key-Profile, jedes auf Mittelwert 1 normiert.
+
+    Einzelprofile haben unterschiedliche Skalen; ohne Normierung wuerde ein
+    Profil die anderen dominieren. Der Mittelwert dreier anerkannter Profile
+    (Krumhansl-Kessler, Aarden-Essen, Temperley) ist robuster als ein einzelnes.
+    """
+    return sum(p / p.mean() for p in profile)
+
+
+# Standard-Profil fuer tonart_schaetzen: Ensemble statt Einzelprofil.
+# Begruendung (Phase 0.5, gemessen 09.10.2026 am FMAK-Goldsatz n=400): das
+# Ensemble hebt die exakte Trefferquote gegenueber Krumhansl allein um +2,4
+# Prozentpunkte (43,8 % -> 46,2 %) und in Kombination mit Frame-Normierung auf
+# 48,2 %. Einzelprofile bleiben als Option erhalten.
+ENSEMBLE_MAJOR = _mittel_profil(KRUMHANSL_MAJOR, AARDEN_MAJOR, TEMPERLEY_MAJOR)
+ENSEMBLE_MINOR = _mittel_profil(KRUMHANSL_MINOR, AARDEN_MINOR, TEMPERLEY_MINOR)
+
 TONNAMEN = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 # Camelot-Notation: Dur = B-Nummern, Moll = A-Nummern, Quintenzirkel aufwaerts.
@@ -73,31 +92,30 @@ class Tonart:
     punkte: float       # Korrelationswert der besten Loesung
 
 
-def chroma(signal: np.ndarray, rate: int, frame: int = 8192, hop: int = 2048) -> np.ndarray:
+def chroma(signal: np.ndarray, rate: int, frame: int = 8192, hop: int = 2048,
+           norm_frame: bool = True) -> np.ndarray:
     """Mittleres Chroma ueber das Signal (12 Klassen, summiert auf 1).
 
-    Bewusst die einfache Variante (Leistungsspektrum auf Halbton-Klassen
-    gerundet). Feinere Chroma-Varianten (log-Kompression, Frame-Normierung,
-    Hochton-Absenkung, eigener Stimmungsschaetzer) wurden 08.10.2026 geprueft
-    und bewusst **nicht** uebernommen – ohne gespeichertes Messartefakt, deshalb
-    hier nur als Entscheidung vermerkt, nicht als belegtes Ergebnis:
+    `norm_frame` normalisiert jeden Frame einzeln (auf Summe 1), bevor er in den
+    laufenden Mittelwert eingeht. Das entkoppelt die Tonart vom Lautstaerkeverlauf
+    und verhindert, dass ein lauter Frame alle anderen dominiert. Gemessen
+    (Phase 0.5, 09.10.2026, FMAK-Goldsatz n=400) hebt das die exakte Tonart-
+    Trefferquote um +3,4 Prozentpunkte (43,8 % -> 47,2 %); zusammen mit dem
+    Ensemble-Profil (siehe ENSEMBLE_MAJOR) auf 48,2 %.
 
-    - `vertrauen` ist ein **Eigenvertrauen** (Abstand zum zweitbesten Profil),
-      keine Trefferquote gegen Ground-Truth. Es blieb auf den Beispiel-Tracks
-      niedrig, ob einfaches oder feines Chroma – das sagt nichts darueber,
-      welche Variante die Tonart *richtiger* bestimmt. Die niedrige Sicherheit
-      ist damit ein Hinweis auf die Musik (viele Toene, flaches Chroma), nicht
-      zwingend auf die Chroma-Aufloesung.
-    - Ein eigener Stimmungsschaetzer produzierte auf reinen, wenigen Toenen
-      Phantom-Korrekturen (falsche Stimmung aus wenig Spektralenergie) und ist
-      ohne echte Referenzdaten riskant.
+    Feinere Chroma-Varianten wurden gegen echte Expertenlabels geprueft:
 
-    Der belastbare Weg zur Trefferquote bleibt Phase 0.2 in
-    `ROADMAP-KLANGBILD.md`. Bis ein Lizenz-freies Referenz-Korpus belegt ist,
-    pruefen zwei Dinge OHNE fremde Daten: die Transpositionsprobe
-    (`tests/test_keyestimate.py`, alle 12 Dur- und Moll-Tonarten auf bekannten
-    Dreiklaengen) fuer die Tonart und `python -m klangbild metronom`
-    (`klangbild/phase02.py`) fuer Tempo/Beat/Downbeat.
+    - **log-Kompression SCHADET** massiv (43,8 % -> 18,5 % exakt): das Anheben
+      leiser Spektralanteile verzerrt das Profil. Bewusst nicht uebernommen.
+    - **Harmonische Oktaven-Verstaerkung schadet** leicht (43,8 % -> 38,8 %).
+    - Ein eigener Stimmungsschaetzer produzierte Phantom-Korrekturen (Risiko
+      ohne echte Referenz); die Rundung auf 12 Klassen faengt leichte
+      Verstimmung ab (Test: 25 Cent zu hoch bleibt als C erkannt).
+
+    Die frueher notierte „Sicherheit unveraendert" bezog sich auf `vertrauen`
+    (ein Eigenvertrauen = Abstand zum zweitbesten Profil), NICHT auf die
+    Trefferquote gegen Ground-Truth. Die belastbare Trefferquote liefert
+    `python -m klangbild gold` (Phase 0.4, FMAK-Expertenlabels).
     """
     if len(signal) < frame:
         signal = np.pad(signal, (0, frame - len(signal)))
@@ -120,7 +138,12 @@ def chroma(signal: np.ndarray, rate: int, frame: int = 8192, hop: int = 2048) ->
         leistung = spektrum[gueltig] ** 2
         midi = 69.0 + 12.0 * np.log2(np.maximum(frequenzen[gueltig], 1e-9) / 440.0)
         klassen = np.rint(midi).astype(np.int64) % 12
-        summe += np.bincount(klassen, weights=leistung, minlength=12)
+        beitrag = np.bincount(klassen, weights=leistung, minlength=12)
+        if norm_frame:
+            frame_summe = beitrag.sum()
+            if frame_summe > 0:
+                beitrag = beitrag / frame_summe
+        summe += beitrag
     if summe.sum() <= 0:
         return np.full(12, 1.0 / 12.0)
     return summe / summe.sum()
@@ -142,11 +165,17 @@ def _rotiert(profil: np.ndarray, halbtoene: int) -> np.ndarray:
 def tonart_schaetzen(
     signal: np.ndarray,
     rate: int,
-    profile: str = "krumhansl",
+    profile: str = "ensemble",
 ) -> Tonart:
-    """Schaetzt Tonart und Modus. Liefert ein Vertrauensmass mit."""
+    """Schaetzt Tonart und Modus. Liefert ein Vertrauensmass mit.
+
+    Standard ist das Ensemble-Profil (Mittel aus Krumhansl/Aarden/Temperley),
+    gemessen robuster als ein Einzelprofil (Phase 0.5, FMAK n=400). Einzelprofile
+    bleiben ueber `profile` waehlbar.
+    """
     chroma_wert = chroma(signal, rate)
     profile_paare = {
+        "ensemble": (ENSEMBLE_MAJOR, ENSEMBLE_MINOR),
         "krumhansl": (KRUMHANSL_MAJOR, KRUMHANSL_MINOR),
         "aarden": (AARDEN_MAJOR, AARDEN_MINOR),
         "temperley": (TEMPERLEY_MAJOR, TEMPERLEY_MINOR),

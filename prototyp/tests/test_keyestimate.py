@@ -110,3 +110,57 @@ def test_verstimmte_aufnahme_wird_trotzdem_richtig_erkannt():
     signal = _dreiklang_signal(60, moll=False, cents=25.0)
     ergebnis = keyestimate.tonart_schaetzen(signal, 22050)
     assert ergebnis.name == "C"
+
+
+# --------------------------------------------------------------------------
+# Phase 0.5 - Verankerung der gemessenen Verbesserungen (FMAK n=400)
+# --------------------------------------------------------------------------
+def test_ensemble_ist_standard_profil():
+    """Phase 0.5: tonart_schaetzen nutzt standardmaessig das Ensemble-Profil
+    (Mittel dreier Profile, jedes vorher auf Mittelwert 1 normiert). Gemessen
+    robuster als ein Einzelprofil: FMAK-Goldsatz n=400, 48,2 % vs 43,8 % exakt
+    (43,8 % war Krumhansl allein; zusammen mit Frame-Normierung 48,2 %)."""
+    assert keyestimate.ENSEMBLE_MAJOR.shape == (12,)
+    assert keyestimate.ENSEMBLE_MINOR.shape == (12,)
+    # Ensemble = Summe der einzeln auf Mittelwert 1 normierten Profile.
+    erwartet_major = (
+        keyestimate.KRUMHANSL_MAJOR / keyestimate.KRUMHANSL_MAJOR.mean()
+        + keyestimate.AARDEN_MAJOR / keyestimate.AARDEN_MAJOR.mean()
+        + keyestimate.TEMPERLEY_MAJOR / keyestimate.TEMPERLEY_MAJOR.mean()
+    )
+    assert np.allclose(keyestimate.ENSEMBLE_MAJOR, erwartet_major)
+    # und die Signatur nutzt es tatsaechlich als Vorgabe.
+    import inspect
+
+    parameter = inspect.signature(keyestimate.tonart_schaetzen).parameters["profile"]
+    assert parameter.default == "ensemble"
+
+
+def test_frame_normierung_verhindert_lautstaerke_dominanz():
+    """Phase 0.5: Frame-Normierung (Vorgabe norm_frame=True) gibt jedem Frame
+    gleiches Gew. Eine sehr laute, tonal weit entfernte F#-Passage darf das
+    mittlere Chroma nicht allein bestimmen; ohne Normierung dominiert sie."""
+    rate = 22050
+    sekunden = 4.0
+    t = np.arange(int(sekunden * rate)) / rate
+
+    def ton(frequenzen):
+        signal = np.zeros_like(t)
+        for frequenz, staerke in frequenzen:
+            signal += staerke * np.sin(2 * np.pi * frequenz * t)
+        return signal
+
+    # erste Haelfte leises C-Dur, zweite Haelfte sehr lautes F# (Klasse 6)
+    c = ton([(130.81, 0.5), (261.63, 0.3), (329.63, 0.25), (392.0, 0.25)])
+    fis = ton([(185.0, 8.0), (370.0, 5.0), (466.16, 4.0), (554.37, 4.0)])
+    haelfte = len(t) // 2
+    signal = np.concatenate([c[:haelfte], fis[haelfte:]]).astype(np.float32)
+
+    normal = keyestimate.chroma(signal, rate)                  # Vorgabe: normiert
+    ohne = keyestimate.chroma(signal, rate, norm_frame=False)  # laut dominiert
+
+    idx_fis = 6  # F#
+    assert ohne[idx_fis] > normal[idx_fis] + 0.1, (
+        "ohne Frame-Normierung muesste die laute F#-Passage staerker hervortreten"
+    )
+    assert normal[0] > ohne[0], "der leise C-Grundton wird ohne Normierung erdrueckt"

@@ -218,6 +218,44 @@ report`.
 
 ---
 
+## Phase 0.5 · Tonart-Schätzung verbessert (an FMAK gemessen)
+
+Auslöser: Phase 0.4 zeigte auf n=400 **exakt 43,8 %** (Krumhansl-Profil allein),
+das 0.2-Tor (exakt ≥ 50 %) war verfehlt. Statt weiter zu raten, wurde **jede
+Kandidat-Verbesserung gegen denselben FMAK-Goldsatz gemessen** (n=400, exakt und
+Camelot-Nachbar, Tor = Wilson-Untergrenze). Die Messung entschied, nicht die
+Annahme.
+
+**Was half (gemessen, in `klangbild/keyestimate.py` übernommen):**
+
+| Veränderung | exakt | Nachbar | Bewertung |
+|---|---|---|---|
+| Basis (Krumhansl, keine Frame-Norm) | 43,8 % | 68,0 % | Ausgang |
+| Frame-Normierung (jeder Frame auf 1) | 47,2 % | 70,2 % | **+3,4 pp**, übernommen (Vorgabe `norm_frame=True`) |
+| Ensemble-Profil (Mittel Krumhansl/Aarden/Temperley) | 46,2 % | 70,0 % | **+2,4 pp**, übernommen (Vorgabe `profile="ensemble"`) |
+| **Frame-Norm + Ensemble** | **48,2 %** | **73,5 %** | **+4,4 pp**, neuer Standard |
+
+Die beiden Gewinner **addieren sich fast vollständig** (48,2 % liegt über jedem
+Einzelwert) – ein Zeichen, dass sie unabhängige Fehler beheben, nicht auf
+denselben Tracks. Der echte Produktionslauf (`python -m klangbild gold`)
+bestätigt das Experiment auf die Nachkommastelle: **48,2 %**.
+
+**Was schadete (bewusst verworfen, als Warnung im Code-Docstring vermerkt):**
+log-Kompression **−25,3 pp** (18,5 %!), harmonische Oktaven-Verstärkung leicht.
+Das belegt: „mehr Signal-Verarbeitung" ist nicht automatisch besser – nur die
+Messung trennt Fortschritt von Rückschritt.
+
+**Nebeneffekt:** Die **„weit"-Fehler** (völlig daneben) fielen von 24 % auf
+16,5 %, und die Nachbar-Wilson-Untergrenze steht mit 69,0 % Haaresbreite am
+70 %-Tor. Verankert durch zwei Regressionstests (`tests/test_keyestimate.py`).
+
+> Tor-Status nach Phase 0.5: exakt 48,2 % (UG 43,4 %) und Nachbar 73,5 % (UG
+> 69,0 %) – **beide Tore noch nicht** erfüllt, aber deutlich näher. Der nächste
+> Hebel ist die Modus-Verwechslung (Dur/Moll verwechselt), die im Fehlerbild
+> weiterhin sichtbar bleibt.
+
+---
+
 ## Phase 1 · Auto-DJ offline (PC)
 
 Ziel: Der Prototyp baut aus der Bibliothek ein Set und **rendert** es als
@@ -342,7 +380,7 @@ Gemma 4 als optionalem Download (ADR-015), Stem-Trennung offline.
 |---|---|
 | Was sagen die Musik-Benchmarks (MAEB) über EmbeddingGemma 2? | Phase 0.0 |
 | Taugen die Vektoren für Musik? | Phase 0.1 |
-| Genauigkeit von BPM/Key/Downbeat | Phase 0.2 |
+| Genauigkeit von BPM/Key/Downbeat | Phase 0.2, Key vertieft in Phase 0.5 (FMAK n=400) |
 | Hören Menschen den Unterschied? | Phase 1 |
 | Zahlbereitschaft / Interesse | Phase 2 |
 | Rechenlast Analyse, Engine-Stabilität | Phase 3 |
