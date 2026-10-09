@@ -310,8 +310,13 @@ aus `phase04`. Damit ist „besser" belastbar, nicht anekdotisch.
 
 | Kennzahl | unser Profil (Phase 0.5) | **skey (Phase 0.8)** | Δ | Tor | erreicht? |
 |---|---|---|---|---|---|
-| exakt | 48,2 % | **58,8 %** | **+10,6 pp** | 50 % (Wilson-UG ≥ 50 %) | **JA** (UG 53,9 %) |
-| Nachbar | 73,5 % | **82,2 %** | +8,8 pp | 70 % (Wilson-UG ≥ 70 %) | **JA** (UG 78,2 %) |
+| exakt | 48,2 % | **58,8 %** | **+10,5 pp** | 50 % (Wilson-UG ≥ 50 %) | **JA** (UG 53,9 %) |
+| Nachbar | 73,5 % | **82,2 %** | **+8,8 pp** | 70 % (Wilson-UG ≥ 70 %) | **JA** (UG 78,2 %) |
+
+Δ rechnet der Bericht selbst aus den Artefakten (`phase04-gold.json` gegen
+`phase08-skey.json`), es steht nicht als Zahl im Code – beide Deltas sind
+Differenzen der *ungekürzten* Quoten (235/400 − 193/400 = 10,5 pp,
+329/400 − 294/400 = 8,8 pp), nicht der gerundeten Anzeigewerte.
 
 **Belastbar:** Der Vergleich entscheidet nicht am Punktwert, sondern an der
 *Untergrenze* des Wilson-Intervalls (wie Phase 0.2/0.4). skey liegt mit **UG 53,9 %

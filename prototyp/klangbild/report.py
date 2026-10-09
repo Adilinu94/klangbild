@@ -84,6 +84,7 @@ def schreiben(conn, einstellungen: config.Einstellungen) -> Path:
     zeilen.append(_analyse_uebersicht(conn, einstellungen.analyse_version))
     zeilen.append(_konsens_uebersicht(einstellungen.ergebnisse))
     zeilen.append(_gold_uebersicht(einstellungen.ergebnisse))
+    zeilen.append(_skey_uebersicht(einstellungen.ergebnisse))
 
     pfad = einstellungen.ergebnisse / "phase0-bericht.md"
     pfad.parent.mkdir(parents=True, exist_ok=True)
@@ -186,6 +187,12 @@ def _gold_uebersicht(ergebnisse: Path) -> str:
             "| Hinweis | keine Tracks ausgewertet (FMAK-Audio holen: "
             "`python -m klangbild gold --fmak-remote`) |")
         return "\n".join(zeilen)
+    if n < 30:
+        zeilen.append(
+            f"| Hinweis | nur n={n} ausgewertet - **Rauchtest**, die Quoten "
+            "sind nicht belastbar (Wilson-Untergrenze weit offen). Fuer das Tor: "
+            "`python -m klangbild gold` ohne `--limit` |")
+        return "\n".join(zeilen)
     zeilen.append("| Kennzahl | Treffer/N | Quote | Wilson 95 % | erreicht? |")
     zeilen.append("|---|---|---|---|---|")
     for name, schluessel in (("exakt gleiche Tonart", "exakt"),
@@ -207,4 +214,102 @@ def _gold_uebersicht(ergebnisse: Path) -> str:
     zeilen.append("")
     zeilen.append("Vollstaendiger Per-Track-Export (alle Tracks): "
                   "`ergebnisse/phase04-gold-tracks.csv`.")
+    return "\n".join(zeilen)
+
+
+def _json_laden(pfad: Path) -> dict | None:
+    """JSON einlesen; None bei fehlender/unlesbarer Datei (nie werfen)."""
+    if not pfad.exists():
+        return None
+    try:
+        return json.loads(pfad.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _skey_uebersicht(ergebnisse: Path) -> str:
+    """Phase-0.8-Ergebnis (skey, trainiertes CNN) gegen den Goldsatz einbetten.
+
+    Entscheidend fuer die Belastbarkeit des Vergleichs: die Baseline
+    (**unser Chroma-Profil**) wird **nicht** als Zahl in diesen Text geschrieben,
+    sondern aus `phase04-gold.json` gelesen. Beide Zeilen stammen also aus
+    Artefakten desselben Goldsatzes - wer eine Seite neu rechnet, rechnet den
+    Vergleich mit. Genau das haelt Phase 0.8 vergleichbar statt anekdotisch.
+    """
+    skey = _json_laden(Path(ergebnisse) / "phase08-skey.json")
+    titel = "\n## Phase 0.8 · skey (trainiertes CNN) gegen denselben Goldsatz\n"
+    if skey is None:
+        return titel + (
+            "Noch kein Lauf. Erzeugen: `python -m klangbild phase08` "
+            "(braucht skey: torch, torchaudio, nnAudio). "
+            "Details: `ergebnisse/phase08-skey.md`.\n"
+        )
+
+    n = skey.get("tracks", 0)
+    zeilen = [titel]
+    zeilen.append(
+        "Dasselbe FMAK-Gold, dieselbe Metrik, dieselben Tore, dasselbe "
+        "Wilson-Intervall wie Phase 0.4 – **nur der Schaetzer ist getauscht**: "
+        "statt handgeschriebener Chroma-Profile ein trainiertes CNN "
+        "(`deezer/skey`, MIT → passiert das Lizenz-Gate ADR-012). Tor prueft die "
+        "**Untergrenze** des Wilson-Intervalls.\n"
+    )
+    if not n:
+        zeilen.append("| Hinweis | keine Tracks ausgewertet |")
+        return "\n".join(zeilen)
+
+    zeilen.append("| Kennzahl | Treffer/N | Quote | Wilson 95 % | erreicht? |")
+    zeilen.append("|---|---|---|---|---|")
+    for name, schluessel in (("exakt gleiche Tonart", "exakt"),
+                             ("inkl. Camelot-Nachbar", "nachbar")):
+        t = skey.get(schluessel, {})
+        wilson = f"{t.get('wilson_unten', 0) * 100:0.1f}-{t.get('wilson_oben', 0) * 100:0.1f} %"
+        erreicht = "erfuellt" if t.get("erreicht") else "nicht erfuellt"
+        zeilen.append(
+            f"| {name} | {t.get('treffer', 0)}/{n} "
+            f"| {t.get('quote', 0) * 100:0.1f} % | {wilson} | {erreicht} |")
+
+    # Direktvergleich: Baseline aus dem Phase-0.4-Artefakt, nicht getippt.
+    # Mindestumfang, sonst waere ein Delta aus einem --limit-Rauchtest eine
+    # Zahl ohne Aussage (bei wenigen Faellen ist ein einziger Treffer hunderte
+    # Zehntelpunkte wert - dieselbe Warnung, die die Roadmap fuer Phase 0.1 gibt).
+    gold = _json_laden(Path(ergebnisse) / "phase04-gold.json")
+    MIN_DELTA_N = 30
+    zeilen.append("")
+    if gold and gold.get("tracks") == n and n >= MIN_DELTA_N:
+        zeilen.append("**Direktvergleich (gleicher Goldsatz, nur Schaetzer getauscht):**\n")
+        zeilen.append("| Kennzahl | Chroma-Profil (0.4) | skey (0.8) | Delta |")
+        zeilen.append("|---|---|---|---|")
+        for name, schluessel in (("exakt", "exakt"), ("inkl. Nachbar", "nachbar")):
+            a = gold.get(schluessel, {}).get("quote", 0.0)
+            b = skey.get(schluessel, {}).get("quote", 0.0)
+            zeilen.append(
+                f"| {name} | {a * 100:0.1f} % | {b * 100:0.1f} % "
+                f"| {(b - a) * 100:+0.1f} pp |")
+    else:
+        grund = (
+            f"n={n} unter {MIN_DELTA_N} (Rauchtest)"
+            if n < MIN_DELTA_N
+            else f"kein Phase-0.4-Lauf auf n={n}"
+        )
+        zeilen.append(
+            f"| Hinweis | Direktvergleich nicht berechnet ({grund}; "
+            "`python -m klangbild gold` erzeugt die Baseline) |")
+
+    klassen = skey.get("klassen") or {}
+    if klassen:
+        zeilen.append("")
+        zeilen.append("Wo skey danebenliegt (Fehlerklassen):")
+        for name in ("exakt", "modus", "quint", "diagonal", "weit"):
+            anz = klassen.get(name, 0)
+            zeilen.append(f"- {name}: {anz} ({anz / n * 100:0.1f} %)")
+
+    zeilen.append("")
+    zeilen.append(
+        "> Das Softmax-Max ist ein **roher, unkalibrierter** Wert (Mittel nahe "
+        "1/24): gegated wird nur ueber Trefferquote + Wilson-Untergrenze, "
+        "niemals ueber diesen Rohwert.")
+    zeilen.append(
+        "> Vollstaendiger Per-Track-Export (alle Tracks): "
+        "`ergebnisse/phase08-skey-tracks.csv`.")
     return "\n".join(zeilen)

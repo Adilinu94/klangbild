@@ -51,7 +51,7 @@ CUDA-Variante. Beim ersten `embed` lädt das Modell `google/embeddinggemma-2`
 
 ```bash
 cd prototyp
-python -m pytest                        # 65 Tests, alle ohne Modelldownload
+python -m pytest                        # 114 Tests, alle ohne Modelldownload
 
 python -m klangbild scan                # Sammlung einlesen und hashen (ADR-013)
 python -m klangbild analyze             # Tonart, Lautheit, Energie, Beats
@@ -73,6 +73,7 @@ python -m klangbild metronom            # BPM/Beat/Downbeat auf bekannten Metron
 python -m klangbild konsens             # Tonart-Konsens eigener + freier Modelle (Silber)
 python -m klangbild gold                # Tonart gegen FMAK-Expertenlabels (echtes Gold-Tor)
 python -m klangbild gold --fmak-remote --limit 20   # FMAK-Audio per Range laden, Stichprobe
+python -m klangbild phase08             # skey (trainiertes CNN) gegen denselben Goldsatz
 ```
 
 Alle Pfade sind überschreibbar: `--bibliothek`, `--datenbank`, `--cache`,
@@ -89,7 +90,7 @@ Alle Pfade sind überschreibbar: `--bibliothek`, `--datenbank`, `--cache`,
 | `neighbors` / `baseline` | bauen die Bewertungsaufgaben (Seed + k Kandidaten). |
 | `text` / `unsinn` | Textanfragen als Vektor gegen die Audio-Vektoren, Top-k. |
 | `serve` | lokale Oberfläche: Ausgangssong bzw. Anfrage oben, Kandidaten blind darunter, Urteil und Marke „Unfall". |
-| `report` | schreibt `ergebnisse/phase0-bericht.md` mit Quoten, Wilson-Intervallen und Torprüfung. |
+| `report` | schreibt `ergebnisse/phase0-bericht.md` mit Quoten, Wilson-Intervallen und Torprüfung. Bettet Konsens (0.3), Gold (0.4) und skey (0.8) ein; das skey-Delta wird aus beiden Artefakten **berechnet**, nicht getippt. |
 
 ## Die Tore (festgelegt, `../ROADMAP-KLANGBILD.md`)
 
@@ -133,8 +134,8 @@ klangbild/
   evaluate.py      Aufgaben bauen + Tore auswerten
   blindui.py       Bewertungsoberfläche (nur Standardbibliothek)
   pipeline.py      Kommandozeile
-  report.py        Bericht
-tests/             44 Tests
+  report.py        Bericht (Konsens 0.3, Gold 0.4, skey 0.8)
+tests/             114 Tests
 beispiele/         Anfrage-Listen für Textsuche und Kontrollsatz
 ergebnisse/        Bericht und Datenbank (nicht im Git)
 ```
