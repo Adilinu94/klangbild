@@ -53,3 +53,7 @@ prototyp/werkzeuge/
 nie ins Repo. Labels sind klein, aber Audio ist forschungsfremd und riesig.
 prototyp/daten/
 
+
+# Laufzeit-Caches auf G: (HuggingFace-Modelle ~1.5 GB, pip-Wheel-Cache).
+# Bewusst NEBEN dem Repo-Root, damit sie nie eingecheckt werden und C: frei bleibt.
+.cache/

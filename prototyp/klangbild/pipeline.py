@@ -19,13 +19,23 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
 
-from . import audioio, beats, config, db, embeddings, energy, hashutil, keyestimate, lufs, metrics
+from . import (
+    audioio,
+    beats,
+    config,
+    db,
+    embeddings,
+    energy,
+    hashutil,
+    keyestimate,
+    lufs,
+    metrics,
+)
 
 
 def _log(text: str) -> None:
@@ -48,7 +58,7 @@ def kommandos_scan(args: argparse.Namespace) -> int:
     )
     _log(f"{len(dateien)} Audiodateien in {quelle}")
     conn = db.verbinden(einstellungen.datenbank)
-    neu = geaendert = 0
+    neu_oder_geaendert = 0
     beginn = time.time()
     for nummer, pfad in enumerate(dateien, 1):
         stat = pfad.stat()
@@ -57,12 +67,12 @@ def kommandos_scan(args: argparse.Namespace) -> int:
             conn, pfad, stat.st_size, stat.st_mtime, audio_hash,
             bereich.container, bereich.start, bereich.ende,
         )
-        neu += ist_neu
+        neu_oder_geaendert += ist_neu
         if nummer % 50 == 0 or nummer == len(dateien):
             conn.commit()
             _log(f"  {nummer}/{len(dateien)} · {time.time() - beginn:0.1f}s")
     conn.commit()
-    _log(f"fertig: {neu} neu/geaendert von {len(dateien)}")
+    _log(f"fertig: {neu_oder_geaendert} neu/geaendert von {len(dateien)}")
     conn.close()
     return 0
 
@@ -123,10 +133,6 @@ def kommandos_analyze(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 # embed
 # --------------------------------------------------------------------------
-def _clip_schreiben(audio: audioio.Audio, start: int, ende: int, ziel: Path) -> Path:
-    return audioio.ausschnitt_schneiden(audio, start, ende, ziel)
-
-
 def kommandos_embed(args: argparse.Namespace) -> int:
     einstellungen = config.vorbereiten(config.aus_argumenten(args))
     version = "pseudo" if args.pseudo else einstellungen.modell_version
@@ -144,14 +150,14 @@ def kommandos_embed(args: argparse.Namespace) -> int:
         try:
             audio = audioio.decodieren(pfad, config.ABTASTRATE_EINBETTUNG)
             for position, start, ende in audioio.ausschnitte_planen(audio):
-                with tempfile.TemporaryDirectory(dir=einstellungen.cache) as tmp:
-                    clip = Path(tmp) / f"{position}.wav"
-                    _clip_schreiben(audio, start, ende, clip)
-                    vektor = (
-                        embeddings.pseudo_vektor(clip)
-                        if args.pseudo
-                        else embeddings.audio_einbetten(clip)
-                    )
+                # Rohe Mono-Samples direkt schneiden (kein Temp-WAV): vermeidet den
+                # load_audio/librosa-Weg, haelt die Dekodierung bei soundfile (ADR-012).
+                proben = np.ascontiguousarray(audio.daten[start:ende], dtype=np.float32)
+                vektor = (
+                    embeddings.pseudo_vektor(f"{zeile['id']}:{position}")
+                    if args.pseudo
+                    else embeddings.audio_einbetten(proben, audio.rate)
+                )
                 db.embedding_speichern(
                     conn, int(zeile["id"]), position, version, vektor,
                     str(pfad), start / audio.rate, ende / audio.rate,

@@ -12,21 +12,40 @@ Dazu kommt die Vorstufe **Phase 0.0**: erst die öffentlichen Musik-Benchmarks
 
 ## Installation
 
+Die Umgebung liegt **bewusst auf G:** (in `prototyp/.venv`), weil C: wenig Platz
+hat. Auch der ~1,5-GB-Modell-Cache landet auf G: – die Pfade sind im venv per
+`.pth`-Datei erzwungen (`HF_HOME`, `PIP_CACHE_DIR` → `../.cache`), damit **nichts**
+Großes auf C: ankommt, egal wie Python gestartet wird. Ein eigener Override
+(`HF_HOME=…` selbst setzen) gewinnt trotzdem.
+
+Venv anlegen (einmalig, auf G:):
+
+```bash
+python -m venv .venv
+.venv\Scripts\python -m pip install -U pip
+```
+
 Leicht (reicht für Analyse und Oberfläche):
 
 ```bash
-python -m pip install numpy scipy soundfile soxr
-python -m pip install pytest            # für die Tests
+.venv\Scripts\python -m pip install numpy scipy soundfile soxr mutagen
+.venv\Scripts\python -m pip install pytest            # für die Tests
 ```
 
 Schwer (nur für echte Einbettungen und Beats):
 
 ```bash
-python -m pip install "sentence-transformers>=6.1.0" torch beat-this einops rotary-embedding-torch
+.venv\Scripts\python -m pip install "sentence-transformers>=6.1.0" torch beat-this einops rotary-embedding-torch
 ```
 
-Beim ersten `embed` lädt das Modell `google/embeddinggemma-2` (Apache 2.0,
-ca. 1,5 GB). Getestet wurde mit Python 3.13 auf Windows.
+Getestet mit Python 3.13 auf Windows, **CPU-only torch** (`2.14.1+cpu`, kein
+CUDA) – für den Prototyp reicht das völlig und spart ~1,5 GB gegenüber der
+CUDA-Variante. Beim ersten `embed` lädt das Modell `google/embeddinggemma-2`
+(Apache 2.0, ca. 1,5 GB) nach `../.cache/huggingface`.
+
+> Tests laufen immer im venv: `.venv\Scripts\python -m pytest`. Für alle
+> weiteren Befehle unten gilt dasselbe – entweder das venv aktivieren
+> (`.venv\Scripts\activate`) oder `.venv\Scripts\python -m klangbild …` nutzen.
 
 ## Ablauf
 

@@ -15,7 +15,6 @@ Torergebnis einfliessen.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 
 import numpy as np
 
@@ -91,11 +90,25 @@ def _kodieren(modell, eingabe) -> np.ndarray:
     )
 
 
-def audio_einbetten(clip_pfad: str | Path) -> np.ndarray:
-    """Einbettung eines Audio-Ausschnitts (kein Praefix)."""
+def audio_einbetten(samples: np.ndarray, rate: int = config.ABTASTRATE_EINBETTUNG) -> np.ndarray:
+    """Einbettung eines Audio-Ausschnitts (kein Praefix).
+
+    Nimmt bewusst **rohe Mono-Samples** entgegen, nicht einen Dateipfad. Die
+    Datei-Route wuerde in sentence-transformers `load_audio` aufrufen, das je
+    nach Version librosa oder torchcodec nachlaedt – genau die GPL-Nachbarschaft,
+    die ADR-012 aus dem Audiopfad heraushaelt. Der offizielle Weg
+    (`SentenceTransformer`-Modality, Zeile 773/802) akzeptiert ein Array direkt:
+    `{"audio": {"array": <samples>, "sampling_rate": <rate>}}`. Damit bleibt die
+    Dekodierung bei soundfile/soxr und nur das Modell laedt Torch.
+    """
     modell = modell_laden()
-    clip_pfad = str(clip_pfad)
-    vektor = _kodieren(modell, {"audio": clip_pfad})
+    eingabe = {
+        "audio": {
+            "array": np.ascontiguousarray(samples, dtype=np.float32).reshape(-1),
+            "sampling_rate": int(rate),
+        }
+    }
+    vektor = _kodieren(modell, eingabe)
     if vektor.size != config.EINBETTUNG_DIM:
         # Manche Versionen liefern die volle Dimension trotz truncate_dim.
         vektor = vektor[: config.EINBETTUNG_DIM]
@@ -114,8 +127,14 @@ def text_einbetten(text: str, praefix: str | None = None) -> np.ndarray:
     return _normalisieren(vektor[: config.EINBETTUNG_DIM])
 
 
-def pseudo_vektor(clip_pfad: str | Path, dim: int = config.EINBETTUNG_DIM) -> np.ndarray:
-    """Deterministischer Ersatzvektor zum Testen der Mechanik (nie fuer das Tor)."""
-    kennung = hashlib.sha256(Path(clip_pfad).name.encode("utf-8")).digest()
+def pseudo_vektor(schluessel: str, dim: int = config.EINBETTUNG_DIM) -> np.ndarray:
+    """Deterministischer Ersatzvektor zum Testen der Mechanik (nie fuer das Tor).
+
+    Nimmt bewusst einen **Schluessel** entgegen (z. B. "<track_id>:<position>"),
+    nicht einen Dateipfad: auf einem Pfad wuerden alle Tracks fuer dieselbe
+    Position denselben Vektor bekommen. Der Schluessel macht den Vektor je
+    Track und Ausschnitt eindeutig und reproduzierbar.
+    """
+    kennung = hashlib.sha256(str(schluessel).encode("utf-8")).digest()
     rng = np.random.default_rng(int.from_bytes(kennung[:8], "big"))
     return _normalisieren(rng.standard_normal(dim).astype(np.float32))
