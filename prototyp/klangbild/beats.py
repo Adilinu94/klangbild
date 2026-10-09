@@ -19,6 +19,7 @@ import numpy as np
 from . import config
 
 _MODELL = None
+_LADEFEHLER: Exception | None = None
 
 
 class SchlagFehler(RuntimeError):
@@ -43,18 +44,45 @@ def verfuegbar() -> bool:
     return True
 
 
+def checkpoint_pfad() -> Path:
+    """Lokalen Checkpoint liefern, falls vorhanden, sonst den Kurznamen.
+
+    Der lokale Pfad (config.BEAT_THIS_CHECKPOINT) hat Vorrang: beat_this wuerde
+    bei einem Kurznamen selbst laden, und genau das scheitert hier still -
+    ein angefangener, nie abgeschlossener Download, je Track erneut versucht.
+    """
+    lokal = config.BEAT_THIS_CHECKPOINT
+    return lokal if lokal.exists() else Path("final0")
+
+
 def _modell_laden():
     global _MODELL
     if _MODELL is None:
         try:
-            from beat_this.inference import File2Beats
+            # Audio2Beats nimmt (signal, sr) - File2Beats dagegen einen *Pfad*
+            # und wuerde ein Array als Dateinamen lesen (\"Could not load audio\").
+            # Wir fuettern grundsaetzlich Arrays (auch die synthetischen
+            # Metronome der Phase 0.2 haben keine Datei), darum Audio2Beats.
+            from beat_this.inference import Audio2Beats
         except ImportError as fehler:
             raise SchlagFehler(
                 "beat-this fehlt. Installation: python -m pip install beat-this "
                 "(zieht torch nach)."
             ) from fehler
         # final0 ist das Hauptmodell; fuer das Handy ist small0 vorgesehen.
-        _MODELL = File2Beats(checkpoint_path="final0", device="cpu", dbn=False)
+        # Vorrangig der lokale Pfad (siehe checkpoint_pfad), damit der Lauf nicht
+        # still an einem Download haengt. Ein Fehler hier darf nicht je Track
+        # wiederholt werden: _MODELL bleibt None, der Fehler wird gemerkt.
+        try:
+            _MODELL = Audio2Beats(checkpoint_path=str(checkpoint_pfad()),
+                                  device="cpu", dbn=False)
+        except Exception as fehler:  # Ursache an den Aufrufer
+            global _LADEFEHLER
+            _LADEFEHLER = fehler
+            raise SchlagFehler(
+                f"beat-this-Checkpoint nicht ladbar ({fehler}). Erwartet unter "
+                f"{config.BEAT_THIS_CHECKPOINT} oder per KLANGBILD_BEAT_CKPT."
+            ) from fehler
     return _MODELL
 
 
@@ -65,10 +93,13 @@ def analysieren_signal(signal: np.ndarray) -> SchlagAnalyse:
     Signale (Metronom mit bekannter Ground-Truth) ohne Datei-Umweg pruefen kann.
     """
     modell = _modell_laden()
-    beats, downbeats = modell(signal.astype(np.float32))
+    # Audio2Beats will (signal, sr); ohne Abtastrate geht es von etwas Falschem aus.
+    beats_arr, downbeats_arr = modell(
+        signal.astype(np.float32), config.ABTASTRATE_ANALYSE
+    )
     return SchlagAnalyse(
-        beats=np.asarray(beats, dtype=float),
-        downbeats=np.asarray(downbeats, dtype=float),
+        beats=np.asarray(beats_arr, dtype=float),
+        downbeats=np.asarray(downbeats_arr, dtype=float),
     )
 
 

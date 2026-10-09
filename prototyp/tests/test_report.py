@@ -160,3 +160,67 @@ def test_fehlerklassen_werden_mitgenannt(tmp_path):
     for klasse in ("quint", "modus", "diagonal", "weit"):
         assert klasse in text
     assert "15.5 %" in text          # quint 62/400
+
+
+# --- Phase 0.9 im Bericht ----------------------------------------------------
+
+
+def _phase09(n=402, bpm_ok=402, downbeat_ok=386):
+    return {
+        "anzahl_faelle": n,
+        "anzahl_mit_beats": n,
+        "bpm": {"zaehler": bpm_ok, "gesamt": n, "quote": bpm_ok / n,
+                "wilson_unten": 0.987, "wilson_oben": 1.0,
+                "schwelle": 0.9, "erreicht": True, "punktwert_erreicht": True},
+        "downbeat": {"zaehler": downbeat_ok, "gesamt": n,
+                     "quote": downbeat_ok / n, "wilson_unten": 0.931,
+                     "wilson_oben": 0.977, "schwelle": 0.8,
+                     "erreicht": True, "punktwert_erreicht": True},
+        "beat_f1_mittel": 0.997,
+        "je_takt": {"4": {"gesamt": 67, "bpm_ok": 67, "downbeat_ok": 64,
+                          "beat_f1_mittel": 0.997}},
+    }
+
+
+def test_phase09_ohne_lauf_sagt_offen(tmp_path):
+    """Ohne Lauf ist das Tor OFFEN - „nicht gemessen\" ist kein Fehlschlag."""
+    text = report._phase09_uebersicht(tmp_path)
+    assert "Phase 0.9" in text
+    assert "python -m klangbild phase09" in text
+    assert "nicht erfuellt" not in text
+
+
+def test_phase09_ohne_modell_kein_fehler(tmp_path):
+    (tmp_path / "phase09-beats.json").write_text(
+        json.dumps({"anzahl_faelle": 402, "anzahl_mit_beats": 0}),
+        encoding="utf-8")
+    text = report._phase09_uebersicht(tmp_path)
+    assert "Tor OFFEN" in text
+    assert "nicht gescheitert" in text
+
+
+def test_phase09_zeigt_beide_tore_und_taktart(tmp_path):
+    (tmp_path / "phase09-beats.json").write_text(
+        json.dumps(_phase09()), encoding="utf-8")
+    text = report._phase09_uebersicht(tmp_path)
+    assert "Tempo richtig" in text
+    assert "Downbeat richtig" in text
+    assert "100.0 %" in text
+    assert "erfuellt" in text
+    assert "| 4/4 |" in text                       # Taktart-Tabelle
+    assert "Untergrenze" in text                    # Tor-Regel genannt
+
+
+def test_phase09_warnt_vor_synthetischen_faellen(tmp_path):
+    """Der Bericht darf den leichtesten Fall nicht als Musik-Genauigkeit verkaufen."""
+    (tmp_path / "phase09-beats.json").write_text(
+        json.dumps(_phase09()), encoding="utf-8")
+    text = report._phase09_uebersicht(tmp_path)
+    assert "Metronome" in text
+    assert "lizenzfreies Korpus" in text
+
+
+def test_phase09_kaputtes_json_bricht_nicht(tmp_path):
+    (tmp_path / "phase09-beats.json").write_text("kaputt", encoding="utf-8")
+    text = report._phase09_uebersicht(tmp_path)
+    assert "Phase 0.9" in text

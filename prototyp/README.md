@@ -74,6 +74,7 @@ python -m klangbild konsens             # Tonart-Konsens eigener + freier Modell
 python -m klangbild gold                # Tonart gegen FMAK-Expertenlabels (echtes Gold-Tor)
 python -m klangbild gold --fmak-remote --limit 20   # FMAK-Audio per Range laden, Stichprobe
 python -m klangbild phase08             # skey (trainiertes CNN) gegen denselben Goldsatz
+python -m klangbild phase09             # Beat This! auf Tempo/Downbeat (n gross, Tor an der UG)
 ```
 
 Alle Pfade sind überschreibbar: `--bibliothek`, `--datenbank`, `--cache`,
@@ -90,7 +91,8 @@ Alle Pfade sind überschreibbar: `--bibliothek`, `--datenbank`, `--cache`,
 | `neighbors` / `baseline` | bauen die Bewertungsaufgaben (Seed + k Kandidaten). |
 | `text` / `unsinn` | Textanfragen als Vektor gegen die Audio-Vektoren, Top-k. |
 | `serve` | lokale Oberfläche: Ausgangssong bzw. Anfrage oben, Kandidaten blind darunter, Urteil und Marke „Unfall". |
-| `report` | schreibt `ergebnisse/phase0-bericht.md` mit Quoten, Wilson-Intervallen und Torprüfung. Bettet Konsens (0.3), Gold (0.4) und skey (0.8) ein; das skey-Delta wird aus beiden Artefakten **berechnet**, nicht getippt. |
+| `report` | schreibt `ergebnisse/phase0-bericht.md` mit Quoten, Wilson-Intervallen und Torprüfung. Bettet Konsens (0.3), Gold (0.4), skey (0.8) und Beats (0.9) ein; das skey-Delta wird aus beiden Artefakten **berechnet**, nicht getippt. Ein `--limit`-Rauchtest wird als solcher gekennzeichnet statt eine Schein-Quote zu zeigen. |
+| `phase09` | Beat This! auf synthetischen Metronomen, aber mit **n groß genug für ein belastbares Tor** und mit 6 Taktarten. Tor entscheidet an der **Wilson-Untergrenze**, nicht am Punktwert (das war der Fehler von Phase 0.2 mit n=7). Grenze: Metronome sind der leichteste Fall, echtes Musik-Gold bleibt offen. |
 
 ## Die Tore (festgelegt, `../ROADMAP-KLANGBILD.md`)
 

@@ -85,6 +85,7 @@ def schreiben(conn, einstellungen: config.Einstellungen) -> Path:
     zeilen.append(_konsens_uebersicht(einstellungen.ergebnisse))
     zeilen.append(_gold_uebersicht(einstellungen.ergebnisse))
     zeilen.append(_skey_uebersicht(einstellungen.ergebnisse))
+    zeilen.append(_phase09_uebersicht(einstellungen.ergebnisse))
 
     pfad = einstellungen.ergebnisse / "phase0-bericht.md"
     pfad.parent.mkdir(parents=True, exist_ok=True)
@@ -312,4 +313,72 @@ def _skey_uebersicht(ergebnisse: Path) -> str:
     zeilen.append(
         "> Vollstaendiger Per-Track-Export (alle Tracks): "
         "`ergebnisse/phase08-skey-tracks.csv`.")
+    return "\n".join(zeilen)
+
+
+def _phase09_uebersicht(ergebnisse: Path) -> str:
+    """Phase-0.9-Ergebnis (Beat This!) einbetten - Tempo und Downbeat.
+
+    Liest `phase09-beats.json`. Ohne Lauf: ehrliches OFFEN, nicht „gescheitert" -
+    ohne Modell ist nichts gemessen, und „nicht gemessen" ist kein Fehlschlag.
+    """
+    titel = "\n## Phase 0.9 · Beat This! auf Tempo und Downbeat\n"
+    daten = _json_laden(Path(ergebnisse) / "phase09-beats.json")
+    if daten is None:
+        return titel + (
+            "Noch kein Lauf. Erzeugen: `python -m klangbild phase09` "
+            "(braucht beat-this + lokalen Checkpoint). "
+            "Details: `ergebnisse/phase09-beats.md`.\n"
+        )
+    if not daten.get("anzahl_mit_beats"):
+        return titel + (
+            "Lauf ohne messbare Faelle (Modell fehlte) - **Tor OFFEN**, "
+            "nicht gescheitert.\n"
+        )
+
+    zeilen = [titel]
+    zeilen.append(
+        "Dieselbe Messkette wie Phase 0.2, aber mit **n gross genug fuer ein "
+        "belastbares Tor** und mit mehreren Taktarten (Downbeat ist "
+        "taktabhaengig). Tor entscheidet an der **Untergrenze** des "
+        "Wilson-Intervalls, nicht am Punktwert - Phase 0.2 entschied am "
+        "Punktwert und hatte nur 7 Faelle.\n"
+    )
+    zeilen.append("| Kennzahl | Treffer/N | Quote | Wilson 95 % | erreicht? |")
+    zeilen.append("|---|---|---|---|---|")
+    namen = {"bpm": "Tempo richtig", "downbeat": "Downbeat richtig"}
+    for schluessel, label in namen.items():
+        t = daten.get(schluessel, {})
+        zeilen.append(
+            f"| {label} | {t.get('zaehler', 0)}/{t.get('gesamt', 0)} "
+            f"| {t.get('quote', 0) * 100:0.1f} % | "
+            f"{t.get('wilson_unten', 0) * 100:0.1f}-"
+            f"{t.get('wilson_oben', 0) * 100:0.1f} % | "
+            f"{'erfuellt' if t.get('erreicht') else 'nicht erfuellt'} |")
+    zeilen.append("")
+    zeilen.append(f"- mittlere Beat-F1: {daten.get('beat_f1_mittel', 0.0):0.3f}")
+
+    je_takt = daten.get("je_takt") or {}
+    if je_takt:
+        zeilen.append("")
+        zeilen.append("Nach Taktart:")
+        zeilen.append("")
+        zeilen.append("| Takt | Faelle | Tempo ok | Downbeat ok | Beat-F1 |")
+        zeilen.append("|---|---|---|---|---|")
+        for takt, t in je_takt.items():
+            zeilen.append(
+                f"| {takt}/4 | {t.get('gesamt', 0)} | {t.get('bpm_ok', 0)} "
+                f"| {t.get('downbeat_ok', 0)} "
+                f"| {t.get('beat_f1_mittel', 0.0):0.3f} |")
+
+    zeilen.append("")
+    zeilen.append(
+        "> **Grenze der Aussage:** die Faelle sind **synthetische Metronome** "
+        "(starres Tempo, ein Klang, kein Groove) - der leichteste Fall. Das Tor "
+        "belegt Messkette *und* Modell auf bekannten Signalen, nicht die "
+        "Genauigkeit auf echter Musik. Dafuer braucht es ein lizenzfreies "
+        "Korpus mit Beat-Labels (offen wie fuer Tonart, Lizenz-Gate ADR-012).")
+    zeilen.append(
+        "> Vollstaendiger Per-Fall-Export: "
+        "`ergebnisse/phase09-beats-tracks.csv`.")
     return "\n".join(zeilen)

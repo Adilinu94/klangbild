@@ -73,6 +73,19 @@ FMAK_LABELS = "fmakv2.csv"             # FMAKv2-Expertenlabels (CC BY 4.0)
 FMAK_INDEX = "fma_keys_index.json"     # track_id -> Audio-Pfad + md5
 FMAK_AUDIOZIP = "https://os.unil.cloud.switch.ch/fma/fma_small.zip"
 
+# --- Beat This! (Phase 0.2/0.9) --------------------------------------------
+# beat_this laedt seinen Checkpoint per Kurznamen (\"final0\") selbst ueber
+# torch.hub. Das scheitert hier still: der Download startet, wird aber nicht
+# abgeschlossen, und beat_this wirft je Track erneut \"Could not load the
+# checkpoint\". Ein Kurzname ist daher keine belastbare Quelle.
+# Darum: ein **lokaler Pfad**, der vorrangig benutzt wird (liegt auf G:, wie die
+# uebrigen Modelle - C: bleibt frei). Nur wenn er fehlt, faellt beats.py auf den
+# Kurznamen zurueck und meldet das als Modell-fehlt statt still 0 Beats zu liefern.
+BEAT_THIS_CHECKPOINT: Path = _pfad_aus_umgebung(
+    "KLANGBILD_BEAT_CKPT",
+    DATEN / "modelle" / "torchhub" / "checkpoints" / "beat_this-final0.ckpt",
+)
+
 
 @dataclass(frozen=True)
 class Einstellungen:

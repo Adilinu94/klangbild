@@ -326,6 +326,33 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_p8.set_defaults(funktion=None)
 
+    p_p9 = unter.add_parser(
+        "phase09", parents=[pfade],
+        help="Phase 0.9 · Beat This! auf Tempo/Downbeat messen "
+             "(n gross, Tor an der Wilson-Untergrenze)",
+    )
+    p_p9.add_argument(
+        "--bpm-von", type=float, default=60.0,
+        help="Tiefstes Tempo im Raster (Default: 60)",
+    )
+    p_p9.add_argument(
+        "--bpm-bis", type=float, default=180.0,
+        help="Hoechstes Tempo im Raster (Default: 180)",
+    )
+    p_p9.add_argument(
+        "--bpm-stufen", type=int, default=50,
+        help="Tempi im Log-Raster (Default: 50; dazu kommen feste Anker)",
+    )
+    p_p9.add_argument(
+        "--sekunden", type=float, default=20.0,
+        help="Laenge eines synthetischen Clips in Sekunden (Default: 20)",
+    )
+    p_p9.add_argument(
+        "--limit", type=int, default=0,
+        help="Nur die ersten N Faelle auswerten (0 = alle; Rauchtest)",
+    )
+    p_p9.set_defaults(funktion=None)
+
     return parser
 
 
@@ -366,6 +393,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import phase08
 
         return phase08.laufen(args)
+
+    if args.befehl == "phase09":
+        from . import phase09
+
+        return phase09.laufen(args)
 
     return int(args.funktion(args))
 

@@ -298,7 +298,7 @@ belegte Befund statt einer Schein-Verbesserung.
 Phase 0.6 endete mit der These: „Die Tonart-Decke liegt nicht am Profil, sondern
 an der **Repräsentation** – ein *gelerntes* Modell könnte sie durchbrechen." Diese
 Phase prüft die These, statt sie zu behaupten. `skey` (Deezer, **MIT**) ist ein
-kleines CNN (VQT → ChromaNet), das seine Tonart-Gewichte *gelernt* hat statt
+kleines CNN (HCQT → ChromaNet), das seine Tonart-Gewichte *gelernt* hat statt
 handgeschriebene Profile zu nutzen.
 
 **Messkette 1:1 (ADR-012):** derselbe Goldsatz (FMAK, n=400), dieselbe Metrik,
@@ -341,32 +341,6 @@ später trainierten Ersatz). Unser eigenes Chroma-Profil bleibt als
 lizenz-/abhängigkeitsfreie Basis für PC-und-Android-Einheitlichkeit (ADR-012), aber
 die Genauigkeitsspitze kommt aus dem gelernten Modell.
 
----
-
-## Phase 0.8 · skey (trainiertes Modell) gegen den Goldsatz
-
-Phase 0.6 zeigte messbar: Ein **feineres Chroma-Profil** bringt nichts mehr (Modus
-ist Verwechslung Dur/Moll, kein Profil-Feinjustierung-Problem). Der logische nächste
-Schritt ist daher ein **trainiertes Modell**. `skey` (Deezer, **MIT**, CC-freundlich
-→ passiert das Lizenz-Gate) ist ein kleines CNN (HCQT über nnAudio → ChromaNet), das
-Tonart nicht aus handgeschriebenen Profilen, sondern aus **gelernten Gewichten**
-bestimmt. Abhängigkeiten: numpy, torch, torchaudio, tqdm, einops, nnAudio,
-soundfile — **kein librosa, keine GPL-Nachbarschaft** (ADR-012-konform).
-
-**Messbedingung 1:1 mit Phase 0.4/0.5.** Damit der Vergleich belastbar ist, wurde
-**alles** wiederverwendet — derselbe FMAK-Goldsatz, dieselbe Metrik, dieselbe
-Fehlerklasseneinteilung, dieselben Tore, dasselbe Wilson-Intervall. Einzig der
-Schätzer ist getauscht:
-
-```
-phase04/0.5:  eigenes Chroma-Profil   ->  48,2 % exakt / 73,5 % Nachbar (n=400)
-phase08:      skey (gelerntes CNN)    ->  ??? exakt / ??? Nachbar (gleicher Goldsatz)
-```
-
-So ist n identisch, das Intervall identisch — nur die Vorhersage unterscheidet sich.
-Genau das macht „besser/schlechter als unser Profil" zu einer **Messaussage** statt
-einer Vermutung.
-
 Befehl (interne Auswertung, nichts ausgeliefert):
 
 ```bash
@@ -379,28 +353,82 @@ Ergebnisse landen in `ergebnisse/phase08-skey.{json,md,tracks.csv}`. Die Tore
 Phase 0.2/0.4 — erfüllt nur, wenn die Untergrenze, nicht bloß der Punktwert, darüber
 liegt.
 
-**Echtes Ergebnis (voller Lauf, n=400, 207 s, lokal auf CPU, sr=22050):**
-
-| Kennzahl | skey (CNN) | eigenes Profil (Phase 0.5) | Δ | Tor (Wilson-UG) | erreicht? |
-|---|---|---|---|---|---|
-| exakt gleich | **58,8 %** (235/400) | 48,2 % | **+10,6 pp** | ≥ 50 % (UG 53,9 %) | **JA** |
-| inkl. Camelot-Nachbar | **82,2 %** (329/400) | 73,5 % | +8,7 pp | ≥ 70 % (UG 78,2 %) | **JA** |
-
-**Beide Phase-0.2-Tore sind erreicht** — und zwar an der **Untergrenze** des
-Wilson-Intervalls, nicht bloß am Punktwert. Das trainierte CNN schlägt unser
-handgeschriebenes Chroma-Profil deutlich und klar messbar. Der Fehlerschwerpunkt
-hat sich verschoben: Der vorher dominante **Modus** (Dur/Moll-Verwechslung) fiel auf
-8,0 %, während **Quint**-Nachbarn (15,5 %) und **weit** (11,0 %) jetzt den größeren
-Teil der Restfehler ausmachen — also eher „richtige Tonartverwandtschaft, falsche
-Nachbarstufe" als „falscher Modus". Genau das war die Hoffnung hinter dem
-Modell-Pfad, und sie ist eingetreten.
-
 > Tor-Status: exakt 58,8 % (UG 53,9 %) und Nachbar 82,2 % (UG 78,2 %) — **beide
 > Tore erfüllt**. skey (MIT, Deezer) ist damit der Nachfolger-Kandidat für die
 > Produktions-Tonartschätzung. Ausliefer-Entscheid (Lizenz-Gate ADR-012): MIT ist
 > permissiv, passiert das Gate; die Auslieferung selbst (Modelldatei 0,7 MB) ist
 > separat zu prüfen. Nächster Schritt: skey als Standard-Schätzer andocken und
 > das Chroma-Profil als Offline-Fallback behalten.
+
+---
+
+## Phase 0.9 · Beat This! auf Tempo/Downbeat mit belastbarem n
+
+Phase 0.2 hat Tempo, Beat und Downbeat an **7** Metronomen gemessen und beide
+Tore als „erreicht" geführt. Das hielt einer Prüfung nicht stand — und genau das
+ist der Grund für diese Phase:
+
+| | Phase 0.2 | Problem |
+|---|---|---|
+| Fälle | 7 (nur 4/4) | 7/7 Treffer → Wilson-**UG 64,6 %**, Tor aber 90 % |
+| Tor-Entscheid | am **Punktwert** (`zaehler/n >= schwelle`) | „erfüllt" hing am Zufall, nicht an der Belastbarkeit |
+
+Mit n=7 ist **ein einziger Fehler 14 Punkte**. Die Aussage „Tempo-Tor erreicht"
+war eine Punktwert-Aussage, keine belastbare — während Phase 0.4 und 0.8 längst
+an der Untergrenze entscheiden. Diese Phase korrigiert genau diesen Bruch, ohne
+die Messkette zu wechseln:
+
+```bash
+python -m klangbild phase09 --limit 12 --bpm-stufen 2 --sekunden 10  # Rauchtest
+python -m klangbild phase09             # voller Lauf: 67 Tempi x 6 Taktarten
+```
+
+Zwei Dinge sind gegenüber Phase 0.2 geändert, beides bewusst:
+
+1. **n groß genug, dass die Untergrenze trägt** — 67 Tempi × 6 Taktarten (n=402).
+   Das Tempo-Raster ist **logarithmisch** plus feste Anker: Tempo-Verwechslung ist
+   eine Oktavfrage (60 gegen 120). Ein lineares Raster von 60–180 lässt 120 auf
+   122,45 fallen — die häufigste Verwechslung läge *zwischen* den Messpunkten und
+   wäre damit gar nicht gemessen.
+2. **Mehrere Taktarten** (3/4, 4/4, 5/4, 6/4, 7/4, 9/4). Downbeat ist
+   taktabhängig; wer nur 4/4 prüft, prüft den leichtesten Fall und hält ihn für
+   das Ganze. Eine Gesamtquote würde das verstecken, darum die Aufschlüsselung.
+
+Alles Wiederverwendete (Ground-Truth-Bau, `beat_f1`, `bpm_richtig`,
+`downbeat_richtig`, `wilson`) kommt aus `phase02`/`metrics` — nur n, Taktarten
+und die Tor-Regel ändern sich.
+
+**Echtes Ergebnis (voller Lauf, n=402 = 67 Tempi × 6 Taktarten, ~5 min, CPU):**
+
+| Kennzahl | Treffer/N | Quote | Wilson 95 % | Tor (als UG) | erreicht? |
+|---|---|---|---|---|---|
+| Tempo richtig (±4 %) | 402/402 | 100,0 % | 99,1–100,0 % | ≥ 90 % | **JA** |
+| Downbeat richtig (±1 Takt) | 387/402 | 96,3 % | 93,9–97,9 % | ≥ 80 % | **JA** |
+
+- mittlere Beat-F1: 0,994
+
+Beide Tore sind erreicht — und **an der Untergrenze**, nicht am Punktwert. Das ist
+genau die Aussage, die Phase 0.2 nicht treffen konnte: dort waren beide Tore
+„erreicht" auf 7 Fällen, wo 7/7 nur eine UG von 64,6 % ergibt.
+
+Nach Taktart bleibt das Bild gleichmäßig — Downbeat trifft 65/67 in 3/4, 4/4 und
+6/4 sowie 64/67 in 5/4, 7/4 und 9/4, Tempo ausnahmslos 67/67. Es gibt also keine
+Taktart, die das Modell überproportional schwer hat (und auch keinen „4/4-Bonus").
+Details: `ergebnisse/phase09-beats.{json,md,tracks.csv}`.
+
+> Tor-Status: Tempo 100,0 % (UG 99,1 %) und Downbeat 96,3 % (UG 93,9 %) — **beide
+> Phase-0.2-Tore erfüllt**, jetzt belastbar. Damit kann Phase 1 die
+> Übergangs-Engine (ADR-014) auf gemessene Downbeats stützen statt auf eine
+> n=7-Vermutung.
+
+> **Grenze der Aussage (wichtig):** die Fälle sind **synthetische Metronome** —
+> starres Tempo, ein Klang, kein Groove. Das ist der leichteste Fall. Die Tore
+> belegen, dass Messkette *und* Modell auf bekannten Signalen richtig liegen,
+> **nicht** dass Beat This! auf echter Musik so trifft. Für echtes Musik-Gold mit
+> Beat-Labels braucht es ein lizenzfreies Korpus; das ist für Tempo genauso offen
+> wie für Tonart (Lizenz-Gate ADR-012). Ebenfalls offen: **Tempo-Wechsel**
+> (ritardando/accelerando), Groove-Swing und Live-Offset — alles Dinge, die ein
+> starres Metronom nicht erzeugen kann.
 
 ---
 
