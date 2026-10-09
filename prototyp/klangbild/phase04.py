@@ -287,8 +287,43 @@ def track_vergleichen(track_id: str, gold_camelot: str, signal, rate: int) -> Go
     )
 
 
+def _fehlerklasse(gold: str, schaetzung: str) -> str:
+    """Ordnet einen Treffer/Fehler auf dem Camelot-Rad einer Klasse zu.
+
+    'exakt'     gold == schaetzung
+    'modus'     gleiche Nummer, anderer Buchstabe (relative Dur/Moll - sehr nah)
+    'quint'     gleicher Buchstabe, Nummer +/-1 (Nachbar im Quintenzirkel)
+    'diagonal'  Nummer +/-1 und anderer Buchstabe (nah, aber kein Camelot-Nachbar)
+    'weit'      alles andere (mind. zwei Schritte weg)
+
+    So laesst sich messen, *wo* der Schaetzer danebenliegt - statt zu raten.
+    'modus'+'quint' sind genau die Faelle, die der Nachbar-Tor als Treffer zaehlt.
+    """
+    if gold == schaetzung:
+        return "exakt"
+    if len(gold) < 2 or len(schaetzung) < 2:
+        return "weit"
+    g_num, g_mod = gold[:-1], gold[-1]
+    s_num, s_mod = schaetzung[:-1], schaetzung[-1]
+    if not (g_num.isdigit() and s_num.isdigit()):
+        return "weit"
+    abstand = (int(g_num) - int(s_num)) % 12
+    abstand = min(abstand, 12 - abstand)  # kreisfoermiger Abstand 0..6
+    if abstand == 0 and g_mod != s_mod:
+        return "modus"
+    if abstand == 1 and g_mod == s_mod:
+        return "quint"
+    if abstand == 1 and g_mod != s_mod:
+        return "diagonal"
+    return "weit"
+
+
 def auswerten(vergleiche: list[GoldVergleich]) -> dict:
-    """Quoten exakt / Nachbar mit Wilson-Intervall und Tor-Entscheid (0.2-Schwelle)."""
+    """Quoten exakt / Nachbar mit Wilson-Intervall und Tor-Entscheid (0.2-Schwelle).
+
+    Zaehlt zusaetzlich die Fehlerklassen (exakt/modus/quint/diagonal/weit), damit
+    der Bericht zeigt, *wo* der Schaetzer danebenliegt - nicht bloss wie oft.
+    """
     n = len(vergleiche)
     exakt = sum(v.exakt for v in vergleiche)
     nachbar = sum(v.nachbar for v in vergleiche)
@@ -298,8 +333,13 @@ def auswerten(vergleiche: list[GoldVergleich]) -> dict:
     # (belastbare Aussage, nicht bloss der Punktwert).
     exakt_tor = exakt_ki[0] >= config.TOR_02_TONART_EXAKT_MIN
     nachbar_tor = nachbar_ki[0] >= config.TOR_02_TONART_NACHBAR_MIN
+    klassen: dict[str, int] = {}
+    for v in vergleiche:
+        k = _fehlerklasse(v.gold, v.schaetzung)
+        klassen[k] = klassen.get(k, 0) + 1
     hart = [
-        {"track_id": v.track_id, "gold": v.gold, "schaetzung": v.schaetzung}
+        {"track_id": v.track_id, "gold": v.gold, "schaetzung": v.schaetzung,
+         "klasse": _fehlerklasse(v.gold, v.schaetzung)}
         for v in vergleiche if not v.exakt
     ]
     mittel_vertrauen = sum(v.vertrauen for v in vergleiche) / n if n else 0.0
@@ -312,6 +352,7 @@ def auswerten(vergleiche: list[GoldVergleich]) -> dict:
                     "wilson_unten": nachbar_ki[0], "wilson_oben": nachbar_ki[1],
                     "tor": config.TOR_02_TONART_NACHBAR_MIN, "erreicht": nachbar_tor},
         "mittel_vertrauen": mittel_vertrauen,
+        "klassen": klassen,
         "hart": {"gesamt": len(hart), "tracks": hart[:50]},
     }
 
@@ -363,6 +404,30 @@ def _bericht_schreiben(ordner: Path, z: dict, dauer: float, gesamt_verfuegbar: i
         hinweis_tor,
         "",
     ]
+    # Fehlerklassen: zeigt, WO der Schaetzer danebenliegt (nicht bloss wie oft).
+    klassen = z.get("klassen") or {}
+    if klassen:
+        reihenfolge = ("exakt", "modus", "quint", "diagonal", "weit")
+        n = z["tracks"]
+        zeilen += [
+            "## Fehlerklassen (wo liegt der Schaetzer daneben?)",
+            "",
+            "| Klasse | N | Anteil | Bedeutung |",
+            "|---|---|---|---|",
+        ]
+        bedeutung = {
+            "exakt": "Tonart exakt getroffen",
+            "modus": "relative Dur/Moll-Verwechslung (gleiche Ziffer, A<->B) - sehr nah",
+            "quint": "Nachbar im Quintenzirkel (gleicher Modus, Ziffer +/-1)",
+            "diagonal": "Ziffer +/-1 und Modus anders (nah, aber kein Camelot-Nachbar)",
+            "weit": "sonstiges (mind. zwei Schritte weg)",
+        }
+        for name in reihenfolge:
+            anz = klassen.get(name, 0)
+            zeilen.append(
+                f"| {name} | {anz} | {anz / n * 100:0.1f} % | {bedeutung[name]} |"
+            )
+        zeilen.append("")
     if z["hart"]["gesamt"]:
         zeilen += ["## Harte Faelle (exakt daneben)", "",
                    "| Track-ID | Gold | geschaetzt |", "|---|---|---|"]
@@ -374,6 +439,10 @@ def _bericht_schreiben(ordner: Path, z: dict, dauer: float, gesamt_verfuegbar: i
         "(Modelluebereinstimmung) sagt diese Zahl: *trifft unser Weg die "
         "richtige Tonart?* Fuer ein MIREX-Vergleich (Phase 0.2) ist das der "
         "fehlende Beleg.")
+    zeilen.append(
+        "> Jeder einzelne Track steht in `phase04-gold-tracks.csv` "
+        "(track_id, gold, schaetzung, exakt, nachbar, klasse, vertrauen) "
+        "- vollstaendig nachvollziehbar, nicht nur die harten Faelle.")
     p = ordner / "phase04-gold.md"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(nl.join(zeilen) + nl, encoding="utf-8")
@@ -384,6 +453,31 @@ def _json_schreiben(ordner: Path, z: dict) -> Path:
     p = ordner / "phase04-gold.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(z, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
+
+
+def _csv_schreiben(ordner: Path, vergleiche: list[GoldVergleich]) -> Path:
+    """Vollstaendiger Per-Track-Export (MIREX-Stil) - ALLE Vergleiche, nicht 50.
+
+    Der Bericht zeigt nur die ersten harten Faelle; fuer eine 100%-Nachvollziehbarkeit
+    („99,9 % richtig") schreiben wir jede einzelne Zeile: Gold, eigene Schaetzung,
+    Treffer-Flags, Fehlerklasse und Schaetzer-Vertrauen. Eine Zeile je Track.
+    """
+    p = ordner / "phase04-gold-tracks.csv"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", encoding="utf-8", newline="") as f:
+        schreiber = csv.writer(f)
+        schreiber.writerow([
+            "track_id", "gold", "schaetzung", "exakt", "nachbar",
+            "klasse", "vertrauen",
+        ])
+        for v in vergleiche:
+            schreiber.writerow([
+                v.track_id, v.gold, v.schaetzung,
+                int(v.exakt), int(v.nachbar),
+                _fehlerklasse(v.gold, v.schaetzung),
+                f"{v.vertrauen:.4f}",
+            ])
     return p
 
 # --- Ablauf -------------------------------------------------------------------
@@ -482,6 +576,7 @@ def laufen(args) -> int:
 
     z = auswerten(vergleiche)
     _json_schreiben(ordner, z)
+    csv_pfad = _csv_schreiben(ordner, vergleiche)
     bericht = _bericht_schreiben(ordner, z, dauer, gesamt)
     _log(f"Exakt:   {z['exakt']['quote'] * 100:0.1f} % "
          f"({z['exakt']['treffer']}/{z['tracks']}) -> "
@@ -490,6 +585,7 @@ def laufen(args) -> int:
          f"({z['nachbar']['treffer']}/{z['tracks']}) -> "
          f"Tor {'erreicht' if z['nachbar']['erreicht'] else 'NICHT erreicht'}")
     _log(f"JSON: {ordner / 'phase04-gold.json'}")
+    _log(f"CSV (alle {len(vergleiche)} Tracks): {csv_pfad}")
     _log(f"Bericht: {bericht}")
     return 0
 

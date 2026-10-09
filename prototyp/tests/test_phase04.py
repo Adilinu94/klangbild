@@ -182,3 +182,62 @@ def test_track_vergleichen_trifft_bei_sauberer_dreiklangtonspur():
     assert erg.gold == "8B"
     assert erg.exakt is True
     assert erg.vertrauen >= 0.0
+
+
+# --- Fehlerklassen (wo liegt der Schaetzer daneben?) -------------------------
+
+
+@pytest.mark.parametrize(
+    "gold,schaetzung,erwartet",
+    [
+        ("8A", "8A", "exakt"),
+        ("8A", "8B", "modus"),    # gleiche Ziffer, anderer Modus (rel. Dur/Moll)
+        ("8A", "9A", "quint"),    # gleicher Modus, Ziffer +1 (Quintenzirkel)
+        ("8A", "7A", "quint"),    # gleicher Modus, Ziffer -1 (kreisfoermig)
+        ("8A", "9B", "diagonal"),  # Ziffer +1 und Modus anders
+        ("8A", "7B", "diagonal"),  # Ziffer -1 und Modus anders
+        ("8A", "5A", "weit"),    # weither Abstand (Quinte+)
+    ],
+)
+def test_fehlerklasse_zuordnung(gold, schaetzung, erwartet):
+    assert phase04._fehlerklasse(gold, schaetzung) == erwartet
+
+
+def test_fehlerklasse_robust_bei_kurzen_werten():
+    assert phase04._fehlerklasse("8", "9A") == "weit"
+    assert phase04._fehlerklasse("8A", "") == "weit"
+
+
+def test_auswerten_zaehlt_klassen():
+    v = [_vergleich("a", "8A", "8A", True, True),   # exakt
+         _vergleich("b", "8A", "8B", False, True),  # modus
+         _vergleich("c", "8A", "9A", False, True),  # quint
+         _vergleich("d", "8A", "9B", False, False),  # diagonal
+         _vergleich("e", "8A", "5A", False, False)]  # weit
+    z = phase04.auswerten(v)
+    assert z["klassen"] == {"exakt": 1, "modus": 1, "quint": 1,
+                            "diagonal": 1, "weit": 1}
+
+
+# --- Per-Track-CSV-Export (MIREX-Stil, vollstaendig) -------------------------
+
+
+def test_csv_schreiben_vollstaendig(tmp_path):
+    v = [_vergleich("a", "8A", "8A", True, True),
+         _vergleich("b", "8A", "9B", False, False),
+         _vergleich("c", "8A", "5A", False, False)]
+    p = phase04._csv_schreiben(tmp_path, v)
+    assert p.exists()
+    zeilen = p.read_text(encoding="utf-8").strip().splitlines()
+    assert len(zeilen) == 1 + len(v)          # Kopfzeile + eine je Track
+    assert zeilen[0].split(",")[0] == "track_id"
+    # zweite Zeile = erster Track, exakt getroffen
+    felder = zeilen[1].split(",")
+    assert felder[0] == "a" and felder[1] == "8A" and felder[2] == "8A"
+    assert felder[3] == "1" and felder[4] == "1" and felder[5] == "exakt"
+
+
+def test_csv_schreiben_leer_nur_kopfzeile(tmp_path):
+    p = phase04._csv_schreiben(tmp_path, [])
+    inhalt = p.read_text(encoding="utf-8").strip().splitlines()
+    assert len(inhalt) == 1                   # nur die Kopfzeile

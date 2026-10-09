@@ -197,4 +197,14 @@ def _gold_uebersicht(ergebnisse: Path) -> str:
             f"| {name} | {t.get('treffer', 0)}/{n} "
             f"| {t.get('quote', 0) * 100:0.1f} % | {wilson} | {erreicht} |")
     zeilen.append(f"| harte Faelle | {daten.get('hart', {}).get('gesamt', 0)} | – | – | – |")
+    klassen = daten.get("klassen") or {}
+    if klassen:
+        zeilen.append("")
+        zeilen.append("Wo der Schaetzer danebenliegt (Fehlerklassen):")
+        for name in ("exakt", "modus", "quint", "diagonal", "weit"):
+            anz = klassen.get(name, 0)
+            zeilen.append(f"- {name}: {anz} ({anz / n * 100:0.1f} %)")
+    zeilen.append("")
+    zeilen.append("Vollstaendiger Per-Track-Export (alle Tracks): "
+                  "`ergebnisse/phase04-gold-tracks.csv`.")
     return "\n".join(zeilen)
