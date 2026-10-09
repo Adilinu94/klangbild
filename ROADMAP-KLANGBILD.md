@@ -256,6 +256,43 @@ Messung trennt Fortschritt von Rückschritt.
 
 ---
 
+## Phase 0.6 · Modus-Trennung (Dur/Moll) – Versuch, sauber negativ
+
+Die Fehlerdiagnose (Phase 0.5) zeigte einen **echten, messbaren Mode-Bias**:
+wir sagen 74× fälschlich **Dur** statt Moll, aber nur 47× umgekehrt. Die
+Modus-Entscheidung stimmt in **69,8 %** der Fälle. Das ist ein naheliegender,
+nicht-zirkulärer Hebel. Er wurde **gemessen** (FMAK n=400), statt angenommen.
+
+**Geprüft und gemessen verworfen (alles gegen denselben Goldsatz):**
+
+| Ansatz | exakt | Ergebnis |
+|---|---|---|
+| Basis (Phase 0.5) | 48,2 % | Ausgang |
+| Terz-Energie (große/kleine Terz erzwingt Modus) | = 48,2 % | **0 Fixes** – zirkulär: nutzt dieselbe Chroma-Energie, die den Modus schon bestimmt hat |
+| Globaler Dur→Moll-Bias (Sweep 0,01…0,10) | 45,8…48,0 % | repariert 2–6 Fälle, **zerschießt aber mehr** → netto **negativ** bei jedem Wert |
+| Kosinus-Profil, Summen-Profil, eng gekoppelte Terz | ≤ 48,2 % | kein Gewinn |
+
+**Warum der Bias scheitert (die eigentliche Erkenntnis):** Der Mode-Bias ist
+real, aber **global nicht korrigierbar**. Im Chroma-Raum sind „richtig-Dur" und
+„fälschlich-Dur" **nicht unterscheidbar** – ein Schwellenwert verschiebt das
+Problem, statt es zu lösen (handelt einen richtigen Dur gegen zwei falsche ein).
+Das belegt: Das Chroma-Profil-Verfahren hat bei **48,2 % exakt seine natürliche
+Decke**. Die Modus-Verwechslung liegt **in der Repräsentation** (flaches Chroma
+auf polyphoner Musik), nicht in einem behebbaren Parameter.
+
+**Konsequenz (Entscheidung, nicht Schönfärberei):** Kein Bias oder Terz-Trick
+wurde in den Code übernommen – er würde messbar verschlechtern. Wer die
+Modus-Genauigkeit heben will, braucht **kein besseres Chroma-Profil**, sondern
+eine andere Repräsentation (z. B. ein trainiertes Modell / der Konsens-Weg aus
+Phase 0.3, der bereits auf der Bibliothek läuft). Das ist der ehrliche,
+belegte Befund statt einer Schein-Verbesserung.
+
+> Tor-Status unverändert: exakt 48,2 %, Nachbar 73,5 %. Phase 0.6 schließt die
+> Frage „reicht ein feineres Profil?" mit einem **gemessenen Nein** und lenkt
+> den nächsten Schritt auf den trainierten Modell-Pfad.
+
+---
+
 ## Phase 1 · Auto-DJ offline (PC)
 
 Ziel: Der Prototyp baut aus der Bibliothek ein Set und **rendert** es als
