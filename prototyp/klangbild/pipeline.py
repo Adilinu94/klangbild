@@ -353,6 +353,21 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_p9.set_defaults(funktion=None)
 
+    p_p10 = unter.add_parser(
+        "phase10", parents=[pfade],
+        help="Phase 1.0 · Auto-DJ-Engine gegen bekannte Ground-Truth messen "
+             "(Beat-Kontinuitaet, Tempo-Gate, Lautheit; Tor an der Wilson-UG)",
+    )
+    p_p10.add_argument(
+        "--trials", type=int, default=0,
+        help="Anzahl Trials (Default aus phase10.TRIALS; fuer die Wilson-UG >= 35)",
+    )
+    p_p10.add_argument(
+        "--limit", type=int, default=0,
+        help="Nur die ersten N Trials ausfuehren (0 = alle; Rauchtest)",
+    )
+    p_p10.set_defaults(funktion=None)
+
     return parser
 
 
@@ -398,6 +413,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import phase09
 
         return phase09.laufen(args)
+
+    if args.befehl == "phase10":
+        from . import phase10
+
+        return phase10.laufen(args)
 
     return int(args.funktion(args))
 

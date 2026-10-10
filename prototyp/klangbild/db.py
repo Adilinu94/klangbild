@@ -219,6 +219,24 @@ def features_speichern(conn: sqlite3.Connection, track_id: int, version: str, we
     )
 
 
+def features_laden(conn: sqlite3.Connection, version: str) -> list[sqlite3.Row]:
+    """Alle analysierten Tracks (status 'ok') mit ihren Merkmalen zuruecklesen.
+
+    Der Planer (Phase 1) braucht BPM, Camelot, Beats/Downbeats und Energie als
+    Merkmal-Struct, nicht als Rohtabellen-Zeile. `status='ok'` haelt fehlerhafte
+    oder zu kurze Analysen aus dem Set heraus - sonst plant der Auto-DJ auf
+    kaputten Merkmalen. Sortiert nach id, damit die Reihenfolge reproduzierbar ist.
+    """
+    return conn.execute(
+        "SELECT t.id, t.pfad, f.bpm, f.beats_json, f.downbeats_json,"
+        "       f.key_name, f.key_camelot, f.key_vertrauen, f.lufs,"
+        "       f.energie_json, f.status"
+        " FROM tracks t JOIN features f ON f.track_id = t.id AND f.analyse_version = ?"
+        " WHERE f.status = 'ok' ORDER BY t.id",
+        (version,),
+    ).fetchall()
+
+
 def embedding_speichern(
     conn: sqlite3.Connection,
     track_id: int,

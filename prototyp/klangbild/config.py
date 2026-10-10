@@ -87,6 +87,33 @@ BEAT_THIS_CHECKPOINT: Path = _pfad_aus_umgebung(
 )
 
 
+# --- Planer (Phase 1, Auto-DJ, ROADMAP Phase 1 / Architektur Abschnitt 4) ------
+# Gewichte der Uebergangsnote. Kein Tor, nur Verhalten - deshalb hier sichtbar.
+# Tempo ist KEIN Gewicht, sondern ein hartes Gate (resample.tempo_passt, ADR-014).
+PLANER_GEWICHT_HARMONIE = 0.40   # Camelot: exakt / Nachbar / fremd
+PLANER_GEWICHT_KLANG = 0.35      # Klang-Vektor: Kosinus-Aehnlichkeit (0..1)
+PLANER_GEWICHT_ENERGIE = 0.25    # Energie-Reise: grosse Spruenge bestrafen
+PLANER_HARMONIE_EXAKT = 1.0
+PLANER_HARMONIE_NACHBAR = 0.6
+PLANER_HARMONIE_FREMD = 0.0
+# Ab diesem Lautstaerke-Sprung (dBFS, mittlere Energie) ist die Energie-Note 0.
+PLANER_ENERGIE_MAX_SPRUNG_DB = 12.0
+# Crossfade-Laenge in Takten (ADR-014 nennt 8 oder 16).
+PLANER_BLENDE_TAKTE = 16
+
+# Phase 1.0 (phase10): Vorab-Tore der Auto-DJ-Engine gegen bekannte Ground-Truth.
+# Kontinuitaet = Anteil Sets, deren Beat-Raster im ganzen Mix nicht galoppiert
+# (Variationskoeffizient der Onset-Abstaende <= phase10.TOR_GALOPP_CV_MAX).
+TOR_10_KONTINUITAET_MIN = 0.90
+# Tempo-Gate = Anteil Sets, in denen jeder geplante Uebergang innerhalb +-3 % des
+# Master-Takts bleibt (ADR-014). In diesem Vorab-Lauf sind alle Tempi absichtlich
+# innerhalb +-3 %, damit das Gate trifft - der Lauf prueft Resampling und
+# Ausrichtung, nicht die Gate-Logik (die ist in test_plan.py unit-getestet).
+TOR_10_GATE_MIN = 0.90
+# Lautheit = Anteil Sets innerhalb +-0,5 dB von -14 LUFS UND True Peak <= -1 dBTP.
+TOR_10_LAUTHEIT_MIN = 0.90
+
+
 @dataclass(frozen=True)
 class Einstellungen:
     bibliothek: Path = BIBLIOTHEK
