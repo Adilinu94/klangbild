@@ -513,11 +513,45 @@ Schritt. Offen bleiben: echter Musik-Groove (die synthetischen Sets sind starr),
 Tempo-Wechsel innerhalb eines Songs und die tatsächliche Hörqualität der
 Bass-Tausch-Blende.
 
-Befehle: `python -m klangbild phase10` (Messlauf, `--limit`/`--trials`),
-`python -m klangbild plan` und `python -m klangbild mix` (auf echter Bibliothek).
+Befehle: `python -m klangbild phase10` (Messlauf, `--limit`/`--trials`).
 Details: `prototyp/ergebnisse/phase10-autodj.{json,md,tracks.csv}`.
 Abgedeckt durch `tests/test_plan.py`, `tests/test_resample.py`,
-`tests/test_mix.py` (168 Tests grün).
+`tests/test_mix.py`.
+
+
+**Phase 1.1 fertig — echter Hörtest-Mix aus der eigenen Bibliothek (`mix`):**
+
+Der Sprung von Metronom zu echter Musik. `klangbild/autodj.py` rendert einen
+**echten** Mix aus analysierten Bibliothekstracks — mit **denselben** Bauteilen
+wie Phase 1.0, kein zweiter Algorithmus: `plan.baue_set` wählt die Reihenfolge
+(rein Merkmale), `mix.mix_set` rendert (identische Engine, ADR-014). Das Modul
+übersetzt nur die DB-Merkmale (BPM, Camelot, Downbeats, Energie) in die
+Planer-Eingabe und schreibt WAV + JSON-Protokoll.
+
+- `python -m klangbild mix [--start <id>] [--laenge <n>] [--aus <datei.wav>]`
+  (Standard: `ergebnisse/hoertest-mix.wav`).
+- **Tempo-Cluster als Master:** echte Bibliotheken streuen ihre Tempi, deshalb
+  wird standardmäßig der **größte Tempo-Cluster** (modal-häufigstes ganzes BPM)
+  als Start gewählt — das längste mögliche Set innerhalb des ±3-%-Gates, nicht
+  einfach der erste Track. `--start <id>` hebt das auf (dann ist dieser Song
+  Master).
+- **Robust gegen kaputte Merkmale:** Tracks ohne BPM/Downbeat fallen vor dem
+  Planen heraus; ein nicht decodierbarer Song wird einzeln übersprungen, statt
+  das Set zu killen. Fehlendes Wissen wirkt nie wie Abneigung.
+- **Erster echter Render (Smoke, 30 analysierte Tracks im Cluster ~130 BPM):**
+  4 Songs (Camelot 3B→8B→9B→10B, zwei saubere Nachbar-Übergänge, Master
+  130,4 BPM, alle tempo_faktor 1,0 — voll im Gate), **681,8 s**, **−14,0 LUFS**,
+  **TP −0,91 dBTP**. Raster durchgehend, Lautheit auf Referenz-Niveau.
+
+Das schließt die Lücke, die Phase 1.0 offen ließ: die Engine läuft jetzt auf
+**echter Musik** und liefert das Artefakt, das der blinde, randomisierte
+**Hörtest** (Phase 2, „Unfall"-Markierung) bewertet. Die Tore von Phase 1.0
+belegen die Messkette; *wie es klingt*, entscheidet weiterhin das Ohr — dieses
+Modul liefert nur die zu bewertenden Dateien, es behauptet keine Klanggüte.
+
+Abgedeckt durch `tests/test_autodj.py` (12 neue Tests: Merkmals-Übersetzung,
+Master-Wahl, Faktoren/Blende, Tempo-Cluster). **180 Tests grün**, lint sauber
+auf allen berührten Dateien.
 
 
 ---

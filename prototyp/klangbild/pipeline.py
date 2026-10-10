@@ -368,6 +368,24 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_p10.set_defaults(funktion=None)
 
+    p_mix = unter.add_parser(
+        "mix", parents=[pfade],
+        help="Phase 1.1 · echten Auto-DJ-Mix aus der Bibliothek rendern (Hoertest)",
+    )
+    p_mix.add_argument(
+        "--start", type=int, default=None,
+        help="Start-Track-ID (Default: groesster Tempo-Cluster = laengstes Set)",
+    )
+    p_mix.add_argument(
+        "--laenge", type=int, default=0,
+        help="Maximale Songanzahl im Set (0 = so viele das Tempo-Gate erlaubt)",
+    )
+    p_mix.add_argument(
+        "--aus", default=None,
+        help="Ziel-WAV-Datei (Default: ergebnisse/hoertest-mix.wav)",
+    )
+    p_mix.set_defaults(funktion=None)
+
     return parser
 
 
@@ -418,6 +436,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import phase10
 
         return phase10.laufen(args)
+
+    if args.befehl == "mix":
+        from . import autodj
+
+        return autodj.laufen(args)
 
     return int(args.funktion(args))
 
