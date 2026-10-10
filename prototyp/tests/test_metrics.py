@@ -53,6 +53,35 @@ def test_bpm_aus_beats():
     assert abs(metrics.bpm_aus_beats(beats) - 120.0) < 1e-6
 
 
+def test_bpm_aus_beats_leer_und_einzeln():
+    assert metrics.bpm_aus_beats([]) == 0.0
+    assert metrics.bpm_aus_beats([1.0]) == 0.0
+
+
+def test_bpm_aus_beats_128_mit_20ms_jitter_trifft_128():
+    # Der Kern-Bug: Beat This! quantelt auf 20 ms (50 fps). Der Median klebt an
+    # einer Stufe und lief bis ~2 % daneben; der Mittelwert ueber das Haupt-
+    # Cluster mittelt die +-10-ms-Quantelung heraus und muss 128,0 +- 0,1 treffen.
+    rng = np.random.default_rng(1234)
+    periode = 60.0 / 128.0                       # echte Beat-Periode
+    n = 64                                        # ~30 s Musik
+    echte = np.arange(n) * periode
+    # auf 20-ms-Raster quanteln (wie Beat This!) mit symmetrischem Jitter davor
+    jitter = rng.uniform(-0.01, 0.01, size=n)
+    gerastert = np.round((echte + jitter) / 0.02) * 0.02
+    assert abs(metrics.bpm_aus_beats(gerastert) - 128.0) < 0.1
+
+
+def test_bpm_aus_beats_ignoriert_oktav_ausreisser():
+    # Ein fehlender und ein doppelter Einschlag erzeugen 2x- bzw. 0,5x-Abstaende.
+    # Sie duerfen das Tempo nicht reissen (Haupt-Cluster haelt die Wahrheit).
+    basis = np.arange(0.0, 8.0, 0.5)             # 120 BPM
+    ausreisser = np.array([basis[-1] + 1.0,       # Luecke: 2x-Periode
+                           basis[-1] + 1.25])     # halbe Periode
+    beats = np.concatenate([basis, ausreisser])
+    assert abs(metrics.bpm_aus_beats(beats) - 120.0) < 0.5
+
+
 def test_tonart_genauigkeit_exakt_und_nachbar():
     referenz = ["C", "Am", "G", "F#m"]
     schaetzung = ["C", "C", "G", "F#m"]  # Am vs. C: gleiche Vorzeichen, aber anderer Code

@@ -268,27 +268,23 @@ def _bass_rampen(n: int, rate: int) -> tuple[np.ndarray, np.ndarray]:
 def _decke_true_peak(
     signal: np.ndarray, rate: int, grenze_db: float = config.TRUE_PEAK_GRENZE
 ) -> tuple[np.ndarray, float]:
-    """Bringt den True Peak unter `grenze_db` (dBTP) per sanftem Sinus-Klippen.
+    """Bringt den True Peak unter `grenze_db` (dBTP) per **Pegelabsenkung**.
 
-    Erst wird gemessen (`lufs.true_peak_dbtp`); liegt die Spitze darueber, wird
-    alles ueber einer weichen Schwelle per sin-Kurve gerundet statt hart
-    abgeschnitten - das vermeidet das Knacken harten Clips. Liegt die Spitze
-    drunter, bleibt das Signal unberuehrt (kein sinnloser Pegelverlust).
+    Erst wird gemessen (`lufs.true_peak_dbtp`); liegt die Spitze darueber, wird das
+    **ganze** Signal um genau die Ueberhoehung abgesenkt und erneut gemessen. Das
+    ist ehrlich und verzerrungsfrei - kein weiches Knie, kein hartes Klippen.
+    Ein True-Peak-Limiter mit Lookahead/Angriff waere der naechste Schritt, aber
+    Absenken respektiert die Grenze garantiert und laesst den Mix unverfaerbt.
+    Liegt die Spitze drunter, bleibt das Signal unberuehrt (kein Pegelverlust).
     """
     spitze_db = lufs.true_peak_dbtp(signal, rate)
     if not np.isfinite(spitze_db) or spitze_db <= grenze_db:
         return signal, spitze_db
-    ziel_lin = 10.0 ** (grenze_db / 20.0)
-    ausgabe = signal.copy()
-    drueber = np.abs(signal) > ziel_lin
-    if np.any(drueber):
-        # Alles ueber der Schwelle wird per sin-Halbwelle auf [0, ziel_lin]
-        # komprimiert (weiches Knie); Vorzeichen bleibt erhalten.
-        betrag = np.abs(signal[drueber])
-        anteil = np.minimum(betrag / ziel_lin, 1.0)
-        neu = ziel_lin * np.sin(anteil * (np.pi / 2.0))
-        ausgabe[drueber] = np.sign(signal[drueber]) * neu
-    return ausgabe.astype(np.float32), lufs.true_peak_dbtp(ausgabe, rate)
+    # Um die Ueberhoehung plus 0,01 dB Sicherheit senken (float32-Rundung), damit
+    # die Nachmessung garantiert <= Grenze landet statt haarescharf darauf.
+    dba = grenze_db - spitze_db - 0.01
+    ausgabe = (signal * (10.0 ** (dba / 20.0))).astype(np.float32)
+    return ausgabe, lufs.true_peak_dbtp(ausgabe, rate)
 
 
 @dataclass(frozen=True)

@@ -97,4 +97,43 @@ def test_band_teilen_filtert_wirklich_wenn_scipy_da():
     assert _rms(low) > 0.8 * _rms(bass)              # Bass bleibt im LOW-Band
     assert _rms(high) < 0.2 * _rms(bass)             # kaum Durchlass nach oben
 
-# === WEITER ===
+
+# --- True-Peak-Deckel: Absenken statt harte Kappung -------------------------
+
+
+def test_decke_true_peak_senkt_ueberhöhung_unter_grenze():
+    from klangbild import config, lufs
+
+    rate = 22050
+    # Lautes Signal, das die -1 dBTP-Grenze klar reisst (Amp 0,98 ~ -0,2 dBFS,
+    # mit Oversampling wandert die Spitze noch hoeher).
+    laut = _sinus(997.0, 1.0, rate, amp=0.98)
+    vorher = lufs.true_peak_dbtp(laut, rate)
+    gedeckt, danach = mix._decke_true_peak(laut, rate)
+    # Ehrliche Absenkung: Pegel sinkt monoton, nichts wird geclippt.
+    assert danach <= config.TRUE_PEAK_GRENZE
+    assert danach < vorher
+    assert float(np.abs(gedeckt).max()) <= float(np.abs(laut).max())
+
+
+def test_decke_true_peak_verzerrt_nicht_unter_grenze():
+    from klangbild import config
+
+    rate = 22050
+    leise = _sinus(997.0, 1.0, rate, amp=0.1)        # klar unter der Grenze
+    gedeckt, spitze = mix._decke_true_peak(leise, rate)
+    # Unter der Grenze bleibt das Signal bitgleich (kein sinnloser Pegelverlust).
+    assert np.array_equal(gedeckt, leise)
+    assert spitze <= config.TRUE_PEAK_GRENZE
+
+
+def test_decke_true_peak_form_bleibt_erhalten():
+    # Reine Pegelabsenkung aendert die Wellenform nicht - nur die Amplitude.
+    # Ein harter/sinusfoermiger Limiter wuerde die Form knicken (das war der Bug).
+    rate = 22050
+    laut = _sinus(440.0, 0.5, rate, amp=0.99)
+    gedeckt, _ = mix._decke_true_peak(laut, rate)
+    n = len(laut)
+    k = int(0.3 * n)                                 # Probe in der Mitte
+    # Verhaeltnis zum lokalen Max bleibt konstant -> gleiche Form, anderer Pegel.
+    assert abs(gedeckt[k] / laut[k] - float(gedeckt.max()) / float(laut.max())) < 1e-4

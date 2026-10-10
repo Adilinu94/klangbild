@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .keyestimate import camelot_nachbarn, CAMELOT_MAJOR, CAMELOT_MINOR
+from .keyestimate import CAMELOT_MAJOR, CAMELOT_MINOR, camelot_nachbarn
 
 STANDARD_TOLERANZ_S = 0.070
 
@@ -87,7 +87,19 @@ def downbeat_richtig(
 
 
 def bpm_aus_beats(beats: np.ndarray | list[float]) -> float:
-    """Tempo als Median der Schlagabstaende (robuster als Mittelwert)."""
+    """Tempo als **Mittelwert ueber das Haupt-Cluster** der Schlagabstaende.
+
+    Beat This! setzt Einschlaege auf ein 50-fps-Raster (20-ms-Stufen). Die
+    Abstaende sind damit gequantelt, und ihr **Median** klebt an einer Stufe -
+    er laeu systematisch daneben (gemessen bis ~2 %, im Mittel ~1,1 %). Fuer
+    Beatmatching braucht es aber etwa +-0,1 %.
+
+    Der **Mittelwert** des Haupt-Clusters mittelt die +-10-ms-Quantelung heraus
+    (Teleskop-Effekt: die Randfehler der Stufen heben sich ueber viele
+    Abstaende auf) und trifft das echte Tempo. Doppelte/fehlende Einschlaege
+    erzeugen Oktav-Ausreisser (Faktor ~0,5 bzw. ~2); die fallen aus dem Cluster,
+    weil nur Abstaeende nahe der Median-Periode zaehlen.
+    """
     b = np.sort(np.asarray(beats, dtype=float))
     if b.size < 2:
         return 0.0
@@ -95,7 +107,13 @@ def bpm_aus_beats(beats: np.ndarray | list[float]) -> float:
     abstaende = abstaende[abstaende > 0]
     if abstaende.size == 0:
         return 0.0
-    return float(60.0 / np.median(abstaende))
+    periode = float(np.median(abstaende))
+    # Haupt-Cluster: Abstände innerhalb ±40 % der Median-Periode. Das lässt
+    # Microtiming/Jitter zu, lässt aber Oktav-Ausreisser (0,5x/2x) draußen.
+    kern = abstaende[np.abs(abstaende - periode) <= 0.40 * periode]
+    if kern.size == 0:
+        kern = abstaende
+    return float(60.0 / np.mean(kern))
 
 
 @dataclass(frozen=True)
