@@ -473,6 +473,53 @@ Audiopfads, mir_eval nicht (Lizenz unklar, Metriken sind selbst geschrieben).
 gerenderten Mixe. Trotzdem nur Werkzeuge nutzen, die später auch auf Android
 erlaubt sind (ADR-012), damit die Ergebnisse übertragbar sind.
 
+**Phase 1.0 fertig — Auto-DJ-Engine gegen bekannte Ground-Truth gemessen (n=40):**
+
+Die Engine (Planer, Vinyl-Resampling, Mix-Renderer) ist gebaut und wurde nicht
+anegenommen, sondern **gemessen** — dieselbe Disziplin wie Phase 0.8/0.9. Als
+Ground-Truth dienen **synthetische Sets mit bekanntem Tempo/Raster**: ein
+musik-ähnliches Signal (Kick-Onset über getragenem Bett, realistischer
+Crest-Factor ~12 dB statt eines nackten Klick-Zugs) mit exakt bekannten Beat- und
+Downbeat-Positionen aus `phase02.baue_metronome`. Jeder Trial zieht **jeden**
+Track auf das Tempo des Masters (durchgehend ein Raster, ADR-014) und rendert das
+Set; ein Onset-Detektor misst danach das tatsächliche Beat-Raster im Mix.
+
+| Kennzahl | Treffer/N | Quote | Wilson-UG | Tor (als UG) | erreicht? |
+|---|---|---|---|---|---|
+| Beat-Kontinuität (CV ≤ 0,03) | 40/40 | 100,0 % | 91,2 % | ≥ 90 % | **JA** |
+| Tempo-Gate (≤ ±3 %) | 40/40 | 100,0 % | 91,2 % | ≥ 90 % | **JA** |
+| Lautheit (−14 LUFS ±0,5, TP ≤ −1) | 40/40 | 100,0 % | 91,2 % | ≥ 90 % | **JA** |
+
+- mittlere Beat-CV im Mix: **0,0092** (max 0,0099) — das Raster bleibt über den
+  ganzen Setübergang hinweg durchgehend; ein Galoppieren (das ADR-014 verhindern
+  will) tritt nicht auf.
+- Entscheidungen fallen an der **Untergrenze** des Wilson-Intervalls, nicht am
+  Punktwert: 40/40 ergeben UG 91,2 %, sicher über dem 90-%-Tor. (Arithmetisch
+  braucht ein perfektes k/n die UG n/(n+3,84); die daher n ≥ 35 — 40 Trials sind
+  genau deswegen gewählt, damit das Tor überhaupt erreichbar ist.)
+- **Determinismus:** der Planer ist pro Eingabe deterministisch; die n=40 Trials
+  sind **40 echte, verschiedene** Renderings — jeder Trial verschiebt das
+  Tempo-Zentrum (Sweep über die legale ±3-%-Bandbreite) und rotiert den
+  Start-Track (→ anderer Master, andere Resampling-Richtungen). Kein Measurement
+  wird 40× gezählt; das Intervall ist ehrlich.
+
+
+**Grenze der Aussage (wichtig):** Die Tore belegen, dass **Messkette und Engine
+auf bekannten synthetischen Signalen** korrekt liegen — Beat-Raster durchgehend,
+Tempo innerhalb der Gate-Grenze, Lautheit auf dem Referenz-Niveau. Sie belegen
+**nicht**, dass die Übergänge auf echter Musik gut *klingen*. Genau dafür ist das
+**Hörtest-Design** oben (blind, randomisiert, „Unfall"-Markierung) der nächste
+Schritt. Offen bleiben: echter Musik-Groove (die synthetischen Sets sind starr),
+Tempo-Wechsel innerhalb eines Songs und die tatsächliche Hörqualität der
+Bass-Tausch-Blende.
+
+Befehle: `python -m klangbild phase10` (Messlauf, `--limit`/`--trials`),
+`python -m klangbild plan` und `python -m klangbild mix` (auf echter Bibliothek).
+Details: `prototyp/ergebnisse/phase10-autodj.{json,md,tracks.csv}`.
+Abgedeckt durch `tests/test_plan.py`, `tests/test_resample.py`,
+`tests/test_mix.py` (168 Tests grün).
+
+
 ---
 
 ## Phase 2 · Validierung (Produkt §14)

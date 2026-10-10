@@ -62,6 +62,53 @@ def _log(text: str) -> None:
     print(text, flush=True)
 
 
+def _musik_signal(metro) -> np.ndarray:
+    """Musik-aehnliches Signal fuer den Phase-1-Vorab-Check (nicht phase02).
+
+    `phase02.Metronom.signal` ist ein reiner Impuls-Zug: zwischen den Schlaehen
+    ist Stille, der Crest-Factor ~24 dB (reale Musik ~10-14 dB). Auf -14 LUFS
+    normalisiert explodiert der wahre Peak; der -1-dBTP-Deckel opfert dann ~17 dB
+    und reisst die Lautheit auf ~-26 LUFS. `mix.py` ist korrekt - das **Signal**
+    war unrealistisch.
+
+    Wir behalten die **Ground-Truth-Positionen** aus metro.beats/downbeats (der
+    Auto-DJ richtet sich danach) und legen darum:
+    - einen Kick (abklingender Tiefton) auf jeden Schlag -> klarer Einsatz fuer
+      die Onset-Erkennung und Masse fuer den Basstausch,
+    - ein getragenes, leises Bett dazwischen -> realistischer RMS, kontrollierter
+      Crest-Factor, kontinuierliche Energie (wie ein Pad).
+
+    Das Bett bleibt unter der 20-%-Onset-Schwelle, schlaegt aber im RMS zu Buche -
+    genau der Unterschied, der -14 LUFS und -1 dBTP gemeinsam erreichbar macht.
+    """
+    rate = int(metro.rate)
+    anzahl = int(metro.sekunden * rate)
+    if anzahl <= 0:
+        return np.zeros(0, dtype=np.float32)
+    t = np.arange(anzahl, dtype=np.float64) / rate
+
+    # Getragenes Bett: leiser Akkord (tiefe Teiler), gibt vorwiegend RMS-Energie.
+    bett = (0.16 * np.sin(2 * np.pi * 110.0 * t)
+            + 0.09 * np.sin(2 * np.pi * 165.0 * t)
+            + 0.07 * np.sin(2 * np.pi * 220.0 * t))
+    signal = bett
+
+    # Kick auf jeden Schlag: abklingender 60-Hz-Ton, scharfer Einsatz.
+    for index, zeit in enumerate(metro.beats):
+        start = int(zeit * rate)
+        if start >= anzahl:
+            break
+        laenge = min(int(0.12 * rate), anzahl - start)
+        tt = np.arange(laenge, dtype=np.float64) / rate
+        hull = np.exp(-tt / 0.028)
+        kick = 0.6 * hull * np.sin(2 * np.pi * 58.0 * tt)
+        # Downbeat minimal betont (nur Orientierung; Onsets egal ob betont).
+        amplitude = 1.0 if index % metro.takt == 0 else 0.82
+        signal[start:start + laenge] += amplitude * kick
+
+    return np.clip(signal, -1.0, 1.0).astype(np.float32)
+
+
 # --- Synthetisches Set -------------------------------------------------------
 @dataclass(frozen=True)
 class SetTrack:
@@ -74,7 +121,9 @@ class SetTrack:
 
     @property
     def signal(self) -> np.ndarray:
-        return self.metro.signal
+        # Musik-aehnlich (Kick + getragenes Bett), nicht der rohe Klick-Zug - nur
+        # so sind -14 LUFS und -1 dBTP physikalisch gemeinsam erreichbar.
+        return _musik_signal(self.metro)
 
 
 # Camelot-Leiter: benachbarte Codes (9A→10A→11A→…), damit der Planer eine
