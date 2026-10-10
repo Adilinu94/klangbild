@@ -1,12 +1,11 @@
-"""Uebergangs-Engine des Auto-DJ (Phase 1, ROADMAP, ADR-014).
+"""Uebergangs-Engine des Auto-DJ (Phase 1, ROADMAP, ADR-020).
 
-Rendert aus einem `plan.Plan` eine Mix-Datei. Der Uebergang A->B laeuft nach
-ADR-014 (Vinyl-Angleich per Resampling) und der Roadmap Phase 1:
+Rendert aus einem `plan.Plan` eine Mix-Datei. Der Uebergang A->B läuft nach ADR-020 (Vinyl-Angleich per Resampling) und der Roadmap Phase 1:
 
 1. **Tempoangleich:** B wird per Resampling (`resample.resample`) auf das Tempo
    von A gezogen. Damit laufen die Beats nach dem Uebergang **im Raster von A**
    statt auseinander - genau das, was 1 % Tempounterschied ueber 16 Takte sonst
-   hoerbar galoppieren liesse (ADR-014). Der Faktor kommt **aus dem Plan**, damit
+   hoerbar galoppieren liesse (ADR-020). Der Faktor kommt **aus dem Plan**, damit
    Planer und Renderer identisch rechnen.
 2. **Taktgenaues Einsetzen:** A steigt am Ende einer Phrase aus (auf einem
    Downbeat), B setzt **auf einem Downbeat** ein - und weil B auf A-Tempo
@@ -167,7 +166,7 @@ def uebergang_rendern(
 ) -> np.ndarray:
     """Rendert genau einen Uebergang A -> B und liefert den fertigen Block.
 
-    Ablauf (ADR-014, Roadmap Phase 1):
+    Ablauf (ADR-020, Roadmap Phase 1):
     - B wird per Resampling auf A-Tempo gezogen (`faktor` stammt aus `plan`, damit
       Planer und Renderer identisch rechnen). Die Beats bleiben damit im Raster.
     - A laeuft bis `a_ausstieg_s` (Ausstieg auf einem Downbeat / Phrasenende). Die
@@ -223,7 +222,7 @@ def waehle_ausstieg(
     Mit `phrasen_takte` (z. B. 8) wird der Ausstieg auf ein **Phrasenraster**
     gezwungen (jeder n-te Downbeat = Phrasenanfang), statt auf den allerletzten
     Takt. Das ist der Unterschied zwischen „im Ausklang/Fade-out aussteigen" und
-    „an einem Phrasenuebergang aussteigen" - letzteres klingt nach DJ (ADR-014).
+    „an einem Phrasenuebergang aussteigen" - letzteres klingt nach DJ (ADR-020).
     Faellt kein Phrasenanfang mit Blendenplatz vor, wird auf den letzten normalen
     Downbeat bzw. das Songende zurueckgegriffen (ehrlich degradieren).
 
@@ -356,7 +355,7 @@ def mix_set(
     - A steigt auf einem Downbeat aus (`waehle_ausstieg`), B setzt auf einem
       Downbeat ein (`waehle_einstieg`).
     - B wird per `resample` mit `faktoren[B]` auf A's laufendes Tempo gezogen
-      (ADR-014). Der Faktor kommt **aus dem Plan**, damit Plan und Mix identisch
+      (ADR-020). Der Faktor kommt **aus dem Plan**, damit Plan und Mix identisch
       rechnen; beide Spuren liegen so auf demselben Beat-Raster.
     - Die letzten `blende_s` von A und die ersten `blende_s` von B werden
       equipotent uebergeblendet (`_fade_segment`, optional mit Bass-Tausch).
@@ -396,7 +395,7 @@ def mix_set(
         ende_n = min(len(spur), max(anfang_n + 1, round(ausstieg_s * rate)))
         segment = spur[anfang_n:ende_n]
 
-        # Tempoangleich auf die laufende Zeit (Faktor aus dem Plan, ADR-014).
+        # Tempoangleich auf die laufende Zeit (Faktor aus dem Plan, ADR-020).
         faktor = float(faktoren.get(track_id, 1.0)) if position > 0 else 1.0
         if faktor and abs(faktor - 1.0) > 1e-9:
             segment = resample.resample(segment, rate, faktor)

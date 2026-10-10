@@ -1,8 +1,9 @@
-"""Vinyl-Tempoangleich per Resampling (ADR-014).
+"""Vinyl-Tempoangleich per Resampling (ADR-014, Gate per ADR-020 auf +-1 %).
 
 Version 1 zieht Song B per **einfachem Resampling** auf das Tempo von A - das
 Vinyl-Prinzip. Tonhoehe und Tempo aendern sich dabei gemeinsam; der Planer
-begrenzt den Sprung auf +-3 % (ADR-014), das ist etwa ein halber Halbton.
+begrenzt den Sprung auf +-1 % (ADR-020), das sind 0,17 Halbtöne (17 Cent).
+Ohne Keylock wäre ±3 % (0,51 Halbtöne, ADR-014) hörbar verstimmt.
 
 Zwei Wege, **dieselbe** Tempo-Mathematik:
 
@@ -24,7 +25,7 @@ from __future__ import annotations
 
 import numpy as np
 
-TEMPO_MAX_ABWEICHUNG = 0.03  # +-3 % (ADR-014)
+TEMPO_MAX_ABWEICHUNG = 0.01  # +-1 % (ADR-020, Vinyl bis Keylock kommt)
 
 
 def tempo_faktor(
@@ -47,8 +48,8 @@ def tempo_passt(
 ) -> bool:
     """True, wenn `von_bpm` ohne Klemmung innerhalb +-`max_abweichung` liegt.
 
-    Der Planer nutzt das als harte Bedingung: liegen zwei Tempi weiter als 3 %
-    auseinander, gehoeren sie nicht in dasselbe Set (ADR-014).
+    Der Planer nutzt das als harte Bedingung: liegen zwei Tempi weiter als 1 %
+    auseinander, gehoeren sie nicht in dasselbe Set (ADR-020).
     """
     if von_bpm <= 0 or auf_bpm <= 0:
         return False

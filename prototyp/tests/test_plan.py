@@ -74,27 +74,27 @@ def test_uebergang_note_gewicht_ohne_vektor():
 
 
 def test_uebergang_tempo_gate_ist_hart():
-    # 120 vs 160 BPM: 33 % auseinander, jenseits +-3 % -> Note 0, Faktor geklemmt.
-    # Faktor = deck/kandidat = 120/160 = 0,75, geklemmt auf 0,97: das zieht B
+    # 120 vs 160 BPM: 33 % auseinander, jenseits +-1 % -> Note 0, Faktor geklemmt.
+    # Faktor = deck/kandidat = 120/160 = 0,75, geklemmt auf 0,99: das zieht B
     # *langsamer*, also in Richtung Deck (resample_linear wuerde B verlaengern).
-    # 1,03 wuerde B weiter vom Deck wegbeschleunigen - deshalb ist 0,97 richtig.
+    # 1,01 wuerde B weiter vom Deck wegbeschleunigen - deshalb ist 0,99 richtig.
     a = _track(1, 120.0, "8A", -10.0)
     b = _track(2, 160.0, "8A", -10.0)
     u = plan.uebergang_note(a, b, energie_gewichtet=True)
     assert u.note == 0.0
-    assert abs(u.tempo_faktor - 0.97) < 1e-9        # Klemmung zur Deck-Seite
+    assert abs(u.tempo_faktor - 0.99) < 1e-9        # Klemmung zur Deck-Seite
     assert "Tempo-Gate" in u.grund
 
 
 def test_uebergang_tempo_knapp_drin_bleibt_offen():
-    # 120 vs 123 BPM: +2,5 %, innerhalb des Gates -> Note nicht weggeworfen.
-    # Faktor = deck/kandidat = 120/123 = 0,9756: B wird leicht verlangsamt, damit
-    # ihre Beats auf dem 120er-Deckraster landen (123 * 0,9756 = 120, ADR-014).
+    # 120 vs 121 BPM: +0,8 %, innerhalb des Gates -> Note nicht weggeworfen.
+    # Faktor = deck/kandidat = 120/121 = 0,9917: B wird leicht verlangsamt, damit
+    # ihre Beats auf dem 120er-Deckraster landen (121 * 0,9917 = 120, ADR-020).
     a = _track(1, 120.0, "8A", -10.0)
-    b = _track(2, 123.0, "8A", -10.0)
+    b = _track(2, 121.0, "8A", -10.0)
     u = plan.uebergang_note(a, b, energie_gewichtet=True)
     assert u.note > 0.0
-    assert abs(u.tempo_faktor - (120.0 / 123.0)) < 1e-3
+    assert abs(u.tempo_faktor - (120.0 / 121.0)) < 1e-3
 
 
 def test_uebergang_vektor_erhoeht_den_klanganteil():

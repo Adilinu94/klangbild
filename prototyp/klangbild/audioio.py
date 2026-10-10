@@ -58,6 +58,11 @@ def decodieren_stereo(pfad: str | Path, ziel_rate: int) -> Audio:
     Stereobild entstehen, nicht als Analyse-Mono. Die Zeitpunkte (Sekunden) sind
     ratenunabhaengig und lassen sich direkt auf das Downbeat-Raster uebertragen.
 
+    Grenze: soundfile dekodiert WAV/FLAC/OGG, aber **kein AAC/M4A** (libsndfile).
+    Solche Dateien scheitern mit Lesefehler, der Aufrufer markiert sie als
+    "fehler" (statt sie still zu ueberspringen). FFmpeg waere die Loesung, ist
+    aber LGPL - bewusst draussen (ADR-012). Auf Android dekodiert Media3 alles.
+
     Rueckgabe: `Audio.daten` ist (n_samples, n_channels). `soxr.resample`
     resampled **je Kanal** (axis=0), damit L/R getrennt bleiben.
     """

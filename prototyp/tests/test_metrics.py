@@ -89,3 +89,12 @@ def test_tonart_genauigkeit_exakt_und_nachbar():
     assert ergebnis.exakt == 3
     # Am (8A) und C (8B) sind Camelot-Nachbarn -> zaehlt als Nachbar-Treffer
     assert ergebnis.nachbar == 4
+
+
+def test_bpm_aus_beats_auftakt_und_langer_song():
+    # 128 BPM ueber 3 Minuten auf 20-ms-Raster, mit Auftakt auf halbem Schlag und
+    # einem Doppel-Einschlag: der Index darf weder kippen noch verrutschen.
+    periode = 60.0 / 128.0
+    raster = np.arange(1.0, 180.0, periode)
+    beats = np.round(np.concatenate([[1.0 - periode / 2], raster, [raster[100] + periode / 2]]) / 0.02) * 0.02
+    assert abs(metrics.bpm_aus_beats(beats) - 128.0) < 0.128

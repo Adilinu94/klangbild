@@ -64,10 +64,10 @@ def test_faktoren_erster_song_ist_master():
 
 
 def test_faktoren_werden_geklemmt_wie_resample():
-    index = {1: _track(1, 120.0), 2: _track(2, 200.0)}  # weit ausserhalb +-3 %
+    index = {1: _track(1, 120.0), 2: _track(2, 200.0)}  # weit ausserhalb +-1 %
     faktoren = autodj._faktoren([1, 2], index, master_bpm=120.0)
-    assert faktoren[2] == resample.tempo_faktor(200.0, 120.0)  # geklemmt 0.97
-    assert abs(faktoren[2] - 0.97) < 1e-9
+    assert faktoren[2] == resample.tempo_faktor(200.0, 120.0)  # geklemmt 0.99
+    assert abs(faktoren[2] - 0.99) < 1e-9
 
 
 def test_blende_s_sind_ganze_takte_des_masters():
@@ -82,7 +82,7 @@ def test_blende_s_sind_ganze_takte_des_masters():
 
 
 def _db_mit_features(rows):
-    """rows: (id, bpm, downbeats_json, camelot, status).
+    """rows: (id, bpm, downbeats_json, camelot, status[, pfad]).
 
     Spiegelt db.verbinden: row_factory = sqlite3.Row, damit autodj ueber
     Spaltennamen (z["bpm"]) liest wie in Produktion.
@@ -95,9 +95,11 @@ def _db_mit_features(rows):
         " beats_json TEXT, downbeats_json TEXT, key_name TEXT, key_camelot TEXT,"
         " key_vertrauen REAL, lufs REAL, energie_json TEXT, status TEXT)"
     )
-    for tid, bpm, downbeats, camelot, status in rows:
+    for zeile in rows:
+        tid, bpm, downbeats, camelot, status = zeile[:5]
+        pfad = zeile[5] if len(zeile) > 5 else f"t{tid}"
         conn.execute("INSERT INTO tracks (id, pfad) VALUES (?, ?)",
-                     (tid, f"t{tid}"))
+                     (tid, pfad))
         conn.execute(
             "INSERT INTO features (track_id, analyse_version, bpm, beats_json,"
             " downbeats_json, key_name, key_camelot, key_vertrauen, lufs,"
@@ -114,7 +116,7 @@ def test_lade_tracks_wirft_halbe_merkmale_raus():
         (1, 120.0, "[0.0, 2.0]", "8A", "ok"),   # komplett -> bleibt
         (2, None, "[0.0, 2.0]", "8A", "ok"),    # kein bpm -> faellt raus
         (3, 120.0, "[]", "8A", "ok"),           # kein downbeat -> faellt raus
-        (4, 120.0, "[0.0]", "8A", "fehler"),    # status nicht ok -> raus
+        (4, 120.0, "[0.4]", "8A", "fehler"),    # status nicht ok -> raus
     ])
     tracks, downbeats, pfade, _ = autodj.lade_tracks(
         conn, VERSION, start=None, laenge=0)
@@ -126,10 +128,10 @@ def test_lade_tracks_wirft_halbe_merkmale_raus():
 
 def test_lade_tracks_waehlt_den_groessten_tempo_cluster():
     conn = _db_mit_features([
-        (1, 100.0, "[0.0]", "8A", "ok"),
-        (2, 120.0, "[0.0]", "8A", "ok"),
-        (3, 121.0, "[0.0]", "9A", "ok"),   # rundet auf 120 -> gleicher Cluster
-        (4, 120.0, "[0.0]", "8A", "ok"),
+        (1, 100.0, "[0.1]", "8A", "ok"),
+        (2, 120.0, "[0.2]", "8A", "ok"),
+        (3, 121.0, "[0.3]", "9A", "ok"),   # rundet auf 120 -> gleicher Cluster
+        (4, 120.0, "[0.4]", "8A", "ok"),
     ])
     _, _, _, start_id = autodj.lade_tracks(
         conn, VERSION, start=None, laenge=0)
@@ -140,8 +142,8 @@ def test_lade_tracks_waehlt_den_groessten_tempo_cluster():
 
 def test_lade_tracks_start_wird_respektiert():
     conn = _db_mit_features([
-        (1, 120.0, "[0.0]", "8A", "ok"),
-        (2, 100.0, "[0.0]", "9A", "ok"),
+        (1, 120.0, "[0.1]", "8A", "ok"),
+        (2, 100.0, "[0.2]", "9A", "ok"),
     ])
     _, _, _, start_id = autodj.lade_tracks(
         conn, VERSION, start=2, laenge=0)
@@ -164,3 +166,30 @@ def test_cluster_starts_meiden_ueberlappende_tempi():
     tracks = [t(1, 128.0), t(2, 128.2), t(3, 129.0), t(4, 140.0), t(5, 100.0)]
     # 129 liegt im 3-%-Gate von 128 -> kein eigenes Paar.
     assert autodj.cluster_starts(tracks, 3) == [1, 4, 5]
+
+
+def test_lade_tracks_ueberspringt_dubletten():
+    # Gleiche Aufnahme als MP3 und FLAC: identische Downbeats -> nur einmal ins Set.
+    conn = _db_mit_features([
+        (1, 120.0, "[0.0, 2.0]", "8A", "ok"),
+        (2, 120.0, "[0.0, 2.0]", "8A", "ok"),
+        (3, 121.0, "[0.5, 2.5]", "8A", "ok"),
+    ])
+    tracks, _, _, _ = autodj.lade_tracks(conn, VERSION, start=None, laenge=0)
+    assert [t.id for t in tracks] == [1, 3]
+    conn.close()
+
+
+def test_lade_tracks_ueberspringt_dubletten_mit_anderem_schnitt():
+    # Dieselbe Aufnahme, anders geschnitten (MP3 vs FLAC): Downbeats
+    # verschieden, aber normalisierter Titel gleich -> nur einmal ins Set.
+    conn = _db_mit_features([
+        (1, 131.0, "[0.0, 2.0]", "8A", "ok",
+         "I Feel Better - Oscar Farrell Remix-DJ SeinfeldOscar Farrell.mp3"),
+        (2, 131.0, "[0.1, 2.1]", "8A", "ok",
+         "I Feel Better - Oscar Farrell Remix - DJ Seinfeld, Oscar Farrell.flac"),
+        (3, 132.0, "[0.5, 2.5]", "8A", "ok", "Anderer Song.mp3"),
+    ])
+    tracks, _, _, _ = autodj.lade_tracks(conn, VERSION, start=None, laenge=0)
+    assert [t.id for t in tracks] == [1, 3]
+    conn.close()

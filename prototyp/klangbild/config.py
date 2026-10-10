@@ -47,7 +47,7 @@ EINBETTUNG_TRAINIERTEXT_PRAEFIX = "SentenceSimilarity"
 EINBETTUNG_DEAKTIVIERTE_ENCODER = {"vision_config": None}
 
 # --- Versionierung ----------------------------------------------------------
-ANALYSE_VERSION = "0.2.0"    # wechselt das Verfahren, wird ALLES neu gerechnet (0.2.0: BPM per Cluster-Mittel statt Median)
+ANALYSE_VERSION = "0.3.0"    # wechselt das Verfahren, wird ALLES neu gerechnet (0.3.0: BPM per Regression ueber alle Beats)
 MODELL_VERSION = "embeddinggemma-2/256d@2026-10-08"
 
 # --- Lautheit ---------------------------------------------------------------
@@ -94,7 +94,7 @@ BEAT_THIS_CHECKPOINT: Path = _pfad_aus_umgebung(
 
 # --- Planer (Phase 1, Auto-DJ, ROADMAP Phase 1 / Architektur Abschnitt 4) ------
 # Gewichte der Uebergangsnote. Kein Tor, nur Verhalten - deshalb hier sichtbar.
-# Tempo ist KEIN Gewicht, sondern ein hartes Gate (resample.tempo_passt, ADR-014).
+# Tempo ist KEIN Gewicht, sondern ein hartes Gate (resample.tempo_passt, ADR-020).
 PLANER_GEWICHT_HARMONIE = 0.40   # Camelot: exakt / Nachbar / fremd
 PLANER_GEWICHT_KLANG = 0.35      # Klang-Vektor: Kosinus-Aehnlichkeit (0..1)
 PLANER_GEWICHT_ENERGIE = 0.25    # Energie-Reise: grosse Spruenge bestrafen
@@ -110,9 +110,9 @@ PLANER_BLENDE_TAKTE = 16
 # Kontinuitaet = Anteil Sets, deren Beat-Raster im ganzen Mix nicht galoppiert
 # (Variationskoeffizient der Onset-Abstaende <= phase10.TOR_GALOPP_CV_MAX).
 TOR_10_KONTINUITAET_MIN = 0.90
-# Tempo-Gate = Anteil Sets, in denen jeder geplante Uebergang innerhalb +-3 % des
-# Master-Takts bleibt (ADR-014). In diesem Vorab-Lauf sind alle Tempi absichtlich
-# innerhalb +-3 %, damit das Gate trifft - der Lauf prueft Resampling und
+# Tempo-Gate = Anteil Sets, in denen jeder geplante Uebergang innerhalb +-1 % des
+# Master-Takts bleibt (ADR-020). In diesem Vorab-Lauf sind alle Tempi absichtlich
+# innerhalb +-1 %, damit das Gate trifft - der Lauf prueft Resampling und
 # Ausrichtung, nicht die Gate-Logik (die ist in test_plan.py unit-getestet).
 TOR_10_GATE_MIN = 0.90
 # Lautheit = Anteil Sets innerhalb +-0,5 dB von -14 LUFS UND True Peak <= -1 dBTP.

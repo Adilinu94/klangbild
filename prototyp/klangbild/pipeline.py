@@ -88,8 +88,19 @@ def kommandos_analyze(args: argparse.Namespace) -> int:
         offen = offen[: args.limit]
     _log(f"{len(offen)} Tracks ohne Analyse")
     schlag_da = beats.verfuegbar()
+    if not schlag_da and not getattr(args, "ohne_beats", False):
+        # Fail-Fast statt stiller Zeilen ohne Beats: wer analyze ohne beat-this
+        # startet (z. B. System-Python statt venv), bekommt sonst 498 Zeilen mit
+        # leerem beats_json, die spaeter wie echte Analysen aussehen. Abbruch mit
+        # Anleitung; nur --ohne-beats geht bewusst weiter (z. B. nur Tonart/LUFS).
+        _log("ABBRUCH: beat-this fehlt - ohne Schlaganalyse entstuenden Zeilen ohne Beats.")
+        _log("Installation: python -m pip install beat-this (zieht torch nach).")
+        _log("Checkpoint: daten/modelle/torchhub/checkpoints/beat_this-final0.ckpt")
+        _log("Nur wenn Beats bewusst entfallen sollen: analyze --ohne-beats.")
+        conn.close()
+        return 2
     if not schlag_da:
-        _log("Hinweis: beat-this fehlt – Schlaganalyse wird uebersprungen (Rest laeuft).")
+        _log("Hinweis: beat-this fehlt - Schlaganalyse wird uebersprungen (Rest laeuft).")
     beginn = time.time()
     for nummer, zeile in enumerate(offen, 1):
         pfad = Path(zeile["pfad"])
@@ -226,6 +237,11 @@ def _parser() -> argparse.ArgumentParser:
 
     p_analyze = unter.add_parser("analyze", parents=[pfade], help="Tonart, Lautheit, Energie, Beats")
     p_analyze.add_argument("--limit", type=int, default=0)
+    p_analyze.add_argument(
+        "--ohne-beats", action="store_true",
+        help="Bewusst ohne Schlaganalyse laufen (nur Tonart/Lautheit/Energie)."
+             " Ohne diese Option bricht analyze ab, wenn beat-this fehlt.",
+    )
     p_analyze.set_defaults(funktion=kommandos_analyze)
 
     p_embed = unter.add_parser("embed", parents=[pfade], help="Ausschnitte einbetten")
@@ -236,6 +252,10 @@ def _parser() -> argparse.ArgumentParser:
     p_all = unter.add_parser("all", parents=[pfade], help="scan + analyze + embed + status")
     p_all.add_argument("--limit", type=int, default=0)
     p_all.add_argument("--pseudo", action="store_true")
+    p_all.add_argument(
+        "--ohne-beats", action="store_true",
+        help="Wie bei analyze: bewusst ohne Schlaganalyse laufen.",
+    )
     p_all.set_defaults(funktion=kommandos_all)
 
     p_status = unter.add_parser("status", parents=[pfade], help="Zaehler anzeigen")

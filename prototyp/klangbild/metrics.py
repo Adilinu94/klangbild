@@ -87,14 +87,14 @@ def downbeat_richtig(
 
 
 def bpm_aus_beats(beats: np.ndarray | list[float]) -> float:
-    """Tempo als **Mittelwert ueber das Haupt-Cluster** der Schlagabstaende.
+    """Tempo als **Regression ueber alle Beats** (Raster aus dem Haupt-Cluster).
 
     Beat This! setzt Einschlaege auf ein 50-fps-Raster (20-ms-Stufen). Die
     Abstaende sind damit gequantelt, und ihr **Median** klebt an einer Stufe -
     er laeu systematisch daneben (gemessen bis ~2 %, im Mittel ~1,1 %). Fuer
     Beatmatching braucht es aber etwa +-0,1 %.
 
-    Der **Mittelwert** des Haupt-Clusters mittelt die +-10-ms-Quantelung heraus
+    Das Haupt-Cluster liefert die Rasterperiode; die Regression mittelt die +-10-ms-Quantelung heraus
     (Teleskop-Effekt: die Randfehler der Stufen heben sich ueber viele
     Abstaende auf) und trifft das echte Tempo. Doppelte/fehlende Einschlaege
     erzeugen Oktav-Ausreisser (Faktor ~0,5 bzw. ~2); die fallen aus dem Cluster,
@@ -113,7 +113,46 @@ def bpm_aus_beats(beats: np.ndarray | list[float]) -> float:
     kern = abstaende[np.abs(abstaende - periode) <= 0.40 * periode]
     if kern.size == 0:
         kern = abstaende
-    return float(60.0 / np.mean(kern))
+    periode = _lokale_periode(b, float(np.mean(kern)))
+    # Eine Gerade durch ALLE Beats (Index gegen Zeit) mittelt das 20-ms-Raster weg;
+    # der Mittelwert allein haengt nur am ersten und letzten Beat (Teleskopsumme).
+    # Rasterphase aus dem Kreismittel aller Beats, nicht aus b[0]: ein Auftakt-
+    # oder Offbeat-Start wuerde sonst das ganze Raster um einen halben Schlag kippen.
+    phase = float(np.angle(np.mean(np.exp(2j * np.pi * b / periode)))) / (2 * np.pi)
+    lage = b / periode - phase
+    index = np.round(lage)
+    auf_raster = np.abs(lage - index) < 0.25  # doppelte Einschlaege fallen heraus
+    index, zeiten = index[auf_raster], b[auf_raster]
+    if zeiten.size >= 3 and np.ptp(index) > 0:
+        steigung = float(np.polyfit(index, zeiten, 1)[0])
+        if steigung > 0:
+            return 60.0 / steigung
+    return 60.0 / periode
+
+
+def _lokale_periode(b: np.ndarray, referenz: float, fenster: int = 16) -> float:
+    """Median lokaler Regressionsperioden (Fenster von `fenster` Beats).
+
+    Genau genug (~0,05 %), dass ein globaler Beat-Index ueber einen ganzen Song
+    nicht verrutscht; robust gegen Tempo-Abschnitte und einzelne Doppel-Einschlaege.
+    Schritte zaehlen gegen die Cluster-`referenz` (nicht den Fenster-Median, der bei
+    wenigen Beats zwischen zwei Oktaven landet). Weicht das Ergebnis mehr als 5 %
+    von der Referenz ab, gilt die Referenz.
+    """
+    perioden = []
+    for anfang in range(0, max(1, b.size - fenster + 1), max(1, fenster // 2)):
+        z = b[anfang:anfang + fenster]
+        d = np.diff(z)
+        if z.size < 4 or referenz <= 0:
+            continue
+        k = np.concatenate([[0.0], np.cumsum(np.round(d / referenz))])
+        if np.ptp(k) > 0:
+            perioden.append(float(np.polyfit(k, z, 1)[0]))
+    perioden = [x for x in perioden if x > 0]
+    if not perioden:
+        return referenz
+    lokal = float(np.median(perioden))
+    return lokal if abs(lokal - referenz) <= 0.05 * referenz else referenz
 
 
 @dataclass(frozen=True)

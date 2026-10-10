@@ -869,7 +869,7 @@ ein Gefühl.
 | 2 | Zahlungsbereitschaft für Auto-DJ extra | Warteliste, bezahlte Beta |
 | 3 | Marktgröße lokaler Sammlungen | externe Marktdaten |
 | 4 | ~~EmbeddingGemma-2-Lizenz (Apache vs. Gemma)~~ **geschlossen 08.10.2026: Apache 2.0** | Google Developer Guide EmbeddingGemma 2 (ADR-015) |
-| 11 | Taugen die EmbeddingGemma-2-Vektoren für **Musik**? (Encoder ist als „speech and sound" beschrieben, Musik in Trainingsdaten und MSEB nicht belegt; MAEB enthält Musik-Tasks) | Phase 0.0 (Belege) und 0.1 (Blindtest mit Baseline) |
+| 11 | Taugen die EmbeddingGemma-2-Vektoren für **Musik**? **Teile belegt 10.10.2026:** MAEB-Mittel 49,39 (768d) / 48,91 (256d) aus der Model Card — aber Mittlung über alle 30 Tasks, kein Musik-Einzelnachweis; Trainingsdaten ohne Musik-Beleg. Pro-Task-Werte oder lokaler MAEB-Musik-Lauf stehen aus | Phase 0.0 (Belege) und 0.1 (Blindtest mit Baseline) |
 | 12 | **Neu 08.10.2026 – Ersatz, wenn das Tor fällt** (MuQ/OpenL3 nicht-kommerziell, musicnn unklar, CLAP prüfen) | Plan B/Plan C, eigenes ADR |
 | 13 | **Neu – CC-Musik für die öffentliche Hörprobe** inklusive Lizenz-Tabelle | Phase 2 |
 | 5 | Milkdrop-Fork „modile" Lizenz | Repo prüfen (nur Kenntnis) |
@@ -896,3 +896,8 @@ einer Meinung. Bis dahin bleibt er offen.
   `ARCHITEKTUR-KLANGBILD.md`, `ANDROID-AUTODJ-TOOLCHAIN-2026.md`
 - Lizenzprüfung: libopenmpt (BSD-3-Clause), WavPack (BSD-3-Clause), Musepack
   (BSD), mbedTLS (Apache-2.0), TagLib (LGPL/MPL), LuaJIT (MIT)
+- MAEB-Recherche 10.10.2026: Model Card `google/embeddinggemma-2` (MAEB-Mittel
+  49,39/48,91, Apache 2.0), HF-Blog „MAEB: Evaluating Audio Embeddings at Scale"
+  (24.02.2026, 98 Tasks MAEB+ / 30 MAEB, CLAP stark bei Musik, Clustering schwach),
+  MTEB-Leaderboard `MAEB(beta)` (22 Modelle, 30 Tasks), Developer Guide
+  (Encoder: „speech and sound", Trainingsdaten ohne Musik)

@@ -16,16 +16,17 @@ Set-Songs sind synthetische Metronome (Wiederverwendung aus `phase02`) mit
 wählt die Reihenfolge, die Engine (`mix.mix_set`) rendert sie. Gemessen werden
 drei Zusagen, die ohne Menschen prüfbar sind:
 
-1. **Tempo-Gate (ADR-014):** jeder geplante Übergang zieht B höchstens ±3 % auf
-   A. Größere Faktoren würden nach 8 Takten hörbar galoppieren.
-2. **Beat-Kontinuität (ADR-014, der Kern):** über jeden Übergang bleibt das
+1. **Tempo-Gate (ADR-020):** jeder geplante Übergang zieht B höchstens ±1 % auf
+   A. Größere Faktoren würden nach 8 Takten hörbar galoppieren - und ohne
+   Keylock auch hörbar verstimmen (0,51 Halbtöne bei 3 %).
+2. **Beat-Kontinuität (ADR-020, der Kern):** über jeden Übergang bleibt das
    Beat-Raster stehen – kein Galoppieren, kein Stolpern. Gemessen als Streuung
    der Abstände detektierter Einsätze im ganzen Mix (Onset-Detektion auf dem
    gerenderten Audio, nicht auf der Annahme).
 3. **Lautheit des Mixes (Roadmap-Hartwert):** −14 LUFS integriert, True Peak
    ≤ −1 dBTP.
 
-Ehrliche Grenze: Alle Tempi liegen **innerhalb ±3 %** eines Zentrums, damit das
+Ehrliche Grenze: Alle Tempi liegen **innerhalb ±1 %** eines Zentrums, damit das
 Tempo-Gate nie greift – dieser Lauf präft Resampling **und** Ausrichtung, nicht
 die Gate-Logik (die ist in `test_plan.py` unit-getestet). Metronome sind der
 leichteste Fall (ein Klang, kein Groove); der Lauf schließt die Render-Kette,
@@ -47,9 +48,9 @@ import numpy as np
 from . import config, lufs, metrics, mix, plan, resample
 from .phase02 import baue_metronome
 
-# Tempi alle innerhalb ±3 % von 120 (Spread 119–122 = 2,5 %): jedes Paar passiert
+# Tempi alle innerhalb ±1 % von 120 (Spread 119,4-120,6 = 1 %): jedes Paar passiert
 # das Tempo-Gate, damit der Lauf Resampling/Ausrichtung prüft, nicht die Gate-Logik.
-TEMPI = (120.0, 121.0, 122.0, 119.0, 121.5, 120.5)
+TEMPI = (120.0, 120.6, 119.4, 120.3, 119.7, 120.9)
 TAKT = 4
 SEKUNDEN = 24.0
 
@@ -135,7 +136,7 @@ _ENERGIE_DB = -18.0
 
 # Tempo-Versatz je Trial: das ganze Set wandert innerhalb der erlaubten
 # Bandbreite. Ein gemeinsamer Versatz aendert die **paarweise** Spannweite
-# nicht (bleibt 2,5 %) - jeder Uebergang passiert das +-3 %-Gate, nur die
+# nicht (bleibt 1 %) - jeder Uebergang passiert das +-1 %-Gate, nur die
 # absoluten Tempi (Sample-Zahlen, Faktoren, Blendenpunkt) aendern sich.
 # 8 Versaetze x rotierter Start = genug Kombinationen, damit 40 Trials alle
 # **verschieden** rendern (identische Renderings 40x gezaehlt haetten Wilson
@@ -157,7 +158,7 @@ def baue_set_tracks(offset: float = 0.0) -> list[SetTrack]:
     """Baut die synthetischen Set-Songs: ein Metronom je Tempo, Camelot-Leiter.
 
     `offset` verschiebt alle Tempi gleichmaessig (BPM). Die paarweise
-    Spannweite bleibt identisch, das +-3 %-Gate haelt fuer jedes Paar.
+    Spannweite bleibt identisch, das +-1 %-Gate haelt fuer jedes Paar.
     """
     tempi = tuple(round(t + offset, 3) for t in TEMPI)
     metro_liste = baue_metronome(tempi=tempi, takt=TAKT, sekunden=SEKUNDEN)
@@ -179,7 +180,7 @@ def _plan_tracks(set_tracks: list[SetTrack]) -> list[plan.Track]:
 # --- Das Beat-Raster im gerenderten Mix messen (Onset-Erkennung) -------------
 # Kein Modell, kein Annahme-Wert: wir schauen dem fertigen Mix zu und messen,
 # wo wirklich Einsaetze liegen. Galoppiert das Raster, wachsen die Abstaende
-# unregelmaessig - genau das faellt hier auf (ADR-014, der Kern von Phase 1).
+# unregelmaessig - genau das faellt hier auf (ADR-020, der Kern von Phase 1).
 
 # Kreuzblende in Takten (Roadmap nennt 8/16 Takte; fuer den Vorab-Check genuegt
 # eine kurze Blende - die Raster-Kontinuitaet haengt nicht an ihrer Laenge).
@@ -237,7 +238,7 @@ def _cv_intervalle(einsaetze: np.ndarray) -> float:
 
 # --- Ein Trial: planen -> rendern -> messen ----------------------------------
 def _master_bpm(reihenfolge: list[int], set_tracks: list[SetTrack]) -> float:
-    """Das Tempo des ersten Songs ist der Master-Takt (Vinyl-Prinzip, ADR-014)."""
+    """Das Tempo des ersten Songs ist der Master-Takt (Vinyl-Prinzip, ADR-020)."""
     index = {t.track_id: t for t in set_tracks}
     erster = reihenfolge[0]
     return float(index[erster].bpm)
@@ -311,7 +312,7 @@ def trial_messen(seed: int, set_tracks: list[SetTrack], start_id: int | None = N
 
     # Tempo-Gate je Uebergang: der auf B **tatsaechlich angewandte** Faktor zieht
     # es auf den Master. tempo_passt(bpm, master) prueft genau diesen Faktor
-    # (master/bpm) gegen +-3 % - dieselbe Grenze, die ADR-014 fuer den Planer setzt.
+    # (master/bpm) gegen +-1 % - dieselbe Grenze, die ADR-020 fuer den Planer setzt.
     gate_ok = True
     for ue in protokoll.uebergaenge:
         auf = index[ue.to_id].bpm
@@ -358,7 +359,7 @@ def auswerten(triale: list[dict]) -> dict:
 
     Drei Tore (je ein Tor, entschieden an der Untergrenze, nicht am Punktwert):
     - Beat-Kontinuitaet: CV der Einsaetz-Abstaende <= 3 % (kein Galopp).
-    - Tempo-Gate: jeder Uebergang innerhalb +-3 % (ADR-014).
+    - Tempo-Gate: jeder Uebergang innerhalb +-1 % (ADR-020).
     - Lautheit: -14 LUFS (+-0,5 dB) und True Peak <= -1 dBTP.
     """
     n = len(triale)
@@ -455,7 +456,7 @@ def _bericht_schreiben(ordner: Path, z: dict, dauer: float) -> Path:
     tore = [
         ("Beat-Kontinuitaet (CV <= 3 %)", z["beat_kontinuitaet"],
          z["tore"]["beat_kontinuitaet_ug_min"], z["erreicht"]["beat_kontinuitaet"]),
-        ("Tempo-Gate (+-3 %, ADR-014)", z["tempo_gate"],
+        ("Tempo-Gate (+-1 %, ADR-020)", z["tempo_gate"],
          z["tore"]["tempo_gate_ug_min"], z["erreicht"]["tempo_gate"]),
         ("Lautheit (-14 LUFS, TP <= -1 dBTP)", z["lautheit"],
          z["tore"]["lautheit_ug_min"], z["erreicht"]["lautheit"]),
@@ -470,7 +471,7 @@ def _bericht_schreiben(ordner: Path, z: dict, dauer: float) -> Path:
         "",
         "## Ehrliche Grenze",
         "",
-        "- Alle Tempi liegen **innerhalb +-3 %** eines Zentrums, damit das Tempo-Gate",
+        "- Alle Tempi liegen **innerhalb +-1 %** eines Zentrums, damit das Tempo-Gate",
         "  nie greift. Dieser Lauf prueft Resampling **und** Ausrichtung, nicht die",
         "  Gate-Logik (die ist unit-getestet in `test_plan.py`).",
         "- Metronome sind der **leichteste** Fall (ein Klang, kein Groove). Der Lauf",
@@ -508,7 +509,7 @@ def laufen(args) -> int:
         seeds = seeds[:limit]
 
     _log(f"Phase 1.0 · {len(seeds)} Trials · Set aus {len(set_tracks)} Songs "
-         f"(Tempi {min(TEMPI):.0f}-{max(TEMPI):.0f} BPM, alle innerhalb +-3 %)")
+         f"(Tempi {min(TEMPI):.0f}-{max(TEMPI):.0f} BPM, alle innerhalb +-1 %)")
 
     beginn = time.time()
     triale: list[dict] = []

@@ -16,7 +16,7 @@ Aufruf:
     python -m klangbild mix --start 12 --laenge 6
     python -m klangbild mix --laenge 5 --aus mix.wav
 
-Tempo-Gate (ADR-014): der Planer laesst nur Songs innerhalb ±3 % des Start-Tempos
+Tempo-Gate (ADR-020): der Planer laesst nur Songs innerhalb ±1 % des Start-Tempos
 zu. Echte Bibliotheken streuen ihre Tempi, deshalb wird als Master-Takt
 standardmäßig der größte Tempo-Cluster gewaehlt (laengstes moegliches Set), nicht
 einfach der erste Track. `--start <id>` hebt das auf.
@@ -62,6 +62,21 @@ def _downbeats(roh) -> list[float]:
         return []
 
 
+def _titel_schluessel(pfad: str) -> str:
+    """Normalisierter Titel aus dem Dateinamen (ohne Endung): klein, nur alphanumerisch.
+
+    Zweites Dublette-Netz neben identischen Downbeats: "I Feel Better - Oscar
+    Farrell Remix-DJ SeinfeldOscar Farrell.mp3" und "... - DJ Seinfeld, Oscar
+    Farrell.flac" kollabieren auf denselben Schluessel, obwohl Container und
+    Schnitt verschieden sind. Kollisionsrisiko (verschiedene Songs, gleicher
+    Titel) ist in einer privaten Sammlung vernachlaessigbar.
+    """
+    import re
+
+    stamm = Path(pfad).stem.lower()
+    return re.sub(r"[^a-z0-9]", "", stamm)
+
+
 def lade_tracks(
     conn, version: str, *, start: int | None, laenge: int
 ) -> tuple[list[plan.Track], dict[int, list[float]], dict[int, str], int | None]:
@@ -71,15 +86,30 @@ def lade_tracks(
     mit BPM und mindestens einem Downbeat sind mischbar; der Rest faellt heraus,
     bevor geplant wird – der Planer soll nicht auf halben Merkmalen entscheiden.
     """
-    zeilen = [
-        z for z in db.features_laden(conn, version)
-        if z["bpm"] and _downbeats(z["downbeats_json"])
-    ]
+    zeilen = []
+    gesehen: set[str] = set()
+    titel_tempo_gesehen: set[tuple[str, int]] = set()
+    for z in db.features_laden(conn, version):
+        if not (z["bpm"] and _downbeats(z["downbeats_json"])):
+            continue
+        # shortcut: Dublette (gleiche Aufnahme als MP3 + FLAC) = identische Downbeats;
+        # verfehlt anders geschnittene Kopien. Zweites Netz: normalisierter Titel
+        # PLUS gerundetes Tempo - faengt "Titel - Mix" vs. "Titel - Mix, Kuenstler"
+        # (MP3 + FLAC). Das Tempo schuetzt vor Kollisionen verschiedener Songs mit
+        # gleichem Titel ("Intro", "Untitled"). Upgrade: akustischer Fingerabdruck.
+        if z["downbeats_json"] in gesehen:
+            continue
+        titel_tempo = (_titel_schluessel(z["pfad"]), round(float(z["bpm"])))
+        if titel_tempo in titel_tempo_gesehen:
+            continue
+        gesehen.add(z["downbeats_json"])
+        titel_tempo_gesehen.add(titel_tempo)
+        zeilen.append(z)
     if not zeilen:
         return [], {}, {}, None
 
     # Tempo-Cluster auf ganzes BPM gerundet: der modal-haufigste Wert ist der
-    # Master-Takt, weil er die meisten ±3 %-Nachbarn anzieht (laengstes Set).
+    # Master-Takt, weil er die meisten ±1 %-Nachbarn anzieht (laengstes Set).
     if start is not None and any(int(z["id"]) == start for z in zeilen):
         start_id = int(start)
     else:
@@ -296,7 +326,7 @@ KONTROLL_BLENDE_S = 6.0
 def cluster_starts(tracks: list[plan.Track], anzahl: int) -> list[int]:
     """Je Paar ein Start-Song aus einem **anderen** Tempo-Cluster.
 
-    Haeufigste gerundete BPM zuerst; ein Kandidat innerhalb des ±3-%-Gates eines
+    Haeufigste gerundete BPM zuerst; ein Kandidat innerhalb des ±1-%-Gates eines
     schon gewaehlten Clusters faellt weg, sonst klingen alle Paare gleich.
     """
     gewaehlt: list[float] = []
@@ -393,11 +423,22 @@ def laufen_hoertest(args) -> int:
     # Dateien mit "_" NICHT an die Hoerer geben - sie loesen A/B auf.
     (ordner / "_schluessel.json").write_text(
         json.dumps(schluessel, indent=2, ensure_ascii=False), encoding="utf-8")
+    # Ein Bogen je Paar (1 Paar je Person, 10-15 min): Die Person bekommt nur
+    # "ihre" Datei, der Dateiname nennt das Paar. Rotation ueber Personen, so
+    # dass jedes Paar von 3-4 Personen gehoert wird.
     with (ordner / "bewertungsbogen.csv").open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(["person", "paar", "bevorzugt (A/B)",
                     "unfall_zeitpunkte_s (z. B. 312;645)", "kommentar"])
         for e in schluessel:
+            w.writerow(["", e["paar"], "", "", ""])
+    for e in schluessel:
+        with (ordner / f"bewertungsbogen-paar{e['paar']}.csv").open(
+            "w", encoding="utf-8", newline=""
+        ) as f:
+            w = csv.writer(f)
+            w.writerow(["person", "paar", "bevorzugt (A/B)",
+                        "unfall_zeitpunkte_s (z. B. 312;645)", "kommentar"])
             w.writerow(["", e["paar"], "", "", ""])
     print(f"Hoertest: {ordner}  ({len(schluessel)} Paare; '_'-Dateien zurueckhalten)")
     return 0

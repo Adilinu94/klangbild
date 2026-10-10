@@ -7,8 +7,8 @@ A->B ist eine gewichtete Summe aus drei Teilen (config.PLANER_*):
 - Klang (Kosinus-Aehnlichkeit der gemittelten Vektoren) -> 0..1
 - Energie-Reise: grosse Lautstaerke-Spruenge werden bestraft -> 0..1
 
-Tempo ist **kein** Gewicht, sondern ein hartes Gate: ein Song ausserhalb +-3 %
-des Deck-Tempos ist gar nicht waehlbar (ADR-014, resample.tempo_passt). Sonst
+Tempo ist **kein** Gewicht, sondern ein hartes Gate: ein Song ausserhalb ±1 %
+des Deck-Tempos ist gar nicht waehlbar (ADR-020, resample.tempo_passt). Sonst
 galoppieren die Songs nach der Resampling-Angleichung hoerbar auseinander. Das
 Deck-Tempo ist das Tempo des Start-Songs; alle Uebergaenge ziehen darauf, damit
 die Beats ueber das ganze Set auf einem Raster liegen.
@@ -60,7 +60,7 @@ class Uebergang:
     klang: float         # 0..1 Kosinus-Aehnlichkeit (0,5 falls kein Vektor)
     energie: float       # 0..1 (1 = kein Sprung, 0 = grosser Sprung)
     note: float          # gewichtete Summe 0..1
-    tempo_faktor: float  # wie B auf das Deck-Tempo gezogen wird (ADR-014)
+    tempo_faktor: float  # wie B auf das Deck-Tempo gezogen wird (ADR-020)
     grund: str           # z. B. "gleiche Tonart", "Camelot-Nachbar", "fremd"
 
 
@@ -143,8 +143,8 @@ def uebergang_note(
     energie, energie_grund = energie_note(ziel.energie_db, kandidat.energie_db, max_sprung)
 
     # Tempo-Angleich (Faktor): der Kandidat wird per Resampling auf das
-    # Deck-Tempo gezogen. tempo_faktor(von, auf) = auf/von, geklemmt auf +-3 %
-    # (ADR-014). Basis ist das Deck-Tempo, sonst das Tempo des Zielsongs.
+    # Deck-Tempo gezogen. tempo_faktor(von, auf) = auf/von, geklemmt auf ±1 %
+    # (ADR-020). Basis ist das Deck-Tempo, sonst das Tempo des Zielsongs.
     # Faktor = basis/kandidat: ein **schnellerer** Kandidat (groesseres
     # kandidat.bpm) wird verlangsamt (<1), damit seine Beats aufs Deck-Raster
     # fallen - genau die Richtung, die resample_linear braucht (f>1 = schneller).
@@ -169,11 +169,11 @@ def uebergang_note(
     if energie_gewichtet:
         gruende.append(energie_grund)
     if not tempo_ok:
-        # Jenseits +-3 % galoppiert der Uebergang selbst nach geklemmtem
-        # Resampling hoerbar auseinander (ADR-014): Note 0. Der Faktor bleibt als
+        # Jenseits ±1 % galoppiert der Uebergang selbst nach geklemmtem
+        # Resampling hoerbar auseinander (ADR-020): Note 0. Der Faktor bleibt als
         # (geklemmte) Referenz stehen, damit Aufrufer den Fall sehen koennen.
         note = 0.0
-        gruende.append("Tempo-Gate (ueber +-3 %)")
+        gruende.append("Tempo-Gate (ueber ±1 %)")
 
     return Uebergang(
         from_id=ziel.id,
@@ -195,8 +195,8 @@ def baue_set(
 ) -> Plan:
     """Baut ein Set gierig: jeder naechste Song maximiert die Uebergangsnote.
 
-    Das Deck-Tempo ist das Tempo des Start-Songs; ein Song ausserhalb +-3 %
-    davon ist gar nicht waehlbar (hartes Gate, ADR-014). Bleibt kein Tempo-
+    Das Deck-Tempo ist das Tempo des Start-Songs; ein Song ausserhalb ±1 %
+    davon ist gar nicht waehlbar (hartes Gate, ADR-020). Bleibt kein Tempo-
     kompatibler Song uebrig, endet das Set vorzeitig - lieber kuerzer als ein
     galoppierender Uebergang. Die uebrigen Tracks werden als uebersprungen
     ausgewiesen. Determinismus: Gleichstand ueber kleinere Track-ID gebrochen.

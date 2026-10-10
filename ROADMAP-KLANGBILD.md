@@ -43,12 +43,17 @@ Ziel: die zwei Annahmen testen, an denen das Produkt hängt. Kein UI, nur Skript
 ### 0.0 · Belege einsammeln (vor dem teuren Test, Stunden statt Wochen)
 
 - **Musik-Benchmark lesen:** Der **MAEB** (Massive Audio Embedding Benchmark,
-  30 Aufgaben, 50+ Modelle, Teil von MTEB) enthält **Musik-Aufgaben**. Für
-  EmbeddingGemma 2 die Musik-Task-Ergebnisse auslesen oder die Aufgaben lokal
-  laufen lassen. (Die Audio-Benchmark im Model Card, MSEB, deckt Sprecher, Intent,
-  Umweltklänge und Bioakustik ab – **kein** Musik. Der Audio-Encoder ist als
-  „speech and sound encoder" beschrieben, die Trainingsdaten nennen Sprache,
-  Umweltklänge und akustische Events; **Musik ist nicht belegt**.)
+  30 Aufgaben, Teil von MTEB v2.8) enthält **Musik-Aufgaben** (u. a. Genre,
+  Emotion, Instrumente). **Belegt 10.10.2026:** Die Model Card nennt für
+  EmbeddingGemma 2 einen MAEB-Mittelwert von **49,39 (768d) bzw. 48,91 (256d)** —
+  aber als **Mittel über alle 30 Tasks**, nicht pro Musik-Task aufgeschlüsselt.
+  Die Trainingsdaten nennen Sprache, Umweltklänge und akustische Events;
+  **Musik ist dort nicht belegt**. Der Audio-Encoder heißt „speech and sound
+  encoder". Fazit: Der MAEB-Mittel **reicht nicht** als Musik-Beleg — ein
+  starker Sprach-Anteil kann schwache Musik-Tasks verdecken. Was 0.0 schließt:
+  (a) die pro-Task-MAEB-Werte für EmbeddingGemma 2 (Leaderboard bzw. lokaler
+  Lauf der Musik-Tasks via `mteb run -b MAEB`), oder (b) der eigene Blindtest
+  0.1. Bis dahin bleibt das 0.0-Tor **offen**, 0.1 läuft als „selbst gemessen".
 - **Konfiguration festlegen** (danach nicht mehr wechseln, sonst ist das Tor
   nicht aussagekräftig):
   - nur **Text- und Audio-Encoder** laden (`vision_config=None`) → **570 M**
@@ -438,8 +443,8 @@ Ziel: Der Prototyp baut aus der Bibliothek ein Set und **rendert** es als
 Audiodatei. Keine Echtzeit, kein Player. Das reicht für Hörtest und Hörprobe.
 
 - **Planer:** Bewertung aus Harmonie (Camelot), Tempo, Klang-Vektor,
-  Energie-Reise (Architektur §4). Tempo-Sprünge begrenzt auf ±3 %.
-- **Übergang V1 (ADR-014):** Vinyl-Angleich per Resampling, Blende über 8 oder
+  Energie-Reise (Architektur §4). Tempo-Sprünge begrenzt auf ±1 % (ADR-020).
+- **Übergang V1 (ADR-020):** Vinyl-Angleich per Resampling, Blende über 8 oder
   16 Takte, beginnt am Ende einer Phrase von A, landet auf einem Downbeat von B.
   Einfacher Bass-Tausch (Tiefpass/Hochpass im Takt). Lautheit per LUFS
   angeglichen.
@@ -487,7 +492,7 @@ Set; ein Onset-Detektor misst danach das tatsächliche Beat-Raster im Mix.
 | Kennzahl | Treffer/N | Quote | Wilson-UG | Tor (als UG) | erreicht? |
 |---|---|---|---|---|---|
 | Beat-Kontinuität (CV ≤ 0,03) | 40/40 | 100,0 % | 91,2 % | ≥ 90 % | **JA** |
-| Tempo-Gate (≤ ±3 %) | 40/40 | 100,0 % | 91,2 % | ≥ 90 % | **JA** |
+| Tempo-Gate (≤ ±3 %, Messbedingung 10.10.2026; seit ADR-020 gilt ±1 %) | 40/40 | 100,0 % | 91,2 % | ≥ 90 % | **JA** |
 | Lautheit (−14 LUFS ±0,5, TP ≤ −1) | 40/40 | 100,0 % | 91,2 % | ≥ 90 % | **JA** |
 
 - mittlere Beat-CV im Mix: **0,0092** (max 0,0099) — das Raster bleibt über den
@@ -498,8 +503,8 @@ Set; ein Onset-Detektor misst danach das tatsächliche Beat-Raster im Mix.
   braucht ein perfektes k/n die UG n/(n+3,84); die daher n ≥ 35 — 40 Trials sind
   genau deswegen gewählt, damit das Tor überhaupt erreichbar ist.)
 - **Determinismus:** der Planer ist pro Eingabe deterministisch; die n=40 Trials
-  sind **40 echte, verschiedene** Renderings — jeder Trial verschiebt das
-  Tempo-Zentrum (Sweep über die legale ±3-%-Bandbreite) und rotiert den
+   sind **40 echte, verschiedene** Renderings — jeder Trial verschiebt das
+   Tempo-Zentrum (Sweep über die damals legale ±3-%-Bandbreite) und rotiert den
   Start-Track (→ anderer Master, andere Resampling-Richtungen). Kein Measurement
   wird 40× gezählt; das Intervall ist ehrlich.
 
@@ -532,7 +537,7 @@ Planer-Eingabe und schreibt WAV + JSON-Protokoll.
   (Standard: `ergebnisse/hoertest-mix.wav`).
 - **Tempo-Cluster als Master:** echte Bibliotheken streuen ihre Tempi, deshalb
   wird standardmäßig der **größte Tempo-Cluster** (modal-häufigstes ganzes BPM)
-  als Start gewählt — das längste mögliche Set innerhalb des ±3-%-Gates, nicht
+   als Start gewählt — das längste mögliche Set innerhalb des ±1-%-Gates, nicht
   einfach der erste Track. `--start <id>` hebt das auf (dann ist dieser Song
   Master).
 - **Robust gegen kaputte Merkmale:** Tracks ohne BPM/Downbeat fallen vor dem
@@ -552,6 +557,47 @@ Modul liefert nur die zu bewertenden Dateien, es behauptet keine Klanggüte.
 Abgedeckt durch `tests/test_autodj.py` (12 neue Tests: Merkmals-Übersetzung,
 Master-Wahl, Faktoren/Blende, Tempo-Cluster). **180 Tests grün**, lint sauber
 auf allen berührten Dateien.
+
+
+**Phase 1.2 (10.10.2026): Hörtest-reif.**
+
+- **BPM-Präzision:** Der Median der Beat-Abstände klebte am 50-fps-Raster von
+  Beat This! (nur 5 BPM-Werte in der ganzen Bibliothek, bis 2,4 % daneben).
+  Neu ist eine Regression über alle Beats: Die Periode kommt aus lokalen
+  Fenstern, die Rasterphase aus dem Kreismittel, Doppel-Einschläge fallen
+  heraus. Neues Tor in Phase 0.9, **Tempo mischgenau ±0,1 %: 99,5 %
+  (Wilson-UG 98,2 %), erfüllt** (Volllauf 10.10.2026 bestätigt: 400/402,
+  UG 98,2 %). Gegenprobe an 500 echten Tracks (Tempo aus Beats vs. Tempo aus
+  Downbeats per Regression, ±0,1 % mit Oktav-Toleranz): 59,2 % Übereinstimmung
+  mit Regression, vorher 45,4 % mit Cluster-Mittel — die Richtung stimmt, der
+  Rest ist Downbeat-Streuung auf echten Songs, kein BPM-Fehler. `ANALYSE_VERSION` 0.3.0, alle 501
+  Tracks neu analysiert.
+- **Stereo, 44,1 kHz:** `mix`, das Resampling und die Lautheitsmessung
+  (BS.1770, Kanalleistungen summiert) arbeiten mit 2 Kanälen.
+- **Phrasen-Ausstieg:** A steigt am letzten 8-Takt-Phrasenanfang mit
+  Blendenplatz aus, die Blende dauert 8 Takte. Grenze: Das Phrasenraster zählt
+  ab dem ersten erkannten Downbeat (später Struktur-Labels).
+- **Dubletten:** Dieselbe Aufnahme als MP3 und FLAC (10 Gruppen) kommt nur
+  einmal ins Set.
+- **Blinder Hörtest:** `python -m klangbild hoertest --paare 3 --laenge 4`
+  rendert je Tempo-Cluster ein Paar aus Auto-DJ und Shuffle (Zufallsfolge,
+  6-s-Blende am Songende, ohne Takt und ohne Bass-Tausch) mit denselben Songs.
+  A und B werden zufällig zugeordnet. Dazu kommen `bewertungsbogen.csv` und
+  `_schluessel.json`; alle Dateien mit `_` gehen nicht an die Hörer. Das
+  Protokoll führt je Übergang die Mix-Zeit, damit sich „Unfall"-Markierungen
+  zuordnen lassen.
+- **Offen:** Der Hörtest mit 10 Personen, je Person **1 Paar** (ein Paar dauert
+  10–15 min, 3 Paare sprengen die geplanten 30 min). Design: Paar-IDs rotieren
+  über Personen, so dass jedes der 3 Paare von 3–4 Personen gehört wird; der
+  Bogen erfasst Bevorzugung (A/B), Unfall-Zeitpunkte und Kommentar (je Paar ein
+  `bewertungsbogen-paarN.csv`).
+  Auswertung: Mehrheitsquote je Paar + Unfall-Zählung je Übergang (Mix-Zeit im
+  Protokoll). Alle Paare mit dem ±1-%-Gate neu gerendert (11.10.2026, Seed 7);
+  Paar 3 dauert 17–18 min (lange Songs) — beim Verteilen kürzen oder nur die
+  Übergangs-Fenster geben.
+- **ADR-020 angenommen (10.10.2026):** Vinyl-Angleich auf **±1 %** begrenzt, bis
+  Keylock kommt (0,17 statt 0,51 Halbtöne). Gegenmessung echter Set-Längen
+  (49 Starts): Median 71 Songs, p10 = 10 — der Hörtest (4 Songs) passt überall.
 
 
 ---

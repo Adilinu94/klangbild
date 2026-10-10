@@ -25,6 +25,7 @@ Konsequenzen.
 | [ADR-017](ADR-017-engine-als-media3-player.md) | Eigene Engine als Media3-Player | angenommen |
 | [ADR-018](ADR-018-stems-im-uebergangsfenster.md) | Stems als Kern, nur im Übergangsfenster getrennt | **vorgeschlagen** |
 | [ADR-019](ADR-019-uebergang-als-datenformat.md) | Übergänge als Datenformat statt fest im Renderer | **vorgeschlagen** |
+| [ADR-020](ADR-020-vinyl-angleich-auf-1-prozent.md) | Vinyl-Angleich auf ±1 % begrenzen, bis Keylock kommt | angenommen, ergänzt ADR-014 |
 
 Die Nummer 008 bleibt vergeben und wird nicht neu belegt.
 

@@ -1,7 +1,7 @@
-"""Tests fuer resample.py - die Vinyl-Tempoangleich (ADR-014).
+"""Tests fuer resample.py - die Vinyl-Tempoangleich (ADR-014, Gate ADR-020).
 
 Geprueft wird die Mathe, die ein Fehler zuerst kaputt macht: Richtung des
-Faktors, die +-3 %-Klemme, exakte Laengen- und Tonhoehen-Aenderung der
+Faktors, die +-1 %-Klemme, exakte Laengen- und Tonhoehen-Aenderung der
 linearen Referenz sowie die Gleichwertigkeit von soxr und linear im Raster.
 """
 
@@ -31,9 +31,9 @@ def test_faktor_richtung_und_klemmung():
     assert resample.tempo_faktor(100.0, 120.0) > 1.0      # schneller werden
     assert resample.tempo_faktor(120.0, 100.0) < 1.0      # langsamer werden
     assert resample.tempo_faktor(100.0, 100.0) == 1.0
-    # +-3 %-Klemme: 100 -> 120 waere +20 %, wird auf 1.03 geklemmt.
-    assert abs(resample.tempo_faktor(100.0, 120.0) - 1.03) < 1e-9
-    assert abs(resample.tempo_faktor(100.0, 80.0) - 0.97) < 1e-9
+    # +-1 %-Klemme (ADR-020): 100 -> 120 waere +20 %, wird auf 1.01 geklemmt.
+    assert abs(resample.tempo_faktor(100.0, 120.0) - 1.01) < 1e-9
+    assert abs(resample.tempo_faktor(100.0, 80.0) - 0.99) < 1e-9
 
 
 def test_faktor_unplausible_tempi_sind_neutral():
@@ -43,9 +43,9 @@ def test_faktor_unplausible_tempi_sind_neutral():
 
 
 def test_tempo_passt_respektiert_grenze():
-    assert resample.tempo_passt(100.0, 103.0) is True
-    assert resample.tempo_passt(100.0, 103.1) is False
-    assert resample.tempo_passt(100.0, 97.0) is True
+    assert resample.tempo_passt(100.0, 101.0) is True
+    assert resample.tempo_passt(100.0, 101.1) is False
+    assert resample.tempo_passt(100.0, 99.0) is True
     assert resample.tempo_passt(0.0, 120.0) is False
 
 
