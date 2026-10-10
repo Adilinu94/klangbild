@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from klangbild import autodj, resample
+from klangbild import autodj, plan, resample
 
 VERSION = "v1"
 
@@ -71,11 +71,11 @@ def test_faktoren_werden_geklemmt_wie_resample():
 
 
 def test_blende_s_sind_ganze_takte_des_masters():
-    # 120 BPM -> Takt = 4*(60/120) = 2.0 s -> 2 Takte = 4.0 s.
-    assert abs(autodj._blende_s(120.0) - 4.0) < 1e-9
-    # 130 BPM -> Takt = 4*(60/130); 2 Takte darum.
+    # 120 BPM -> Takt = 4*(60/120) = 2.0 s -> 8 Takte = 16.0 s.
+    assert abs(autodj._blende_s(120.0) - 16.0) < 1e-9
+    # 130 BPM -> Takt = 4*(60/130); 8 Takte darum.
     takt = 4 * (60.0 / 130.0)
-    assert abs(autodj._blende_s(130.0) - 2 * takt) < 1e-9
+    assert abs(autodj._blende_s(130.0) - 8 * takt) < 1e-9
 
 
 # --- lade_tracks: Filter + Tempo-Cluster (mit echter In-Memory-DB) -----------
@@ -155,3 +155,12 @@ def test_lade_tracks_ohne_mischbare_ist_leer():
         conn, VERSION, start=None, laenge=0)
     assert tracks == [] and downbeats == {} and pfade == {} and start_id is None
     conn.close()
+
+
+def test_cluster_starts_meiden_ueberlappende_tempi():
+    def t(i, bpm):
+        return plan.Track(id=i, pfad="", bpm=bpm, camelot=None, energie_db=None, vektor=None)
+
+    tracks = [t(1, 128.0), t(2, 128.2), t(3, 129.0), t(4, 140.0), t(5, 100.0)]
+    # 129 liegt im 3-%-Gate von 128 -> kein eigenes Paar.
+    assert autodj.cluster_starts(tracks, 3) == [1, 4, 5]

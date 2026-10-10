@@ -47,3 +47,12 @@ def test_absolute_sanity():
 def test_true_peak_vollaussteuerung():
     signal = _sinus(amplitude=0.999)
     assert abs(lufs.true_peak_dbtp(signal, 22050) - 0.0) < 0.3
+
+
+def test_stereo_summiert_kanalleistungen():
+    # Zwei gleiche Kanaele = doppelte Leistung = +3,01 LU gegenueber Mono (BS.1770).
+    t = np.arange(22050 * 3) / 22050
+    ton = (0.1 * np.sin(2 * np.pi * 1000 * t)).astype(np.float32)
+    mono = lufs.integrierte_lautheit(ton, 22050)
+    stereo = lufs.integrierte_lautheit(np.stack([ton, ton], axis=1), 22050)
+    assert abs((stereo - mono) - 3.01) < 0.05

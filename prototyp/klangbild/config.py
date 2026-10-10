@@ -34,6 +34,7 @@ DATENBANK: Path = ERGEBNISSE / "klangbild.db"
 # --- Analyse-Parameter (ADR-012) --------------------------------------------
 ABTASTRATE_ANALYSE = 22050   # mono 22,05 kHz: Vorgabe von Beat This!
 ABTASTRATE_EINBETTUNG = 16000  # mono 16 kHz: Vorgabe von EmbeddingGemma 2
+ABTASTRATE_HOERTEST = 44100   # Hoertest-Render in Originalqualitaet (statt 22,05 kHz)
 AUSSCHNITTE = ("anfang", "mitte", "ende")
 AUSSCHNITT_SEKUNDEN = 20.0
 MIN_SEKUNDEN = 25.0          # darunter wird ein Track nicht ausgewertet
@@ -46,7 +47,7 @@ EINBETTUNG_TRAINIERTEXT_PRAEFIX = "SentenceSimilarity"
 EINBETTUNG_DEAKTIVIERTE_ENCODER = {"vision_config": None}
 
 # --- Versionierung ----------------------------------------------------------
-ANALYSE_VERSION = "0.1.0"    # wechselt das Verfahren, wird ALLES neu gerechnet
+ANALYSE_VERSION = "0.2.0"    # wechselt das Verfahren, wird ALLES neu gerechnet (0.2.0: BPM per Cluster-Mittel statt Median)
 MODELL_VERSION = "embeddinggemma-2/256d@2026-10-08"
 
 # --- Lautheit ---------------------------------------------------------------
@@ -63,6 +64,10 @@ TOR_02_BPM_TOLERANZ = 0.04             # +-4 %
 TOR_02_BPM_MIN = 0.90
 TOR_02_DOWNBEAT_TAKTE = 1              # +-1 Takt
 TOR_02_DOWNBEAT_MIN = 0.80
+# Phase 0.9: Mischgenauigkeit. +-4 % prueft nur "richtiges Tempo"; Beatmatching
+# braucht ~+-0,1 % (1 % laeuft ueber 8 Takte ~150 ms auseinander, ADR-014).
+TOR_09_BPM_PRAEZISION = 0.001          # +-0,1 %
+TOR_09_BPM_PRAEZISION_MIN = 0.90
 TOR_02_TONART_EXAKT_MIN = 0.50
 TOR_02_TONART_NACHBAR_MIN = 0.70
 

@@ -51,6 +51,35 @@ def _pruefe_abhaengigkeiten() -> None:
         )
 
 
+def decodieren_stereo(pfad: str | Path, ziel_rate: int) -> Audio:
+    """Liest eine Datei als **Stereo (Kanaele erhalten)** und wandelt nur die Rate.
+
+    Fuer den Hoertest-Render (autodj): der Mix soll in Originalqualitaet und mit
+    Stereobild entstehen, nicht als Analyse-Mono. Die Zeitpunkte (Sekunden) sind
+    ratenunabhaengig und lassen sich direkt auf das Downbeat-Raster uebertragen.
+
+    Rueckgabe: `Audio.daten` ist (n_samples, n_channels). `soxr.resample`
+    resampled **je Kanal** (axis=0), damit L/R getrennt bleiben.
+    """
+    _pruefe_abhaengigkeiten()
+    pfad = Path(pfad)
+    try:
+        daten, rate = sf.read(str(pfad), dtype="float32", always_2d=True)
+    except Exception as fehler:  # soundfile wirft je nach Backend Unterschiedliches
+        raise Lesefehler(f"Kann {pfad.name} nicht lesen: {fehler}") from fehler
+    if daten.shape[1] == 1:
+        daten = np.repeat(daten, 2, axis=1)  # Mono-Quelle -> sauberes Stereo
+    if rate != ziel_rate:
+        if soxr is None:
+            raise Lesefehler(
+                "soxr fehlt (wird fuer die Ratenwandlung gebraucht): "
+                "python -m pip install soxr"
+            )
+        daten = soxr.resample(daten, rate, ziel_rate).astype(np.float32)
+        rate = ziel_rate
+    return Audio(daten=np.ascontiguousarray(daten), rate=int(rate))
+
+
 def decodieren(pfad: str | Path, ziel_rate: int) -> Audio:
     """Liest eine Datei und wandelt sie nach mono mit der gewuenschten Rate."""
     _pruefe_abhaengigkeiten()

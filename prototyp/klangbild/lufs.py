@@ -119,11 +119,17 @@ def _zu_lufs(mittelwert: float) -> float:
 
 
 def integrierte_lautheit(mono: np.ndarray, samplerate: int) -> float:
-    """Integrierte Lautheit (LUFS) eines Monosignals."""
+    """Integrierte Lautheit (LUFS) eines Mono- oder (n, Kanaele)-Signals."""
     if mono.size == 0:
         return float("-inf")
-    gewichtet = k_gewichten(mono, samplerate)
-    bloecke = _block_mittelwerte(gewichtet, samplerate)
+    if mono.ndim == 2:
+        # BS.1770: Blockleistungen je Kanal summieren (L/R-Gewicht 1,0).
+        bloecke = sum(
+            _block_mittelwerte(k_gewichten(mono[:, k], samplerate), samplerate)
+            for k in range(mono.shape[1])
+        )
+    else:
+        bloecke = _block_mittelwerte(k_gewichten(mono, samplerate), samplerate)
     if bloecke.size == 0:
         return float("-inf")
 

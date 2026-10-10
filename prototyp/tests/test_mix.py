@@ -137,3 +137,34 @@ def test_decke_true_peak_form_bleibt_erhalten():
     k = int(0.3 * n)                                 # Probe in der Mitte
     # Verhaeltnis zum lokalen Max bleibt konstant -> gleiche Form, anderer Pegel.
     assert abs(gedeckt[k] / laut[k] - float(gedeckt.max()) / float(laut.max())) < 1e-4
+
+
+# --- Phrasenraster und Stereo ------------------------------------------------
+
+
+def test_waehle_ausstieg_springt_auf_phrasenanfang():
+    downbeats = [float(i) for i in range(40)]  # ein Downbeat je Sekunde
+    # Ohne Raster: letzter Downbeat mit 4 s Platz in 40 s -> 36.
+    assert mix.waehle_ausstieg(downbeats, 40.0, 4.0) == 36.0
+    # Mit 8er-Raster: Phrasenanfaenge 0, 8, 16, 24, 32 -> 32.
+    assert mix.waehle_ausstieg(downbeats, 40.0, 4.0, phrasen_takte=8) == 32.0
+    # Kein Phrasenanfang passt -> ehrlich auf den letzten Downbeat zurueck.
+    assert mix.waehle_ausstieg([0.0, 1.0, 2.0], 3.5, 3.0, phrasen_takte=8) == 0.0
+
+
+def test_mix_set_stereo_bleibt_stereo_und_kanaltrennung():
+    rate = 22050
+    links = _sinus(440, 6.0, rate)
+    stereo_a = np.stack([links, np.zeros_like(links)], axis=1)   # nur links
+    stereo_b = np.stack([np.zeros_like(links), links], axis=1)   # nur rechts
+    beats = [float(i) for i in range(6)]
+    mischung, protokoll = mix.mix_set(
+        [1, 2], {1: stereo_a, 2: stereo_b}, {1: beats, 2: beats}, rate,
+        faktoren={2: 1.02}, blende_s=1.0, basstausch=True,
+    )
+    assert mischung.ndim == 2 and mischung.shape[1] == 2
+    # Anfang: nur A (links), Ende: nur B (rechts) - kein Verschachteln der Kanaele.
+    kopf, ende = mischung[: rate // 2], mischung[-rate // 2:]
+    assert _rms(kopf[:, 0]) > 0.1 and _rms(kopf[:, 1]) < 1e-3
+    assert _rms(ende[:, 1]) > 0.1 and _rms(ende[:, 0]) < 1e-3
+    assert abs(protokoll.dauer_s - len(mischung) / rate) < 1e-9

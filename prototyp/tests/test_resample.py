@@ -92,3 +92,10 @@ def test_soxr_faellt_ohne_soxr_auf_linear_zurueck_und_bleibt_im_raster():
 def test_resample_methode_linear_ist_standard():
     x = _sinus(440.0)
     assert np.array_equal(resample.resample(x, 22050, 1.0), x)
+
+
+def test_resample_stereo_je_kanal():
+    x = np.stack([np.arange(100, dtype=np.float32), -np.arange(100, dtype=np.float32)], axis=1)
+    y = resample.resample(x, 22050, 2.0)
+    assert y.shape == (50, 2)
+    assert np.allclose(y[:, 0], -y[:, 1])

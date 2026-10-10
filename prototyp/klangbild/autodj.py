@@ -109,7 +109,7 @@ def lade_tracks(
 def lade_audio(
     reihenfolge: list[int], pfade: dict[int, str], downbeats: dict[int, list[float]], rate: int
 ) -> tuple[dict[int, np.ndarray], dict[int, list[float]]]:
-    """Decodiert die Songs der Reihenfolge nach Mono@rate und liefert Audio+Downbeats.
+    """Decodiert die Songs der Reihenfolge als Stereo@rate und liefert Audio+Downbeats.
 
     Ein Track, der nicht decodierbar ist, wird uebersprungen (statt das Set zu
     killen) – `mix.mix_set` degradiert dann ehrlich. Die Rueckgabe enthaelt nur
@@ -122,12 +122,12 @@ def lade_audio(
         if not pfad:
             continue
         try:
-            a = audioio.decodieren(pfad, rate)
+            a = audioio.decodieren_stereo(pfad, rate)
         except Exception:  # noqa: BLE001,S112 - eine datei darf einzeln scheitern
             continue
         if a.daten.size == 0:
             continue
-        audio[tid] = np.asarray(a.daten, dtype=np.float32).reshape(-1)
+        audio[tid] = np.asarray(a.daten, dtype=np.float32)
         beats_out[tid] = downbeats.get(tid, [])
     return audio, beats_out
 
@@ -137,8 +137,11 @@ def lade_audio(
 # phase10._faktoren/_blende_s gerechnet, damit Plan und Mix dasselbe Raster
 # treffen (ADR-014). Der einzige Unterschied: master = Start-Song statt Track 0.
 
-TAKT = 4          # 4/4-Takt: die Blende muss ganze Takte (Taktanfaenge) umfassen
-BLENDE_TAKTE = 2  # wie phase10 - Raster-Kontinuitaet haengt nicht an der Laenge
+TAKT = 4          # 4/4-Takt: die Blende umfasst ganze Takte (Taktanfaenge)
+BLENDE_TAKTE = 8  # 8 Takte = eine Phrase. Klingt nach DJ (ADR-014); die 2 Takte
+                  # von phase10 waren der Mess-Metronom-Wert, kein Hoerwert.
+PHRASEN_TAKTE = 8  # Ausstieg am Phrasenanfang: jeder 8. Downbeat ist ein neuer
+                   # Takt-Block. Verhindert den Ausstieg im Fade-out/Ausklang.
 
 
 def _master_bpm(reihenfolge: list[int], index: dict[int, plan.Track]) -> float:
@@ -209,6 +212,25 @@ def _protokoll_schreiben(ziel: Path, protokoll, planung, index, pfade,
     ziel.write_text(json.dumps(daten, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _render(reihenfolge, index, audio, beats):
+    """Auto-DJ-Render einer Reihenfolge: Master-Takt, Faktoren, Phrasen-Blende."""
+    master_bpm = _master_bpm(reihenfolge, index)
+    faktoren = _faktoren(reihenfolge, index, master_bpm)
+    blende_s = _blende_s(master_bpm)
+    mischung, protokoll = mix.mix_set(
+        reihenfolge=reihenfolge,
+        audio=audio,
+        downbeats=beats,
+        rate=config.ABTASTRATE_HOERTEST,
+        faktoren=faktoren,
+        blende_s=blende_s,
+        basstausch=True,
+        ziel_lufs=config.LUFS_ZIEL,
+        phrasen_takte=PHRASEN_TAKTE,
+    )
+    return mischung, protokoll, master_bpm, blende_s, faktoren
+
+
 def laufen(args) -> int:
     """Rendert einen echten Hoertest-Mix aus der eigenen Bibliothek.
 
@@ -238,28 +260,18 @@ def laufen(args) -> int:
                   "innerhalb des Tempo-Gates moeglich.")
             return 3
 
-        master_bpm = _master_bpm(reihenfolge, index)
-        faktoren = _faktoren(reihenfolge, index, master_bpm)
-        blende_s = _blende_s(master_bpm)
-
+        # Hoertest in Originalqualitaet: Stereo 44,1 kHz. Downbeats sind Sekunden,
+        # also ratenunabhaengig.
         audio, beats = lade_audio(reihenfolge, pfade, downbeats,
-                                  config.ABTASTRATE_ANALYSE)
-        mischung, protokoll = mix.mix_set(
-            reihenfolge=reihenfolge,
-            audio=audio,
-            downbeats=beats,
-            rate=config.ABTASTRATE_ANALYSE,
-            faktoren=faktoren,
-            blende_s=blende_s,
-            basstausch=True,
-            ziel_lufs=config.LUFS_ZIEL,
-        )
+                                  config.ABTASTRATE_HOERTEST)
+        mischung, protokoll, master_bpm, blende_s, faktoren = _render(
+            reihenfolge, index, audio, beats)
 
         aus = getattr(args, "aus", None)
         ziel = Path(aus) if aus else (einstellungen.ergebnisse / "hoertest-mix.wav")
         if sf is not None and mischung.size:
             ziel.parent.mkdir(parents=True, exist_ok=True)
-            sf.write(str(ziel), mischung, config.ABTASTRATE_ANALYSE)
+            sf.write(str(ziel), mischung, config.ABTASTRATE_HOERTEST)
             print(f"Mix geschrieben: {ziel}  ({protokoll.dauer_s:.1f}s, "
                   f"{protokoll.lufs:.1f} LUFS, TP {protokoll.true_peak:.2f} dBTP)")
         elif sf is None:
@@ -272,4 +284,121 @@ def laufen(args) -> int:
         return 0
     finally:
         conn.close()
+
+
+# --- Blinder Hoertest: Auto-DJ gegen Shuffle (ROADMAP Phase 1) -----------------
+
+# Kontrolle = was ein normaler Player tut: Zufallsreihenfolge, Ende->Anfang,
+# feste Sekunden-Blende ohne Takt, ohne Tempoangleich, ohne Bass-Tausch.
+KONTROLL_BLENDE_S = 6.0
+
+
+def cluster_starts(tracks: list[plan.Track], anzahl: int) -> list[int]:
+    """Je Paar ein Start-Song aus einem **anderen** Tempo-Cluster.
+
+    Haeufigste gerundete BPM zuerst; ein Kandidat innerhalb des ±3-%-Gates eines
+    schon gewaehlten Clusters faellt weg, sonst klingen alle Paare gleich.
+    """
+    gewaehlt: list[float] = []
+    starts: list[int] = []
+    for bpm, _ in Counter(round(t.bpm) for t in tracks).most_common():
+        if any(resample.tempo_passt(b, bpm) for b in gewaehlt):
+            continue
+        gewaehlt.append(bpm)
+        starts.append(next(t.id for t in tracks if round(t.bpm) == bpm))
+        if len(starts) == anzahl:
+            break
+    return starts
+
+
+def _uebergangszeiten(protokoll) -> list[float]:
+    return [round(u.mix_beginn_s, 1) for u in protokoll.uebergaenge
+            if u.mix_beginn_s is not None]
+
+
+def laufen_hoertest(args) -> int:
+    """Rendert `--paare` blinde Paare (Auto-DJ vs. Shuffle) mit denselben Songs.
+
+    Je Paar: dasselbe Set, einmal als Auto-DJ, einmal als Shuffle-Kontrolle; welche
+    Datei A und welche B ist, wird zufaellig gezogen. Die Aufloesung steht nur im
+    Schluessel, die Hoerer bekommen WAVs und Bewertungsbogen.
+    """
+    import csv
+    import random
+
+    einstellungen = config.vorbereiten(config.aus_argumenten(args))
+    paare = int(getattr(args, "paare", 0) or 3)
+    laenge = int(getattr(args, "laenge", 0) or 4)
+    rng = random.Random(getattr(args, "seed", None))
+    ordner = Path(getattr(args, "aus", None) or einstellungen.ergebnisse / "hoertest")
+    conn = db.verbinden(einstellungen.datenbank)
+    try:
+        tracks, downbeats, pfade, _ = lade_tracks(
+            conn, einstellungen.analyse_version, start=None, laenge=laenge)
+    finally:
+        conn.close()
+    if not tracks:
+        print("Keine mischbaren Tracks. Erst 'analyze' laufen lassen.")
+        return 2
+    if sf is None:
+        print("soundfile fehlt - ohne WAV kein Hoertest.")
+        return 2
+
+    index = {t.id: t for t in tracks}
+    ordner.mkdir(parents=True, exist_ok=True)
+    schluessel: list[dict] = []
+    for nr, start_id in enumerate(cluster_starts(tracks, paare), 1):
+        planung = plan.baue_set(tracks, start_id=start_id, laenge=laenge)
+        if len(planung.reihenfolge) < 2:
+            print(f"Paar {nr}: Cluster um Track {start_id} zu klein - uebersprungen.")
+            continue
+        audio, beats = lade_audio(planung.reihenfolge, pfade, downbeats,
+                                  config.ABTASTRATE_HOERTEST)
+        auto, proto_auto, master_bpm, blende_s, faktoren = _render(
+            planung.reihenfolge, index, audio, beats)
+        folge = list(planung.reihenfolge)
+        rng.shuffle(folge)
+        # Leere Downbeats: Ausstieg = Songende - Blende, Einstieg = 0 (Player-Verhalten).
+        kontrolle, proto_k = mix.mix_set(
+            folge, audio, {}, config.ABTASTRATE_HOERTEST, {},
+            blende_s=KONTROLL_BLENDE_S, basstausch=False, ziel_lufs=config.LUFS_ZIEL)
+
+        varianten = {"autodj": (auto, proto_auto), "shuffle": (kontrolle, proto_k)}
+        arten = list(varianten)
+        rng.shuffle(arten)
+        eintrag: dict = {"paar": nr, "songs": list(planung.reihenfolge)}
+        for buchstabe, art in zip("AB", arten):
+            mischung, proto = varianten[art]
+            datei = ordner / f"paar{nr}-{buchstabe}.wav"
+            sf.write(str(datei), mischung, config.ABTASTRATE_HOERTEST)
+            eintrag[buchstabe] = {
+                "art": art,
+                "datei": datei.name,
+                "reihenfolge": proto.reihenfolge,
+                "uebergaenge_s": _uebergangszeiten(proto),
+                "dauer_s": round(proto.dauer_s, 1),
+                "lufs": round(proto.lufs, 2),
+                "true_peak": round(proto.true_peak, 2),
+            }
+        eintrag["autodj_protokoll"] = f"_paar{nr}-autodj.json"
+        _protokoll_schreiben(ordner / eintrag["autodj_protokoll"], proto_auto, planung,
+                             index, pfade, master_bpm, blende_s, faktoren)
+        schluessel.append(eintrag)
+        print(f"Paar {nr}: {len(folge)} Songs, A={eintrag['A']['dauer_s']}s, "
+              f"B={eintrag['B']['dauer_s']}s")
+
+    if not schluessel:
+        print("Kein Paar renderbar.")
+        return 3
+    # Dateien mit "_" NICHT an die Hoerer geben - sie loesen A/B auf.
+    (ordner / "_schluessel.json").write_text(
+        json.dumps(schluessel, indent=2, ensure_ascii=False), encoding="utf-8")
+    with (ordner / "bewertungsbogen.csv").open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["person", "paar", "bevorzugt (A/B)",
+                    "unfall_zeitpunkte_s (z. B. 312;645)", "kommentar"])
+        for e in schluessel:
+            w.writerow(["", e["paar"], "", "", ""])
+    print(f"Hoertest: {ordner}  ({len(schluessel)} Paare; '_'-Dateien zurueckhalten)")
+    return 0
 

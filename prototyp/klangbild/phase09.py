@@ -114,6 +114,8 @@ def _faelle_bewerten(faelle: list[Fall], modell_da: bool) -> list[dict]:
                 "bpm_geschaetzt": round(geschaetzt, 2),
                 "bpm_richtig": bool(metrics.bpm_richtig(
                     fall.bpm, geschaetzt, config.TOR_02_BPM_TOLERANZ)),
+                "bpm_praezise": bool(metrics.bpm_richtig(
+                    fall.bpm, geschaetzt, config.TOR_09_BPM_PRAEZISION)),
                 "downbeat_richtig": bool(metrics.downbeat_richtig(
                     fall.metro.downbeats, schlag.downbeats, periode,
                     config.TOR_02_DOWNBEAT_TAKTE)),
@@ -153,6 +155,7 @@ def auswerten(faelle: list[Fall], ergebnisse: list[dict]) -> dict:
     mit_beats = [e for e in ergebnisse if e.get("hat_beats")]
     n = len(mit_beats)
     bpm_ok = sum(1 for e in mit_beats if e["bpm_richtig"])
+    praezise_ok = sum(1 for e in mit_beats if e.get("bpm_praezise"))
     downbeat_ok = sum(1 for e in mit_beats if e["downbeat_richtig"])
     f1 = [e["beat_f1"] for e in mit_beats]
 
@@ -171,6 +174,7 @@ def auswerten(faelle: list[Fall], ergebnisse: list[dict]) -> dict:
         "anzahl_faelle": len(faelle),
         "anzahl_mit_beats": n,
         "bpm": _tor(bpm_ok, n, config.TOR_02_BPM_MIN),
+        "bpm_praezision": _tor(praezise_ok, n, config.TOR_09_BPM_PRAEZISION_MIN),
         "downbeat": _tor(downbeat_ok, n, config.TOR_02_DOWNBEAT_MIN),
         "beat_f1_mittel": round(sum(f1) / len(f1), 4) if f1 else 0.0,
         "je_takt": je_takt,
@@ -213,6 +217,9 @@ def _bericht_schreiben(ordner: Path, z: dict, dauer: float) -> Path:
     zeilen.append(_tor_zeile(
         f"Tempo richtig (+-{config.TOR_02_BPM_TOLERANZ * 100:0.0f} %)", z["bpm"]))
     zeilen.append(_tor_zeile(
+        f"Tempo mischgenau (+-{config.TOR_09_BPM_PRAEZISION * 100:0.1f} %)",
+        z["bpm_praezision"]))
+    zeilen.append(_tor_zeile(
         f"Downbeat richtig (+-{config.TOR_02_DOWNBEAT_TAKTE} Takt)", z["downbeat"]))
     zeilen.append("")
     zeilen.append(f"- mittlere Beat-F1: {z['beat_f1_mittel']:0.3f}")
@@ -252,7 +259,8 @@ def _csv_schreiben(ordner: Path, ergebnisse: list[dict]) -> Path:
     p = ordner / "phase09-beats-tracks.csv"
     p.parent.mkdir(parents=True, exist_ok=True)
     felder = ["fall", "takt", "bpm_soll", "hat_beats", "beat_f1",
-              "bpm_geschaetzt", "bpm_richtig", "downbeat_richtig", "fehler"]
+              "bpm_geschaetzt", "bpm_richtig", "bpm_praezise", "downbeat_richtig",
+              "fehler"]
     with p.open("w", encoding="utf-8", newline="") as f:
         schreiber = csv.DictWriter(f, fieldnames=felder, extrasaction="ignore")
         schreiber.writeheader()
@@ -328,11 +336,14 @@ def laufen(args) -> int:
     z["grenzen"] = {
         "bpm_min": config.TOR_02_BPM_MIN,
         "bpm_toleranz": config.TOR_02_BPM_TOLERANZ,
+        "bpm_praezision": config.TOR_09_BPM_PRAEZISION,
+        "bpm_praezision_min": config.TOR_09_BPM_PRAEZISION_MIN,
         "downbeat_min": config.TOR_02_DOWNBEAT_MIN,
         "downbeat_takte": config.TOR_02_DOWNBEAT_TAKTE,
     }
 
-    for name, t in (("Tempo", z["bpm"]), ("Downbeat", z["downbeat"])):
+    for name, t in (("Tempo", z["bpm"]), ("Tempo mischgenau", z["bpm_praezision"]),
+                    ("Downbeat", z["downbeat"])):
         _log(f"  {name}: {t['quote'] * 100:0.1f} % ({t['zaehler']}/{t['gesamt']}) "
              f"UG {t['wilson_unten'] * 100:0.1f} % -> "
              f"{'Tor erreicht' if t['erreicht'] else 'Tor NICHT erreicht'}")

@@ -235,3 +235,17 @@ def test_csv_export_hat_kopfzeile_und_eine_zeile_je_fall(tmp_path):
     assert len(roh) == 3                      # Kopf + 2 Faelle
     assert "fall" in roh[0]
 
+
+
+def test_praezisionstor_ist_strenger_als_tempotor():
+    faelle = [phase09.Fall(name=f"4/4 @ {i}", takt=4, bpm=120.0, metro=None) for i in range(20)]
+    # Alle innerhalb +-4 %, aber nur die Haelfte innerhalb +-0,1 %.
+    ergebnisse = [
+        {"takt": 4, "hat_beats": True, "beat_f1": 1.0, "bpm_richtig": True,
+         "bpm_praezise": i % 2 == 0, "downbeat_richtig": True}
+        for i in range(20)
+    ]
+    z = phase09.auswerten(faelle, ergebnisse)
+    assert z["bpm"]["zaehler"] == 20
+    assert z["bpm_praezision"]["zaehler"] == 10
+    assert not z["bpm_praezision"]["erreicht"]

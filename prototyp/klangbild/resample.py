@@ -103,7 +103,13 @@ def resample(
     Standard ist die referenz-kompatible lineare Interpolation (Android-Basis,
     ADR-014). Fuer den gerenderten Demo-Mix kann `methode="soxr"` die bessere
     Qualitaet liefern - Plan und Raster bleiben davon unberuehrt.
+    (n, Kanaele)-Signale werden je Kanal gezogen.
     """
+    if np.ndim(signal) == 2:
+        return np.stack(
+            [resample(signal[:, k], rate, faktor, methode) for k in range(signal.shape[1])],
+            axis=1,
+        )
     if methode == "soxr":
         return resample_soxr(signal, rate, faktor)
     return resample_linear(signal, faktor)

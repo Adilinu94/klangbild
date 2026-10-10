@@ -20,14 +20,14 @@ ADR-014 (Vinyl-Angleich per Resampling) und der Roadmap Phase 1:
 5. **Lautheit:** der fertige Mix wird auf -14 LUFS gebracht, True Peak <= -1 dBTP
    (`lufs.auf_lautheit_bringen`, eigener BS.1770 - spaeter 1:1 libebur128).
 
-Alles ist reine Signalverarbeitung auf Mono-float32. phase10.py prueft das
+Alles ist reine Signalverarbeitung auf float32, Mono (n,) oder Stereo (n, 2). phase10.py prueft das
 Ergebnis gegen **bekannte** synthetische Signale (Klicks je Beat, getrennte
 Bass-Frequenzen), statt sich aufs Hoeren zu verlassen.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -81,13 +81,13 @@ def _filtern(sos: np.ndarray | None, signal: np.ndarray) -> np.ndarray:
     try:
         from scipy.signal import sosfiltfilt
 
-        return sosfiltfilt(sos, x).astype(np.float32)
+        return sosfiltfilt(sos, x, axis=0).astype(np.float32)
     except ValueError:
         # Zu kurz fuer sosfiltfilt (Standard-padlen = 3*(2*n_sections+1)).
         try:
             from scipy.signal import sosfilt
 
-            return sosfilt(sos, x).astype(np.float32)
+            return sosfilt(sos, x, axis=0).astype(np.float32)
         except Exception:  # noqa: BLE001 - notfalls ungefiltert weiterreichen
             return signal
     except Exception:  # noqa: BLE001 - notfalls ungefiltert weiterreichen
@@ -107,11 +107,12 @@ def band_teilen(signal: np.ndarray, rate: int, trenn_hz: float = BASS_TRENN_HZ) 
 
 def _auffuellen(signal: np.ndarray, laenge: int) -> np.ndarray:
     """Bringt ein Signal exakt auf `laenge` Samples (kuerzt oder fuellt mit 0)."""
-    if signal.size == laenge:
+    if len(signal) == laenge:
         return signal
-    if signal.size > laenge:
+    if len(signal) > laenge:
         return signal[:laenge]
-    return np.concatenate([signal, np.zeros(laenge - signal.size, dtype=np.float32)])
+    stille = np.zeros((laenge - len(signal),) + signal.shape[1:], dtype=np.float32)
+    return np.concatenate([signal, stille])
 
 
 def _fade_segment(
@@ -131,19 +132,21 @@ def _fade_segment(
     addieren sich zwei Baesse nie. Faellt scipy aus (kein Band), degradiert der
     Swap ehrlich zur reinen equipotenten Blende.
     """
-    n = min(schwanz_a.size, kopf_b.size)
+    n = min(len(schwanz_a), len(kopf_b))
     if n <= 0:
         return np.zeros(0, dtype=np.float32)
     schwanz_a = np.asarray(schwanz_a[:n], dtype=np.float32)
     kopf_b = np.asarray(kopf_b[:n], dtype=np.float32)
-    aus, ein = equal_power_blende(n)
+    # Kurven je Sample; bei (n, Kanaele) ueber die Kanaele gestreckt.
+    form = (n,) + (1,) * (schwanz_a.ndim - 1)
+    aus, ein = (k.reshape(form) for k in equal_power_blende(n))
 
     if not basstausch:
         return (schwanz_a * aus + kopf_b * ein).astype(np.float32)
 
     a_low, a_high = band_teilen(schwanz_a, rate, trenn_hz)
     b_low, b_high = band_teilen(kopf_b, rate, trenn_hz)
-    r_aus, r_ein = _bass_rampen(n, rate)
+    r_aus, r_ein = (k.reshape(form) for k in _bass_rampen(n, rate))
     hoch = a_high * aus + b_high * ein
     tief = a_low * r_aus + b_low * r_ein
     return (hoch + tief).astype(np.float32)
@@ -212,14 +215,30 @@ class Uebergangspunkt:
     to_id: int
 
 
-def waehle_ausstieg(downbeats: list[float], gesamt_s: float, blende_s: float) -> float:
+def waehle_ausstieg(
+    downbeats: list[float], gesamt_s: float, blende_s: float, phrasen_takte: int = 0
+) -> float:
     """Waehlt A's Ausstiegs-Downbeat: der letzte, der noch `blende_s` Platz laesst.
 
-    Faellt auf das Songende zurueck, wenn keine Downbeats vorliegen (ehrlich: dann
-    wird ohne Taktzeugen uebergeblendet, der Planer hat den Beat-Raster-Teil vorher
-    geprueft).
+    Mit `phrasen_takte` (z. B. 8) wird der Ausstieg auf ein **Phrasenraster**
+    gezwungen (jeder n-te Downbeat = Phrasenanfang), statt auf den allerletzten
+    Takt. Das ist der Unterschied zwischen „im Ausklang/Fade-out aussteigen" und
+    „an einem Phrasenuebergang aussteigen" - letzteres klingt nach DJ (ADR-014).
+    Faellt kein Phrasenanfang mit Blendenplatz vor, wird auf den letzten normalen
+    Downbeat bzw. das Songende zurueckgegriffen (ehrlich degradieren).
+
+    `phrasen_takte=0` (Default) ist das alte Verhalten (letzter Downbeat) und
+    haelt die Phase-1.0-Messung (phase10) unveraendert.
     """
-    gueltig = [d for d in downbeats if 0 <= d <= gesamt_s - blende_s]
+    kandidaten = downbeats
+    if phrasen_takte and phrasen_takte > 1:
+        # shortcut: Phrasenraster ab dem ersten erkannten Downbeat; falsch, wenn der
+        # Song mit einem Auftakt-/Halbphrasen-Intro beginnt. Upgrade: Strukturlabels (allin1).
+        phrasen = downbeats[::phrasen_takte]
+        gueltig = [d for d in phrasen if 0 <= d <= gesamt_s - blende_s]
+        if gueltig:
+            return float(gueltig[-1])
+    gueltig = [d for d in kandidaten if 0 <= d <= gesamt_s - blende_s]
     if gueltig:
         return float(gueltig[-1])
     return float(max(0.0, gesamt_s - blende_s))
@@ -297,6 +316,9 @@ class MixUebergang:
     b_einstieg_s: float
     blende_s: float
     tempo_faktor: float
+    # Beginn der Blende in der Mix-Zeitachse: ordnet eine "Unfall"-Markierung
+    # aus dem Hoertest dem Uebergang zu. None, wenn B nicht gerendert wurde.
+    mix_beginn_s: float | None = None
 
 
 @dataclass
@@ -324,8 +346,11 @@ def mix_set(
     blende_s: float = 2.0,
     basstausch: bool = True,
     ziel_lufs: float = config.LUFS_ZIEL,
+    phrasen_takte: int = 0,
 ) -> tuple[np.ndarray, MixProtokoll]:
-    """Rendert ein ganzes Set aus `reihenfolge` zu einer Mix-Datei (Mono).
+    """Rendert ein ganzes Set aus `reihenfolge` zu einer Mix-Datei.
+
+    Audio darf Mono (n,) oder Stereo (n, Kanaele) sein - alle Spuren gleich.
 
     Ablauf je Nachbarpaar (A -> B):
     - A steigt auf einem Downbeat aus (`waehle_ausstieg`), B setzt auf einem
@@ -348,23 +373,27 @@ def mix_set(
     blende_n = max(1, round(blende_s * rate))
     protokoll_uebergaenge: list[MixUebergang] = []
     mischung = np.zeros(0, dtype=np.float32)
+    blende_beginn: dict[int, float] = {}  # Track-ID von B -> Blendenbeginn im Mix
 
     for position, track_id in enumerate(reihenfolge):
         roh = audio.get(track_id)
         if roh is None or np.asarray(roh).size == 0:
             continue
-        spur = np.asarray(roh, dtype=np.float32).reshape(-1)
+        spur = np.asarray(roh, dtype=np.float32)
         beats = downbeats.get(track_id, []) or []
-        gesamt_s = spur.size / rate
+        gesamt_s = len(spur) / rate
         letzter = position == len(reihenfolge) - 1
 
         # Einstieg: erster Song ab 0, sonst ab dem ersten Downbeat (im Takt).
         einstieg_s = 0.0 if position == 0 else waehle_einstieg(beats)
         # Ausstieg: letzter Downbeat mit Blendenplatz; letzter Song laeuft aus.
-        ausstieg_s = gesamt_s if letzter else waehle_ausstieg(beats, gesamt_s, blende_s)
+        # Mit phrasen_takte>1 auf ein Phrasenraster gezwungen (klingt nach DJ).
+        ausstieg_s = gesamt_s if letzter else waehle_ausstieg(
+            beats, gesamt_s, blende_s, phrasen_takte
+        )
 
         anfang_n = max(0, round(einstieg_s * rate))
-        ende_n = min(spur.size, max(anfang_n + 1, round(ausstieg_s * rate)))
+        ende_n = min(len(spur), max(anfang_n + 1, round(ausstieg_s * rate)))
         segment = spur[anfang_n:ende_n]
 
         # Tempoangleich auf die laufende Zeit (Faktor aus dem Plan, ADR-014).
@@ -377,15 +406,16 @@ def mix_set(
         else:
             # Ueberblende: Schwanz der laufenden Mischung trifft Kopf des neuen
             # Segments - beide liegen nach dem Resampling auf demselben Raster.
-            schwanz = mischung[-blende_n:] if mischung.size >= blende_n else mischung
+            schwanz = mischung[-blende_n:] if len(mischung) >= blende_n else mischung
             schwanz = _auffuellen(np.asarray(schwanz, dtype=np.float32), blende_n)
             kopf = _auffuellen(np.asarray(segment[:blende_n], dtype=np.float32), blende_n)
             mischbar = _fade_segment(schwanz, kopf, rate, basstausch)
             kopf_mischung = (
-                mischung[:-blende_n] if mischung.size >= blende_n
-                else np.zeros(0, dtype=np.float32)
+                mischung[:-blende_n] if len(mischung) >= blende_n
+                else mischung[:0]
             )
             rest = segment[blende_n:]
+            blende_beginn[track_id] = len(kopf_mischung) / rate
             mischung = np.concatenate(
                 [t for t in (kopf_mischung, mischbar, rest) if t.size]
             )
@@ -403,6 +433,10 @@ def mix_set(
                 )
             )
 
+    protokoll_uebergaenge = [
+        replace(u, mix_beginn_s=blende_beginn.get(u.to_id)) for u in protokoll_uebergaenge
+    ]
+
     # Lautheit auf Ziel, True Peak deckeln (Roadmap: -14 LUFS, <= -1 dBTP).
     angeglichen = lufs.auf_lautheit_bringen(mischung, rate, ziel_lufs)
     gedeckelt, tp = _decke_true_peak(angeglichen, rate)
@@ -412,7 +446,7 @@ def mix_set(
         uebergaenge=protokoll_uebergaenge,
         lufs=lufs_wert,
         true_peak=tp,
-        dauer_s=gedeckelt.size / rate if rate else 0.0,
+        dauer_s=len(gedeckelt) / rate if rate else 0.0,
     )
     return gedeckelt, protokoll
 

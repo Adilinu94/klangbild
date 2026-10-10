@@ -386,6 +386,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_mix.set_defaults(funktion=None)
 
+    p_ht = unter.add_parser(
+        "hoertest", parents=[pfade],
+        help="Blinde Paare Auto-DJ vs. Shuffle rendern (Phase 1, Hoertest-Design)",
+    )
+    p_ht.add_argument("--paare", type=int, default=3, help="Anzahl Paare (je ein Tempo-Cluster)")
+    p_ht.add_argument("--laenge", type=int, default=4, help="Songs je Set")
+    p_ht.add_argument("--seed", type=int, default=None, help="Zufall reproduzierbar machen")
+    p_ht.add_argument("--aus", default=None, help="Zielordner (Default: ergebnisse/hoertest)")
+    p_ht.set_defaults(funktion=None)
+
     return parser
 
 
@@ -441,6 +451,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import autodj
 
         return autodj.laufen(args)
+
+    if args.befehl == "hoertest":
+        from . import autodj
+
+        return autodj.laufen_hoertest(args)
 
     return int(args.funktion(args))
 
