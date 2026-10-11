@@ -1,0 +1,269 @@
+"""Phase 2 · Klangbild-Mixer: lokaler Server + Browser-Oberflaeche (ADR-021).
+
+Aufruf:
+    python -m klangbild mixer            # oeffnet http://127.0.0.1:8766
+
+Die Wiedergabe laeuft in Python (`live.Wiedergabe`, sounddevice); der Browser
+ist Fernbedienung, fragt `/api/zustand` mehrmals pro Sekunde ab und laedt Songs
+hoch. Hochgeladene Songs analysiert ein Hintergrund-Thread mit derselben Logik
+wie `analyze` (`pipeline.track_analysieren`). Server wie `blindui.py`:
+Standardbibliothek, nur localhost.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import threading
+import urllib.parse
+import webbrowser
+from dataclasses import asdict
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+from . import autodj, config, db, einstellungen, live
+
+SEITE = Path(__file__).with_name("mixer.html")
+# soundfile liest kein AAC (M4A) - lieber gleich ablehnen als spaeter "fehler".
+UPLOAD_ENDUNGEN = config.AUDIO_ENDUNGEN - {".m4a", ".aac"}
+UPLOAD_MAX_BYTES = 1 << 30   # 1 GB je Datei
+
+
+def bibliothek_laden(conn, version: str) -> dict[int, live.Eintrag]:
+    """Mischbare Tracks (ohne Dubletten, `autodj.lade_tracks`) plus Pegel, Energie, Abschnitte."""
+    tracks, downbeats, pfade, _ = autodj.lade_tracks(conn, version, start=None, laenge=0)
+    extra = {
+        int(z["track_id"]): z for z in conn.execute(
+            "SELECT track_id, lufs, true_peak, energie_json, abschnitte_json FROM features"
+            " WHERE analyse_version=?", (version,))
+    }
+    bib = {}
+    for t in tracks:
+        z = extra.get(t.id)
+        energie = [float(v) for _, v in json.loads(z["energie_json"] or "[]")] if z else []
+        abschnitte = [float(x) for x in json.loads(z["abschnitte_json"] or "[]")] if z else []
+        bib[t.id] = live.Eintrag(
+            id=t.id, pfad=pfade[t.id], bpm=t.bpm, camelot=t.camelot, downbeats=downbeats[t.id],
+            gain_db=live.gain_db(z["lufs"], z["true_peak"]) if z else 0.0,
+            energie=energie, abschnitte=abschnitte)
+    return bib
+
+
+def sicherer_name(name: str) -> str | None:
+    """Dateiname aus dem Upload: ohne Pfad, nur harmlose Zeichen, erlaubte Endung."""
+    name = Path(name.replace("\\", "/")).name
+    stamm, endung = Path(name).stem, Path(name).suffix.lower()
+    stamm = re.sub(r"[^\w\s.,()&'+-]", "_", stamm).strip(" .")[:150]
+    if not stamm or endung not in UPLOAD_ENDUNGEN:
+        return None
+    return stamm + endung
+
+
+class Mixer:
+    """Wiedergabe + Upload-Analyse + Einstellungen, geteilt von allen Requests."""
+
+    def __init__(self, wiedergabe: live.Wiedergabe, datenbank: Path, version: str,
+                 upload_ordner: Path, einst_pfad: Path):
+        self.w = wiedergabe
+        self.datenbank = datenbank
+        self.version = version
+        self.upload_ordner = upload_ordner
+        self.einst_pfad = einst_pfad
+        self.lock = threading.Lock()
+        self.offen: list[Path] = []
+        self.analyse = {"fertig": 0, "fehler": 0, "aktuell": None, "meldung": ""}
+        self._wecker = threading.Event()
+
+    # --- Upload + Analyse --------------------------------------------------
+    def hochladen(self, name: str, daten_lesen, laenge: int) -> str:
+        sicher = sicherer_name(name)
+        if sicher is None:
+            raise ValueError(f"Nicht unterstuetzt: {name} (erlaubt: {', '.join(sorted(UPLOAD_ENDUNGEN))})")
+        if not 0 < laenge <= UPLOAD_MAX_BYTES:
+            raise ValueError("Datei leer oder zu gross")
+        self.upload_ordner.mkdir(parents=True, exist_ok=True)
+        ziel, n = self.upload_ordner / sicher, 1
+        while ziel.exists():
+            ziel = self.upload_ordner / f"{Path(sicher).stem} ({n}){Path(sicher).suffix}"
+            n += 1
+        rest = laenge
+        with ziel.open("wb") as f:
+            while rest > 0:
+                block = daten_lesen(min(rest, 1 << 20))
+                if not block:
+                    break
+                f.write(block)
+                rest -= len(block)
+        if rest:
+            ziel.unlink(missing_ok=True)
+            raise ValueError("Upload abgebrochen")
+        with self.lock:
+            self.offen.append(ziel)
+        self._wecker.set()
+        return ziel.name
+
+    def _analysieren(self, pfad: Path) -> None:
+        from . import beats, hashutil, pipeline
+
+        conn = db.verbinden(self.datenbank)
+        try:
+            stat = pfad.stat()
+            h, bereich = hashutil.datei_hash(pfad)
+            tid, _ = db.track_eintragen(conn, pfad, stat.st_size, stat.st_mtime, h,
+                                        bereich.container, bereich.start, bereich.ende)
+            werte = pipeline.track_analysieren(pfad, beats.verfuegbar())
+            db.features_speichern(conn, tid, self.version, werte)
+            conn.commit()
+            ok = werte.get("status") == "ok"
+            self.analyse["fertig" if ok else "fehler"] += 1
+            if not ok:
+                self.analyse["meldung"] = f"{pfad.name}: {werte.get('status')}"
+            self.w.bibliothek_setzen(bibliothek_laden(conn, self.version))
+        finally:
+            conn.close()
+
+    def _worker(self) -> None:
+        while True:
+            self._wecker.wait()
+            with self.lock:
+                pfad = self.offen.pop(0) if self.offen else None
+                if pfad is None:
+                    self._wecker.clear()
+                    continue
+            self.analyse["aktuell"] = pfad.name
+            try:
+                self._analysieren(pfad)
+            except Exception as fehler:  # noqa: BLE001 - eine kaputte Datei stoppt den Worker nicht
+                self.analyse["fehler"] += 1
+                self.analyse["meldung"] = f"{pfad.name}: {fehler}"
+            self.analyse["aktuell"] = None
+
+    def starten(self) -> None:
+        threading.Thread(target=self._worker, daemon=True).start()
+
+    # --- Zustand + Einstellungen --------------------------------------------
+    def zustand(self) -> dict:
+        z = self.w.zustand()
+        with self.lock:
+            z["analyse"] = {**self.analyse, "offen": len(self.offen)}
+        z["bibliothek_anzahl"] = len(self.w.bibliothek)
+        return z
+
+    def einstellungen_setzen(self, roh: dict) -> dict:
+        neu = einstellungen.aus_dict(roh, self.w.einst)
+        einstellungen.speichern(self.einst_pfad, neu)
+        self.w.einstellungen_setzen(neu)
+        return asdict(neu)
+
+
+_M: Mixer | None = None
+
+
+class _Handler(BaseHTTPRequestHandler):
+    server_version = "KlangbildMixer/0.2"
+
+    def log_message(self, *args):  # ruhiger Server
+        return
+
+    def _sende(self, inhalt: bytes, typ: str = "application/json", code: int = 200) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", typ)
+        self.send_header("Content-Length", str(len(inhalt)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(inhalt)
+
+    def _json(self, daten, code: int = 200) -> None:
+        self._sende(json.dumps(daten, ensure_ascii=False).encode("utf-8"), code=code)
+
+    def do_GET(self) -> None:  # noqa: N802
+        pfad = urllib.parse.urlparse(self.path).path
+        w = _M.w
+        if pfad == "/":
+            self._sende(SEITE.read_bytes(), "text/html; charset=utf-8")
+        elif pfad == "/api/zustand":
+            self._json(_M.zustand())
+        elif pfad == "/api/einstellungen":
+            self._json({"werte": asdict(w.einst), "auswahl": einstellungen.AUSWAHL,
+                        "takte": einstellungen.TAKTE, "grenzen": einstellungen.GRENZEN})
+        elif pfad == "/api/bibliothek":
+            self._json([{"id": e.id, "titel": e.titel, "bpm": round(e.bpm, 2), "camelot": e.camelot}
+                        for e in sorted(w.bibliothek.values(), key=lambda e: e.titel.lower())])
+        elif pfad.startswith("/api/track/"):
+            rest = pfad.rsplit("/", 1)[1]
+            e = w.bibliothek.get(int(rest)) if rest.isdigit() else None
+            if e is None:
+                self._json({"fehler": "unbekannt"}, 404)
+            else:
+                self._json({"id": e.id, "energie": e.energie,
+                            "phrasen": e.downbeats[::autodj.PHRASEN_TAKTE]})
+        else:
+            self._json({"fehler": "nicht gefunden"}, 404)
+
+    def do_POST(self) -> None:  # noqa: N802
+        url = urllib.parse.urlparse(self.path)
+        befehl = url.path.removeprefix("/api/")
+        laenge = int(self.headers.get("Content-Length", "0") or 0)
+        w = _M.w
+        try:
+            if befehl == "upload":
+                name = urllib.parse.parse_qs(url.query).get("name", [""])[0]
+                self._json({"datei": _M.hochladen(name, self.rfile.read, laenge)})
+                return
+            daten = json.loads(self.rfile.read(laenge) or b"{}")
+            if befehl == "einstellungen":
+                self._json(_M.einstellungen_setzen(daten))
+                return
+            aktionen = {
+                "play": lambda: w.play(int(daten["id"])),
+                "pause": w.pause,
+                "seek": lambda: w.seek(float(daten["s"])),
+                "weiter": w.weiter,
+                "queue": lambda: w.einreihen(int(daten["id"])),
+                "entfernen": lambda: w.entfernen(int(daten["index"])),
+                "verschieben": lambda: w.verschieben(int(daten["index"]), int(daten["richtung"])),
+                "sortieren": w.sortieren,
+                "autodj": lambda: w.autodj_setzen(bool(daten["an"])),
+            }
+            if befehl not in aktionen:
+                self._json({"fehler": "unbekannter Befehl"}, 404)
+                return
+            aktionen[befehl]()
+        except (KeyError, ValueError, TypeError) as fehler:
+            self._json({"fehler": str(fehler)}, 400)
+            return
+        except Exception as fehler:  # noqa: BLE001 - z. B. unlesbare Datei: melden statt abstuerzen
+            self._json({"fehler": str(fehler)}, 500)
+            return
+        self._json(_M.zustand())
+
+
+def server(mixer: Mixer, host: str, port: int) -> ThreadingHTTPServer:
+    global _M
+    _M = mixer
+    return ThreadingHTTPServer((host, port), _Handler)
+
+
+def laufen(args) -> int:
+    e = config.vorbereiten(config.aus_argumenten(args))
+    conn = db.verbinden(e.datenbank)
+    try:
+        bib = bibliothek_laden(conn, e.analyse_version)
+    finally:
+        conn.close()
+    einst_pfad = e.ergebnisse / "mixer-einstellungen.json"
+    wiedergabe = live.Wiedergabe(bib, einst=einstellungen.laden(einst_pfad))
+    mixer = Mixer(wiedergabe, e.datenbank, e.analyse_version, config.DATEN / "upload", einst_pfad)
+    wiedergabe.starten()
+    mixer.starten()
+    srv = server(mixer, args.host, args.port)
+    url = f"http://{args.host}:{args.port}"
+    print(f"Klangbild-Mixer: {url}  ({len(bib)} Titel) - Beenden mit Strg+C", flush=True)
+    webbrowser.open(url)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print("\nbeendet", flush=True)
+    finally:
+        srv.server_close()
+    return 0

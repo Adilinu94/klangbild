@@ -80,6 +80,43 @@ def kommandos_scan(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------
 # analyze
 # --------------------------------------------------------------------------
+def track_analysieren(pfad: Path, schlag_da: bool) -> dict:
+    """Tonart, Lautheit, Energie, Abschnitte und (falls da) Beats einer Datei.
+
+    Geteilt von `analyze` (CLI) und dem Upload im Mixer. Wirft nie: jede Datei darf
+    einzeln scheitern, der Fehler steht dann im Status.
+    """
+    werte: dict = {}
+    try:
+        audio = audioio.decodieren(pfad, config.ABTASTRATE_ANALYSE)
+        if audio.sekunden < config.MIN_SEKUNDEN:
+            werte["status"] = "zu_kurz"
+        else:
+            tonart = keyestimate.tonart_schaetzen(audio.daten, audio.rate)
+            werte.update(
+                key_name=tonart.name,
+                key_camelot=tonart.camelot,
+                key_vertrauen=tonart.vertrauen,
+            )
+            werte["lufs"] = lufs.integrierte_lautheit(audio.daten, audio.rate)
+            werte["true_peak"] = lufs.true_peak_dbtp(audio.daten, audio.rate)
+            zeiten, db_werte = energy.rms_kurve(audio.daten, audio.rate)
+            werte["energie"] = [[round(float(t), 2), round(float(v), 1)] for t, v in zip(zeiten, db_werte)]
+            werte["abschnitte"] = [round(float(t), 2) for t in energy.abschnitte(audio.daten, audio.rate)]
+            if schlag_da:
+                try:
+                    schlag = beats.analysieren(pfad)
+                    werte["beats"] = [round(float(t), 4) for t in schlag.beats]
+                    werte["downbeats"] = [round(float(t), 4) for t in schlag.downbeats]
+                    werte["bpm"] = round(metrics.bpm_aus_beats(schlag.beats), 2)
+                except Exception as fehler:  # noqa: BLE001
+                    werte["status"] = f"schlagfehler: {fehler}"
+            werte.setdefault("status", "ok")
+    except Exception as fehler:  # noqa: BLE001 - jede Datei darf einzeln scheitern
+        werte = {"status": f"fehler: {fehler}"}
+    return werte
+
+
 def kommandos_analyze(args: argparse.Namespace) -> int:
     einstellungen = config.vorbereiten(config.aus_argumenten(args))
     conn = db.verbinden(einstellungen.datenbank)
@@ -103,35 +140,7 @@ def kommandos_analyze(args: argparse.Namespace) -> int:
         _log("Hinweis: beat-this fehlt - Schlaganalyse wird uebersprungen (Rest laeuft).")
     beginn = time.time()
     for nummer, zeile in enumerate(offen, 1):
-        pfad = Path(zeile["pfad"])
-        werte: dict = {}
-        try:
-            audio = audioio.decodieren(pfad, config.ABTASTRATE_ANALYSE)
-            if audio.sekunden < config.MIN_SEKUNDEN:
-                werte["status"] = "zu_kurz"
-            else:
-                tonart = keyestimate.tonart_schaetzen(audio.daten, audio.rate)
-                werte.update(
-                    key_name=tonart.name,
-                    key_camelot=tonart.camelot,
-                    key_vertrauen=tonart.vertrauen,
-                )
-                werte["lufs"] = lufs.integrierte_lautheit(audio.daten, audio.rate)
-                werte["true_peak"] = lufs.true_peak_dbtp(audio.daten, audio.rate)
-                zeiten, db_werte = energy.rms_kurve(audio.daten, audio.rate)
-                werte["energie"] = [[round(float(t), 2), round(float(v), 1)] for t, v in zip(zeiten, db_werte)]
-                werte["abschnitte"] = [round(float(t), 2) for t in energy.abschnitte(audio.daten, audio.rate)]
-                if schlag_da:
-                    try:
-                        schlag = beats.analysieren(pfad)
-                        werte["beats"] = [round(float(t), 4) for t in schlag.beats]
-                        werte["downbeats"] = [round(float(t), 4) for t in schlag.downbeats]
-                        werte["bpm"] = round(metrics.bpm_aus_beats(schlag.beats), 2)
-                    except Exception as fehler:  # noqa: BLE001
-                        werte["status"] = f"schlagfehler: {fehler}"
-                werte.setdefault("status", "ok")
-        except Exception as fehler:  # noqa: BLE001 - jede Datei darf einzeln scheitern
-            werte = {"status": f"fehler: {fehler}"}
+        werte = track_analysieren(Path(zeile["pfad"]), schlag_da)
         db.features_speichern(conn, int(zeile["id"]), einstellungen.analyse_version, werte)
         if nummer % 10 == 0 or nummer == len(offen):
             conn.commit()
@@ -416,6 +425,12 @@ def _parser() -> argparse.ArgumentParser:
     p_ht.add_argument("--aus", default=None, help="Zielordner (Default: ergebnisse/hoertest)")
     p_ht.set_defaults(funktion=None)
 
+    p_mx = unter.add_parser("mixer", parents=[pfade],
+                            help="Phase 2 · PC-DJ-Mixer: Player + Auto-DJ live im Browser")
+    p_mx.add_argument("--host", default="127.0.0.1")
+    p_mx.add_argument("--port", type=int, default=8766)
+    p_mx.set_defaults(funktion=None)
+
     return parser
 
 
@@ -476,6 +491,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import autodj
 
         return autodj.laufen_hoertest(args)
+
+    if args.befehl == "mixer":
+        from . import mixer
+
+        return mixer.laufen(args)
 
     return int(args.funktion(args))
 

@@ -16,7 +16,7 @@ Konsequenzen.
 | ADR-008 | Archiv bleibt ohne Zahlung lesbar | **ausgelagert** (gehört zum Produkt Belegkasten, liegt jetzt unter `G:\AI Agentur\`) |
 | [ADR-009](ADR-009-kein-visualizer.md) | Kein Visualizer (EGL/GL) | angenommen |
 | [ADR-010](ADR-010-zwei-decoder-slots.md) | Zwei Decoder-Slots | angenommen |
-| [ADR-011](ADR-011-pc-prototyp-zuerst.md) | PC-Prototyp zuerst, Android später | angenommen |
+| [ADR-011](ADR-011-pc-prototyp-zuerst.md) | PC-Prototyp zuerst, Android später | angenommen, Offline-Wahl **abgelöst durch ADR-021** |
 | [ADR-012](ADR-012-analyse-mit-permissiven-modellen.md) | Analyse mit permissiven Modellen statt librosa | angenommen, löst ADR-005 ab |
 | [ADR-013](ADR-013-hash-ueber-audiodaten.md) | Hash nur über die Audiodaten | angenommen |
 | [ADR-014](ADR-014-vinyl-angleich-in-v1.md) | Tempoangleich per Resampling in Version 1 | angenommen |
@@ -24,8 +24,10 @@ Konsequenzen.
 | [ADR-016](ADR-016-oboe-shared-statt-exclusive.md) | Oboe im geteilten Stromsparmodus | angenommen |
 | [ADR-017](ADR-017-engine-als-media3-player.md) | Eigene Engine als Media3-Player | angenommen |
 | [ADR-018](ADR-018-stems-im-uebergangsfenster.md) | Stems als Kern, nur im Übergangsfenster getrennt | **vorgeschlagen** |
-| [ADR-019](ADR-019-uebergang-als-datenformat.md) | Übergänge als Datenformat statt fest im Renderer | **vorgeschlagen** |
-| [ADR-020](ADR-020-vinyl-angleich-auf-1-prozent.md) | Vinyl-Angleich auf ±1 % begrenzen, bis Keylock kommt | angenommen, ergänzt ADR-014 |
+| [ADR-019](ADR-019-uebergang-als-datenformat.md) | Übergänge als Datenformat statt fest im Renderer | angenommen (11.10.2026, Einstellungen = Rezept) |
+| [ADR-020](ADR-020-vinyl-angleich-auf-1-prozent.md) | Vinyl-Angleich auf ±1 % begrenzen, bis Keylock kommt | angenommen, ergänzt ADR-014; mit Keylock ergänzt durch ADR-022 |
+| [ADR-021](ADR-021-pc-mixer-in-echtzeit.md) | PC-Prototyp als Echtzeit-DJ-Mixer, keine Landingpage | angenommen |
+| [ADR-022](ADR-022-keylock-und-tempo-als-einstellung.md) | Keylock jetzt, Tempo-Grenze als Einstellung, Taktraster aus dem Tempo | angenommen |
 
 Die Nummer 008 bleibt vergeben und wird nicht neu belegt.
 

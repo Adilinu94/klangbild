@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klangbild Mixer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000; --surface: #111; --raised: #1A1A1A; --line: #262626;
+    --text: #FFF; --text2: #E8E8E8; --muted: #999; --dim: #666;
+    --rot: #D71921; --ok: #4A9E5C;
+    --mono: "Space Mono", ui-monospace, monospace;
+    --sans: "Space Grotesk", system-ui, sans-serif;
+    --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 var(--sans); }
+  .app { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 1.6fr) minmax(240px, 0.9fr);
+         height: 100vh; gap: 1px; background: var(--line); }
+  .app > section { background: var(--bg); padding: 24px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .label { font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  h1 { font: 300 32px/1 var(--sans); margin: 0 0 18px; letter-spacing: -.01em; }
+  input[type=search] { width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--text);
+         font: 14px var(--mono); padding: 10px 12px; border-radius: 6px; outline: none; margin-bottom: 12px; }
+  input[type=search]:focus { border-color: var(--dim); }
+  .liste { overflow-y: auto; flex: 1; min-height: 0; scrollbar-color: #333 transparent; scrollbar-width: thin; }
+  .zeile { display: grid; grid-template-columns: 1fr 64px 40px 28px; gap: 8px; align-items: center;
+           padding: 9px 4px; border-bottom: 1px solid var(--surface); cursor: pointer; transition: background 150ms var(--ease); }
+  .zeile:hover { background: var(--surface); }
+  .zeile.aktiv .titel { color: var(--rot); }
+  .titel { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--text2); overflow-wrap: anywhere; }
+  .daten { font: 12px var(--mono); color: var(--muted); text-align: right; }
+  .plus { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 50%; width: 26px; height: 26px;
+          font: 14px var(--mono); cursor: pointer; padding: 0; }
+  .plus:hover { color: var(--text); border-color: var(--dim); }
+  .player { justify-content: center; gap: 22px; }
+  .jetzt-titel { font: 500 26px/1.15 var(--sans); text-transform: uppercase; margin: 0; min-height: 60px; }
+  .instrument { font: 13px var(--mono); color: var(--muted); letter-spacing: .04em; }
+  .instrument b { color: var(--text); font-weight: 400; }
+  canvas { width: 100%; height: 120px; display: block; cursor: pointer; }
+  .zeiten { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); margin-top: 6px; }
+  .bedienung { display: flex; align-items: center; gap: 14px; }
+  .rund { width: 64px; height: 64px; border-radius: 50%; border: none; background: var(--text); color: var(--bg);
+          font: 22px var(--mono); cursor: pointer; transition: opacity 100ms var(--ease); }
+  .rund:active { opacity: .7; }
+  .knopf { background: none; border: 1px solid var(--line); color: var(--text2); border-radius: 999px;
+           padding: 10px 18px; font: 700 12px var(--mono); letter-spacing: .1em; cursor: pointer; }
+  .knopf:hover { border-color: var(--dim); }
+  .autodj { margin-left: auto; display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none;
+            font: 700 12px var(--mono); letter-spacing: .12em; color: var(--muted); background: none; border: none; }
+  .schalter { width: 52px; height: 28px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line);
+              position: relative; transition: background 250ms var(--ease); }
+  .schalter::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+                     background: var(--dim); transition: transform 250ms var(--ease), background 250ms var(--ease); }
+  .autodj.an { color: var(--rot); }
+  .autodj.an .schalter { background: var(--rot); border-color: var(--rot); }
+  .autodj.an .schalter::after { transform: translateX(24px); background: var(--text); }
+  .naechster { border-top: 1px solid var(--line); padding-top: 16px; font: 13px var(--mono); color: var(--muted); min-height: 64px; }
+  .naechster .wer { color: var(--text2); font-family: var(--sans); font-size: 16px; display: block; margin-top: 6px; }
+  .segmente { display: flex; gap: 4px; margin-top: 10px; }
+  .segmente i { flex: 1; height: 6px; background: var(--raised); border-radius: 1px; }
+  .segmente i.voll { background: var(--rot); }
+  .rechts .liste .zeile { grid-template-columns: 1fr 28px; cursor: default; }
+  .verlauf { font: 12px var(--mono); color: var(--muted); }
+  .verlauf div { padding: 6px 0; border-bottom: 1px solid var(--surface); }
+  .verlauf .sync { color: var(--ok); }
+  .status { font: 11px var(--mono); color: var(--dim); margin-top: 12px; }
+  .status.warn { color: var(--rot); }
+  .leer { color: var(--dim); font: 12px var(--mono); padding: 8px 0; }
+  .drop { border: 1px dashed var(--line); border-radius: 8px; padding: 14px; text-align: center; font: 12px var(--mono);
+          color: var(--muted); letter-spacing: .08em; margin-bottom: 12px; cursor: pointer; transition: border-color 150ms var(--ease); }
+  .drop:hover, body.ziehen .drop { border-color: var(--rot); color: var(--text); }
+  .analyse { font: 11px var(--mono); color: var(--muted); margin: -4px 0 10px; min-height: 14px; }
+  .tabs { display: flex; gap: 18px; margin-bottom: 14px; }
+  .tabs button { background: none; border: none; padding: 0 0 6px; font: 700 11px var(--mono); letter-spacing: .12em;
+                 color: var(--dim); cursor: pointer; border-bottom: 1px solid transparent; }
+  .tabs button.an { color: var(--text); border-bottom-color: var(--rot); }
+  .rechts .liste .zeile.q { grid-template-columns: 1fr 22px 22px 22px; gap: 4px; }
+  .q .plus { width: 22px; height: 22px; font-size: 11px; }
+  .einst { overflow-y: auto; flex: 1; min-height: 0; scrollbar-color: #333 transparent; scrollbar-width: thin; }
+  .einst label { display: block; font: 700 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+  .einst select, .einst input[type=number] { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--line);
+          border-radius: 6px; padding: 8px; font: 13px var(--sans); }
+  .einst input[type=range] { width: 100%; accent-color: var(--rot); }
+  .einst .check { display: flex; align-items: center; gap: 10px; font: 13px var(--sans); text-transform: none; letter-spacing: 0; color: var(--text2); }
+  .einst .check input { accent-color: var(--rot); width: 16px; height: 16px; }
+  .einst .wert { float: right; color: var(--text); }
+  .einst .hinweis { font: 11px var(--mono); color: var(--dim); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <section>
+    <p class="label">Bibliothek</p>
+    <h1 id="anzahl">–</h1>
+    <div class="drop" id="drop" role="button" tabindex="0">SONGS HIERHER ZIEHEN ODER KLICKEN</div>
+    <input type="file" id="datei" multiple accept=".mp3,.flac,.wav,.ogg,.opus" hidden>
+    <div class="analyse" id="analyse"></div>
+    <input type="search" id="suche" placeholder="SUCHEN" aria-label="Bibliothek durchsuchen">
+    <div class="liste" id="bibliothek" role="list"></div>
+  </section>
+
+  <section class="player">
+    <div>
+      <p class="label">Jetzt läuft</p>
+      <h2 class="jetzt-titel" id="titel">Nichts ausgewählt</h2>
+      <div class="instrument" id="instrument">Titel links anklicken</div>
+    </div>
+    <div>
+      <canvas id="welle" aria-label="Wellenform, klicken zum Springen"></canvas>
+      <div class="zeiten"><span id="pos">0:00</span><span id="dauer">0:00</span></div>
+    </div>
+    <div class="bedienung">
+      <button class="rund" id="play" aria-label="Wiedergabe/Pause">▶</button>
+      <button class="knopf" id="weiter">WEITER</button>
+      <button class="autodj" id="autodj" aria-pressed="false"><span>AUTO-DJ</span><span class="schalter"></span></button>
+    </div>
+    <div class="naechster" id="naechster"></div>
+  </section>
+
+  <section class="rechts">
+    <div class="tabs"><button class="an" data-tab="tab-queue">WARTESCHLANGE</button><button data-tab="tab-einst">EINSTELLUNGEN</button></div>
+    <div id="tab-queue" style="display: flex; flex-direction: column; flex: 1; min-height: 0">
+      <button class="knopf" id="sortieren" style="margin-bottom: 12px">PERFEKTE REIHENFOLGE</button>
+      <div class="liste" id="queue" style="flex: 0 1 auto; max-height: 50%"></div>
+      <p class="label" style="margin-top: 24px">Übergänge</p>
+      <div class="liste verlauf" id="verlauf"></div>
+    </div>
+    <div id="tab-einst" class="einst" style="display: none"></div>
+    <div class="status" id="status"></div>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let bibliothek = [], titelVon = {}, track = null, zustand = null;
+
+const zeit = (s) => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const senden = (befehl, daten = {}) =>
+  fetch(`/api/${befehl}`, { method: "POST", body: JSON.stringify(daten) })
+    .then((r) => r.json()).then((z) => { if (z.fehler) $("status").textContent = z.fehler; else zeige(z); });
+
+function zeichneBibliothek() {
+  const q = $("suche").value.trim().toLowerCase();
+  const aktiv = zustand && zustand.aktuell ? zustand.aktuell.id : null;
+  const treffer = bibliothek.filter((t) => !q || t.titel.toLowerCase().includes(q) || (t.camelot || "").toLowerCase() === q);
+  $("bibliothek").innerHTML = treffer.map((t) => `
+    <div class="zeile${t.id === aktiv ? " aktiv" : ""}" role="listitem" data-id="${t.id}">
+      <span class="titel">${t.titel.replace(/</g, "&lt;")}</span>
+      <span class="daten">${t.bpm.toFixed(1)}</span><span class="daten">${t.camelot || "–"}</span>
+      <button class="plus" data-queue="${t.id}" aria-label="Einreihen">+</button>
+    </div>`).join("");
+}
+
+function zeichneWelle() {
+  const c = $("welle"), ctx = c.getContext("2d"), dpr = devicePixelRatio || 1;
+  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (!track || !zustand || !zustand.aktuell) return;
+  const werte = track.energie, n = werte.length, dauer = zustand.aktuell.dauer_s;
+  if (!n) return;
+  const min = Math.min(...werte), max = Math.max(...werte), spanne = Math.max(1e-6, max - min);
+  const balken = Math.max(32, Math.floor(c.width / (5 * dpr))), anteil = zustand.aktuell.pos_s / dauer;
+  const breite = c.width / balken, mitte = c.height * 0.8;
+  for (let i = 0; i < balken; i++) {
+    const v = (werte[Math.floor(i / balken * n)] - min) / spanne;
+    const h = Math.max(2 * dpr, v * mitte * 0.95);
+    ctx.fillStyle = i / balken <= anteil ? "#FFFFFF" : "#333333";
+    ctx.fillRect(i * breite, mitte - h, Math.max(1, breite - 2 * dpr), h);
+  }
+  ctx.fillStyle = "#D71921";   // Phrasenanfaenge (jeder 8. Downbeat)
+  for (const p of track.phrasen) ctx.fillRect(p / dauer * c.width, mitte + 6 * dpr, dpr, 10 * dpr);
+}
+
+function zeige(z) {
+  const altId = zustand && zustand.aktuell ? zustand.aktuell.id : null;
+  zustand = z;
+  const a = z.aktuell;
+  $("play").textContent = z.spielt ? "❚❚" : "▶";
+  $("autodj").classList.toggle("an", z.autodj);
+  $("autodj").setAttribute("aria-pressed", z.autodj);
+  if (a) {
+    $("titel").textContent = a.titel;
+    const diff = a.bpm - a.bpm_original;
+    $("instrument").innerHTML = `<b>${a.bpm.toFixed(1)}</b> BPM · <b>${a.camelot || "–"}</b>` +
+      (Math.abs(diff) > 0.05 ? ` · ORIGINAL ${a.bpm_original.toFixed(1)} (${diff > 0 ? "+" : ""}${diff.toFixed(1)})` : "");
+    $("pos").textContent = zeit(a.pos_s); $("dauer").textContent = zeit(a.dauer_s);
+    if (a.id !== altId) fetch(`/api/track/${a.id}`).then((r) => r.json()).then((t) => { track = t; zeichneWelle(); zeichneBibliothek(); });
+  }
+  const nx = z.naechster;
+  if (nx) {
+    const takt = a ? 240 / a.bpm : 2, rest = Math.max(0, nx.in_s), n = nx.takte || 0;
+    const tempo = nx.sync ? `${nx.bpm_a} → ${nx.bpm_b} BPM · ${MODUS[nx.modus] || ""}` : (nx.modus === "aus" ? "" : "TEMPO FREI");
+    const voll = n ? Math.max(0, n - Math.ceil(rest / takt)) : 0;
+    $("naechster").innerHTML = `NÄCHSTER · ${(ARTEN[nx.art] || nx.art).toUpperCase()}${n ? ` · ${n} TAKTE` : ""} · IN ${zeit(rest)}` +
+      `<span class="wer">${nx.titel.replace(/</g, "&lt;")} · ${nx.camelot || "–"}</span>${tempo ? `<div style="margin-top:6px">${tempo}</div>` : ""}` +
+      (n && rest < n * takt ? `<div class="segmente">${"<i class=voll></i>".repeat(voll)}${"<i></i>".repeat(n - voll)}</div>` : "");
+  } else {
+    $("naechster").innerHTML = z.autodj ? "NÄCHSTER · WIRD GEWÄHLT …" : (z.warteschlange.length ? "NÄCHSTER · WIRD GELADEN …" : "WARTESCHLANGE LEER");
+  }
+  $("queue").innerHTML = z.warteschlange.length ? z.warteschlange.map((q, i) => `
+    <div class="zeile q"><span class="titel">${i + 1}. ${q.titel.replace(/</g, "&lt;")}</span>
+    <button class="plus" data-hoch="${i}" aria-label="Nach oben">▲</button>
+    <button class="plus" data-runter="${i}" aria-label="Nach unten">▼</button>
+    <button class="plus" data-entfernen="${i}" aria-label="Entfernen">×</button></div>`).join("") : `<div class="leer">LEER · TITEL MIT + EINREIHEN ODER SORTIEREN</div>`;
+  $("verlauf").innerHTML = z.verlauf.slice().reverse().map((v) =>
+    `<div><span class="${v.sync ? "sync" : ""}">${(ARTEN[v.art] || v.art).toUpperCase()}</span> → ${(titelVon[v.nach] || v.nach).replace(/</g, "&lt;")}` +
+    (v.sync ? ` · ${v.bpm_a}→${v.bpm_b}` : "") + `</div>`).join("") || `<div class="leer">NOCH KEINE</div>`;
+  const an = z.analyse || {};
+  $("analyse").textContent = an.aktuell ? `ANALYSIERE ${an.aktuell} · NOCH ${an.offen}` :
+    (an.fertig || an.fehler ? `${an.fertig} ANALYSIERT${an.fehler ? ` · ${an.fehler} FEHLER` : ""}${an.meldung ? " · " + an.meldung : ""}` : "");
+  if (z.bibliothek_anzahl !== bibliothek.length) ladeBibliothek();
+  $("status").textContent = z.underflows ? `AUSSETZER: ${z.underflows}` : "AUDIO OK";
+  $("status").classList.toggle("warn", z.underflows > 0);
+  zeichneWelle();
+}
+
+$("bibliothek").addEventListener("click", (e) => {
+  const q = e.target.dataset.queue;
+  if (q) return senden("queue", { id: +q });
+  const zeile = e.target.closest(".zeile");
+  if (zeile) senden("play", { id: +zeile.dataset.id });
+});
+$("queue").addEventListener("click", (e) => {
+  const d = e.target.dataset;
+  if (d.entfernen) senden("entfernen", { index: +d.entfernen });
+  if (d.hoch) senden("verschieben", { index: +d.hoch, richtung: -1 });
+  if (d.runter) senden("verschieben", { index: +d.runter, richtung: 1 });
+});
+$("sortieren").onclick = () => senden("sortieren");
+document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("an", x === b));
+  $("tab-queue").style.display = b.dataset.tab === "tab-queue" ? "flex" : "none";
+  $("tab-einst").style.display = b.dataset.tab === "tab-einst" ? "block" : "none";
+});
+
+// --- Upload ---
+async function hochladen(dateien) {
+  for (const f of dateien) {
+    $("analyse").textContent = `LADE HOCH: ${f.name}`;
+    const r = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+    const j = await r.json();
+    if (j.fehler) { $("status").textContent = j.fehler; $("status").classList.add("warn"); }
+  }
+}
+$("drop").onclick = () => $("datei").click();
+$("drop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") $("datei").click(); };
+$("datei").onchange = (e) => hochladen([...e.target.files]);
+addEventListener("dragover", (e) => { e.preventDefault(); document.body.classList.add("ziehen"); });
+addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("ziehen"); });
+addEventListener("drop", (e) => { e.preventDefault(); document.body.classList.remove("ziehen"); hochladen([...e.dataTransfer.files]); });
+
+// --- Einstellungen ---
+const ARTEN = { auto: "Automatisch", eq: "EQ-Mix mit Bass-Tausch", crossfade: "Crossfade", filter: "Filter-Sweep",
+  echo: "Echo-Out", schnitt: "Harter Schnitt", drums_zuerst: "Stems: Drums zuerst", acapella: "Stems: Acapella-Übergabe",
+  gesangsschutz: "Stems: Gesangsschutz" };
+const MODUS = { b_an_a: "Nächster an aktuellen", a_an_b: "Aktueller an nächsten", rampe: "Gleitend (Rampe)", frei: "frei" };
+const NAMEN = {
+  art: ["Übergangsart", ARTEN],
+  takte: ["Übergangslänge (Takte)"],
+  ausstieg: ["Ausstieg aktueller Song", { outro: "Im Outro", phrase: "Letzte Phrase", vor_ende: "N Takte vor Ende" }],
+  vor_ende_takte: ["N Takte vor Ende"],
+  einstieg: ["Einstieg nächster Song", { intro: "Mit dem Intro", drop: "Nach dem Intro (Drop)" }],
+  tempo_modus: ["BPM angleichen", MODUS],
+  max_bpm: ["Max. BPM-Anpassung ±"],
+  keylock: ["Tonhöhe halten (Keylock)"],
+  harmonie: ["Tonart beim Sortieren", { streng: "Streng (nur passende)", locker: "Locker (bevorzugen)", aus: "Ignorieren" }],
+  weiter_takte: ["Übergang bei WEITER (Takte)"],
+  weiter_ab: ["WEITER startet", { takt: "Ab nächstem Takt", phrase: "Ab nächster Phrase" }],
+  lautheit: ["Lautheit angleichen (−14 LUFS)"],
+};
+const TAKT_FELDER = ["takte", "weiter_takte"];
+async function ladeEinstellungen() {
+  const { werte, auswahl, takte, grenzen } = await (await fetch("/api/einstellungen")).json();
+  let html = "";
+  for (const [k, [name, texte]] of Object.entries(NAMEN)) {
+    const v = werte[k];
+    if (typeof v === "boolean") {
+      html += `<label class="check"><input type="checkbox" data-k="${k}" ${v ? "checked" : ""}> ${name}</label>`;
+    } else if (auswahl[k] || TAKT_FELDER.includes(k)) {
+      const opts = auswahl[k] || takte;
+      html += `<label>${name}</label><select data-k="${k}">${opts.map((o) =>
+        `<option value="${o}" ${o == v ? "selected" : ""}>${texte ? texte[o] : o}</option>`).join("")}</select>`;
+    } else if (k === "max_bpm") {
+      html += `<label>${name}<span class="wert" id="max_bpm_wert">${v} BPM</span></label>
+        <input type="range" data-k="${k}" min="${grenzen.max_bpm[0]}" max="${grenzen.max_bpm[1]}" step="0.5" value="${v}">
+        <div class="hinweis">Über der Grenze: Echo-Out statt Mix im Takt</div>`;
+    } else {
+      html += `<label>${name}</label><input type="number" data-k="${k}" min="${grenzen[k][0]}" max="${grenzen[k][1]}" value="${v}">`;
+    }
+  }
+  $("tab-einst").innerHTML = html + `<div class="hinweis" style="margin-top:16px">Stem-Übergänge nutzen bis zur Stem-Trennung den EQ-Mix.</div>`;
+}
+$("tab-einst").addEventListener("change", async (e) => {
+  const k = e.target.dataset.k; if (!k) return;
+  let v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+  if (e.target.type === "range" || e.target.type === "number" || TAKT_FELDER.includes(k)) v = +v;
+  await fetch("/api/einstellungen", { method: "POST", body: JSON.stringify({ [k]: v }) });
+  ladeEinstellungen();
+});
+$("tab-einst").addEventListener("input", (e) => { if (e.target.dataset.k === "max_bpm") $("max_bpm_wert").textContent = `${e.target.value} BPM`; });
+ladeEinstellungen();
+$("play").onclick = () => senden("pause");
+$("weiter").onclick = () => senden("weiter");
+$("autodj").onclick = () => senden("autodj", { an: !(zustand && zustand.autodj) });
+$("suche").oninput = zeichneBibliothek;
+$("welle").onclick = (e) => {
+  if (!zustand || !zustand.aktuell) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  senden("seek", { s: (e.clientX - r.left) / r.width * zustand.aktuell.dauer_s });
+};
+addEventListener("keydown", (e) => { if (e.code === "Space" && e.target.tagName !== "INPUT") { e.preventDefault(); senden("pause"); } });
+addEventListener("resize", zeichneWelle);
+
+let laedt = false;
+function ladeBibliothek() {
+  if (laedt) return;
+  laedt = true;
+  fetch("/api/bibliothek").then((r) => r.json()).then((b) => {
+    bibliothek = b; b.forEach((t) => (titelVon[t.id] = t.titel));
+    $("anzahl").textContent = `${b.length} Titel`; zeichneBibliothek();
+  }).finally(() => { laedt = false; });
+}
+ladeBibliothek();
+setInterval(() => fetch("/api/zustand").then((r) => r.json()).then(zeige).catch(() => {
+  $("status").textContent = "SERVER NICHT ERREICHBAR"; $("status").classList.add("warn");
+}), 250);
+</script>
+</body>
+</html>

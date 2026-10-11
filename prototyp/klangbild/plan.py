@@ -242,3 +242,66 @@ def baue_set(
     return plan
 
 
+
+
+# --- Phase 2: Bibliothek sortieren / naechsten Song waehlen (mit Keylock) ------
+
+def naechster(
+    aktuell: Track, kandidaten: list[Track], max_bpm: float, harmonie: str = "locker",
+) -> Track | None:
+    """Bester naechster Song nach Tempo-Grenze (absolute BPM), Harmonie, Energie.
+
+    Mit Keylock darf das Tempo um `max_bpm` angeglichen werden (ADR-022). Liegt kein
+    Kandidat in der Grenze, wird der tempo-naechste genommen - der Uebergang
+    faellt dann auf Echo/Schnitt zurueck, statt das Set abzubrechen.
+    `harmonie`: "streng" = nur gleiche Tonart/Camelot-Nachbar, falls vorhanden;
+    "locker" = Harmonie zaehlt in der Note; "aus" = ignorieren.
+    """
+    if not kandidaten:
+        return None
+    basis = aktuell.bpm or 0.0
+
+    def abstand(k: Track) -> float:
+        return abs((k.bpm or basis) - basis)
+
+    pool = [k for k in kandidaten if abstand(k) <= max_bpm + 1e-9]
+    if not pool:
+        return min(kandidaten, key=lambda k: (abstand(k), k.id))
+    if harmonie == "streng":
+        passend = [k for k in pool if harmonie_note(aktuell.camelot, k.camelot)[1] != "fremd"]
+        pool = passend or pool
+
+    def note(k: Track) -> tuple[float, int]:
+        harm = harmonie_note(aktuell.camelot, k.camelot)[0] if harmonie != "aus" else 0.5
+        energie = energie_note(aktuell.energie_db, k.energie_db, config.PLANER_ENERGIE_MAX_SPRUNG_DB)[0]
+        tempo = 1.0 - abstand(k) / max(max_bpm, 1.0)
+        return (0.5 * harm + 0.25 * energie + 0.25 * tempo, -k.id)
+
+    return max(pool, key=note)
+
+
+def sortiere_alle(
+    tracks: list[Track], max_bpm: float, harmonie: str = "locker", start_id: int | None = None,
+) -> list[int]:
+    """Alle Tracks in eine Reihenfolge bringen (gierig, jeder Song einmal).
+
+    Start: `start_id` oder der groesste Tempo-Cluster (wie autodj.lade_tracks).
+    shortcut: O(n^2) gierig; bei ~8.000 Titeln einige Minuten. Upgrade: Cluster
+    nach Tempo vorsortieren und nur Nachbarn vergleichen.
+    """
+    if not tracks:
+        return []
+    index = {t.id: t for t in tracks}
+    if start_id not in index:
+        from collections import Counter
+
+        modal = Counter(round(t.bpm or 0) for t in tracks).most_common(1)[0][0]
+        start_id = next(t.id for t in tracks if round(t.bpm or 0) == modal)
+    aktuell = index[start_id]
+    uebrig = [t for t in tracks if t.id != start_id]
+    folge = [start_id]
+    while uebrig:
+        aktuell = naechster(aktuell, uebrig, max_bpm, harmonie)
+        uebrig.remove(aktuell)
+        folge.append(aktuell.id)
+    return folge

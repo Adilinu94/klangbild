@@ -8,6 +8,8 @@ dependencies = [
     "scipy>=1.11",
     "soundfile>=0.12",
     "soxr>=0.3",
+    "sounddevice>=0.5",  # Phase 2: Live-Ausgabe (MIT, PortAudio MIT)
+    "python-stretch>=0.3",  # Phase 2: Keylock (MIT, Signalsmith Stretch, ADR-022)
 ]
 
 [project.optional-dependencies]

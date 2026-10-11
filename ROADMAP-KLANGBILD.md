@@ -25,7 +25,7 @@ weitergebaut.
 |---|---|---|---|
 | **0** · Kernwette | PC | Wissen: Taugen Vektoren und Analyse für Musik? | Belege + Musiktest + Analysegenauigkeit |
 | **1** · Auto-DJ offline | PC | gerenderter Mix (WAV/MP3) + Übergangsprotokoll | Hörtest mit 10 Personen |
-| **2** · Validierung | Web | Landingpage mit Hörprobe, Warteliste | Tötungskriterien Produkt §15 |
+| **2** · PC-Mixer | PC | Echtzeit-DJ-Mixer mit Oberfläche (ADR-021) | wird vor dem Bau festgelegt |
 | **3** · Engine-Spike | Android | zwei Decks auf Oboe, ein Gerät | 1 h ohne Aussetzer, Analysezeit gemessen |
 | **4** · App V1 | Android | schlanker Player + Auto-DJ einfach | Abnahme alt „Phase C" |
 | **5** · Übergangs-Engine | Android | Keylock, Bass-Tausch, Filter, Echo | Abnahme alt „Phase D" |
@@ -602,19 +602,46 @@ auf allen berührten Dateien.
 
 ---
 
-## Phase 2 · Validierung (Produkt §14)
+## Phase 2 · PC-DJ-Mixer in Echtzeit (ADR-021)
 
-- Landingpage mit Warteliste und der Hörprobe aus Phase 1.
-- **Achtung Musikrechte:** Die öffentliche Hörprobe darf **keine** gekauften
-  Songs enthalten. Dafür einen Mix aus **frei lizenzierter** Musik rendern
-  (CC-BY / CC0; Quellen: Free Music Archive, ccMixter, Jamendo).
-- **Pflicht dabei:** `prototyp/ergebnisse/hoerprobe-lizenzen.csv` mit
-  Track, Interpret, Lizenz, Quell-URL je Titel; die Namensnennung steht auf der
-  Seite neben dem Player. Gekaufte Musik verlässt den privaten Hörtest nie.
-- **Weitergabe:** Der Prototyp selbst wird nicht weitergegeben, nur die
-  fertigen Mixe (ADR-011).
-- **Tor:** Tötungskriterien aus `PRODUKT-KLANGBILD.md` §15 (500 Besucher und
-  unter 5 Anmeldungen = Stopp).
+Ersetzt die frühere Phase 2 (Landingpage mit Warteliste), die laut ADR-021
+entfällt.
+
+Ziel: Aus dem Offline-Prototyp wird ein **bedienbarer Mixer** auf dem PC. Er
+hat zwei Decks mit Live-Wiedergabe, Bibliothek, Warteschlange und einen
+Auto-DJ-Schalter. Die Übergangs-Mathematik bleibt die aus Phase 1 (`mix.py`,
+`resample.py`, `plan.py`).
+
+- **Start:** `python -m klangbild mixer` öffnet `http://127.0.0.1:8766`.
+- **Prinzip „vorausbacken":** Der Audio-Callback kopiert nur fertige Samples.
+  Den nächsten Übergang berechnet ein Hintergrund-Thread mit denselben
+  Funktionen wie offline. Live klingt deshalb wie der getestete Offline-Mix.
+- **Ausgabe:** sounddevice (MIT, PortAudio MIT), Stereo 44,1 kHz. Lautheit je
+  Track: Gain auf −14 LUFS, gedeckelt auf True Peak ≤ −1 dBTP.
+- **Bedienung:** Bibliothek mit Suche, Warteschlange, Play/Pause, Springen
+  per Wellenform, Weiter, Auto-DJ-Schalter.
+  - Auto-DJ an: Mix im Takt innerhalb ±1 % (ADR-020), sonst kurze Blende.
+  - „Weiter" startet den Übergang am nächsten Phrasenanfang.
+  - Auto-DJ aus: Schnitt am Songende.
+- **Bewusst nicht in V1:** manuelle Decks, Crossfader, EQ, Cover.
+- **Ausbau 11.10.2026 (Etappe A):**
+  - Upload per Drag & Drop mit Analyse im Hintergrund (dieselbe Logik wie
+    `analyze`).
+  - „Perfekte Reihenfolge" für die ganze Bibliothek.
+  - Warteschlange sortierbar.
+  - Einstellungsseite: Übergangsart (Auto, EQ-Mix, Crossfade, Filter-Sweep,
+    Echo-Out, Schnitt), Länge 1 bis 32 Takte, Ausstieg (Outro, letzte Phrase,
+    N Takte vor Ende), Einstieg (Intro, Drop), BPM-Angleich (an aktuellen, an
+    nächsten, gleitend), Tempo-Grenze ±0 bis ±10 BPM, Keylock, Harmonie beim
+    Sortieren, eigene Länge und eigener Start für WEITER, Lautheit.
+  - Keylock und Beat-Warp nach ADR-022.
+- **Etappe B (folgt):** Stems mit Demucs im Übergangsfenster (ADR-018),
+  Übergänge „Drums zuerst", „Acapella-Übergabe" und „Gesangsschutz".
+- **Tor:**
+  1. 1 h Auto-DJ ohne Aussetzer (Underflow-Zähler = 0).
+  2. Übergänge auf dem Phrasenraster (Test).
+  3. Bedienung reagiert in unter 300 ms.
+  4. Hörprüfung durch den Nutzer: kein Übergang wirkt wie ein „Unfall".
 
 ---
 

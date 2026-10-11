@@ -1,6 +1,6 @@
 # ADR-019 · Übergänge als Datenformat statt fest im Renderer
 
-**Status:** vorgeschlagen (umsetzen, sobald es ein zweites Rezept gibt)
+**Status:** angenommen (11.10.2026: mit den einstellbaren Übergangsarten gibt es jetzt sechs Rezepte)
 **Datum:** 10.10.2026
 **Ergänzt:** ADR-014, ADR-017
 
@@ -37,3 +37,13 @@ um, auf beiden Plattformen gleich. Planer und Editor ändern nur Daten.
 ## Belege
 
 - `WISSEN-DJ-TECHNIKEN-UND-REPOS.md` §6, §9, §10
+
+## Umsetzung 11.10.2026
+
+- Das Rezept sind die Mixer-Einstellungen (`prototyp/klangbild/einstellungen.py`):
+  Art, Länge in Takten, Ausstieg, Einstieg, Tempo-Modus, Tempo-Grenze, Keylock.
+  Gespeichert werden sie als JSON.
+- Ein einziger Renderer setzt sie um: `prototyp/klangbild/uebergang.py`
+  (`backen`, `mischen`).
+- Noch nicht umgesetzt: ein eigenes Rezept je Übergang in einer gespeicherten
+  Playlist.
