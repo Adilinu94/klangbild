@@ -192,7 +192,8 @@ function zeige(z) {
   const nx = z.naechster;
   if (nx) {
     const takt = a ? 240 / a.bpm : 2, rest = Math.max(0, nx.in_s), n = nx.takte || 0;
-    const tempo = nx.sync ? `${nx.bpm_a} → ${nx.bpm_b} BPM · ${MODUS[nx.modus] || ""}` : (nx.modus === "aus" ? "" : "TEMPO FREI");
+    const tempo = (nx.sync ? `${nx.bpm_a} → ${nx.bpm_b} BPM · ${MODUS[nx.modus] || ""}` : (nx.modus === "aus" ? "" : "TEMPO FREI"))
+      + (nx.stems ? " · MIT STEMS" : "") + (nx.hinweis ? ` · ${nx.hinweis.toUpperCase()}` : "");
     const voll = n ? Math.max(0, n - Math.ceil(rest / takt)) : 0;
     $("naechster").innerHTML = `NÄCHSTER · ${(ARTEN[nx.art] || nx.art).toUpperCase()}${n ? ` · ${n} TAKTE` : ""} · IN ${zeit(rest)}` +
       `<span class="wer">${nx.titel.replace(/</g, "&lt;")} · ${nx.camelot || "–"}</span>${tempo ? `<div style="margin-top:6px">${tempo}</div>` : ""}` +
@@ -270,6 +271,7 @@ const NAMEN = {
   weiter_takte: ["Übergang bei WEITER (Takte)"],
   weiter_ab: ["WEITER startet", { takt: "Ab nächstem Takt", phrase: "Ab nächster Phrase" }],
   lautheit: ["Lautheit angleichen (−14 LUFS)"],
+  stems: ["Stems nutzen (Gesang/Instrumente trennen)"],
 };
 const TAKT_FELDER = ["takte", "weiter_takte"];
 async function ladeEinstellungen() {
@@ -291,7 +293,8 @@ async function ladeEinstellungen() {
       html += `<label>${name}</label><input type="number" data-k="${k}" min="${grenzen[k][0]}" max="${grenzen[k][1]}" value="${v}">`;
     }
   }
-  $("tab-einst").innerHTML = html + `<div class="hinweis" style="margin-top:16px">Stem-Übergänge nutzen bis zur Stem-Trennung den EQ-Mix.</div>`;
+  $("tab-einst").innerHTML = html + `<div class="hinweis" style="margin-top:16px">Stems werden im Hintergrund vorgerechnet
+    (~2 min je Übergang). Reicht die Zeit nicht, z. B. nach WEITER, mischt der Auto-DJ ohne Stems.</div>`;
 }
 $("tab-einst").addEventListener("change", async (e) => {
   const k = e.target.dataset.k; if (!k) return;

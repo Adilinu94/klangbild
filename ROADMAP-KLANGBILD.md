@@ -635,8 +635,11 @@ Auto-DJ-Schalter. Die Übergangs-Mathematik bleibt die aus Phase 1 (`mix.py`,
     nächsten, gleitend), Tempo-Grenze ±0 bis ±10 BPM, Keylock, Harmonie beim
     Sortieren, eigene Länge und eigener Start für WEITER, Lautheit.
   - Keylock und Beat-Warp nach ADR-022.
-- **Etappe B (folgt):** Stems mit Demucs im Übergangsfenster (ADR-018),
-  Übergänge „Drums zuerst", „Acapella-Übergabe" und „Gesangsschutz".
+- **Etappe B (11.10.2026):** Stems mit Demucs im Übergangsfenster (ADR-018).
+  - Im Hintergrund für den übernächsten Übergang vorgerechnet.
+  - Übergänge „Drums zuerst", „Acapella-Übergabe" und „Gesangsschutz";
+    „Automatisch" schützt den Gesang selbst.
+  - Live: 10 min, 4 Übergänge, 0 Aussetzer.
 - **Tor:**
   1. 1 h Auto-DJ ohne Aussetzer (Underflow-Zähler = 0).
   2. Übergänge auf dem Phrasenraster (Test).

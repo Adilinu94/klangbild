@@ -1,6 +1,6 @@
 # ADR-018 · Stems als Kern, nur im Übergangsfenster getrennt
 
-**Status:** vorgeschlagen (Entscheidung nach dem A/B/C-Hörtest)
+**Status:** angenommen für den PC-Prototyp (11.10.2026); für die Android-App erst nach Lizenzklärung der Gewichte und Messung auf dem Handy
 **Datum:** 10.10.2026
 **Ergänzt:** ADR-001, ADR-010, `PRODUKT-KLANGBILD.md` §5c (dort „Kann", Phase 6)
 
@@ -54,3 +54,34 @@ Speicher.
 ## Belege
 
 - `WISSEN-DJ-TECHNIKEN-UND-REPOS.md` §4, §7, §10
+
+## Umsetzung im PC-Prototyp (11.10.2026)
+
+- `prototyp/klangbild/stems.py`: Demucs 4.1.0 `htdemucs` (Code MIT). Die
+  Gewichte liegen auf HuggingFace `adefossez/HTDemucs` und nennen **keine
+  Lizenz**. Für den lokalen Prototyp ist das in Ordnung, vor einer
+  Auslieferung muss es geklärt werden.
+- **Eigener Prozess** mit niedriger Priorität und halben Kernen. Im selben
+  Prozess hielt torch den GIL bis etwa 90 ms am Stück, das hätte die
+  Wiedergabe aussetzen lassen.
+- **Messung auf dem Entwicklungs-PC:** etwa 1,4-fache Echtzeit mit allen
+  Kernen, etwa 2,3-fach nachrangig. Just in time reicht das bei kurzen Songs
+  nicht: Das Outro beginnt nach etwa 2:20 min, zwei Fenster brauchen rund
+  140 s.
+- **Darum Vorrechnen:** Sobald ein Übergang gebacken ist, trennt der
+  Hintergrundprozess schon das Outro des nächsten und das Intro des
+  übernächsten Songs. Läuft eine Trennung bereits, wird sie nicht doppelt
+  gestartet.
+- **Cache:** float16-npz unter `prototyp/cache/stems/`, etwa 21 MB je
+  16-Takt-Fenster.
+- **Übergänge:** „Drums zuerst", „Acapella-Übergabe", „Gesangsschutz" (es
+  singen nie zwei Stimmen gleichzeitig). „Automatisch" nimmt Gesangsschutz,
+  wenn im Fenster beide Songs singen (Gesang ≥ 15 % des Pegels).
+- **Rückfall:** Reicht die Zeit nicht (Trennzeit plus Dehnen der 8
+  Stem-Spuren), wird ohne Stems gemischt und der Grund protokolliert. Nach
+  WEITER werden nie Stems benutzt.
+- **Live-Test (10 min Auto-DJ, 16 Takte, gleitend, Keylock):** 4 Übergänge,
+  0 Aussetzer. Der erste lief ohne Stems (zu knapp), die übrigen mit Stems
+  aus der Vorrechnung. Backzeit mit Stems 1,6 bis 13,5 s.
+- **Noch offen:** der A/B/C-Hörtest (Crossfade, EQ, Stems) als Beleg, dass
+  Stems hörbar besser sind.

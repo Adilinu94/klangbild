@@ -67,6 +67,8 @@ class Wiedergabe:
         self._frueh = False
         self._gen = 0   # verwirft Backergebnisse, die von einer Bedienung ueberholt wurden
         self._stream = None
+        self.stem_quelle = None   # stems.trennen, wenn Demucs da ist (starten())
+        self.vorrechner = None    # Stems des uebernaechsten Uebergangs vorrechnen (starten())
 
     def laden(self, e: Eintrag) -> np.ndarray:
         audio = self._roh_laden(e)
@@ -221,7 +223,8 @@ class Wiedergabe:
         if not autodj_an:
             ergebnis = (len(a.puffer), Spur.roh(b, b_audio), {"art": "schnitt", "modus": "aus"})
         else:
-            g = backen(a, b, b_audio, einst, ab_s, weiter=frueh)
+            g = backen(a, b, b_audio, einst, ab_s, weiter=frueh,
+                       stem_quelle=self.stem_quelle, jetzt_s=self.pos / RATE)
             ergebnis = (g.start_n, g.spur, g.info)
         dauer = time.perf_counter() - beginn
 
@@ -232,7 +235,29 @@ class Wiedergabe:
                 return False   # inzwischen bedient oder zu spaet: naechste Runde neu backen
             print(f"Uebergang zu {b.titel} gebacken in {dauer:.1f}s: {ergebnis[2]}", flush=True)
             self._naechste = ergebnis
-            return True
+            danach = self.warteschlange[1] if aus_queue and len(self.warteschlange) > 1 else (
+                self.warteschlange[0] if not aus_queue and self.warteschlange else None)
+        if autodj_an and self.vorrechner is not None:
+            self.vorrechner(ergebnis[1], danach, einst)
+        return True
+
+    def _stems_vorrechnen(self, spur_b: Spur, c_id: int | None, einst) -> None:
+        """Outro-Fenster von B und Intro-Fenster von C in den Stem-Cache (asynchron).
+
+        Demucs braucht ~2,3x Echtzeit; just in time reicht das bei kurzen Songs
+        nicht. Vorgerechnet liegen die Stems beim naechsten Backen schon bereit.
+        """
+        from . import stems, uebergang
+
+        if not einst.stems or not (einst.art in uebergang.STEM_ARTEN or einst.art == "auto"):
+            return
+        abar, i0 = uebergang.ausstieg(spur_b, einst, einst.takte, ab_s=0.0)
+        stems.vorrechnen(*uebergang.fenster_a(spur_b, abar, i0, einst.takte))
+        c = self.bibliothek.get(c_id) if c_id is not None else None
+        if c is not None:
+            c_audio = self.laden(c)
+            bbar, j0 = uebergang.einstieg(c, len(c_audio), einst)
+            stems.vorrechnen(*uebergang.fenster_b(c, c_audio, bbar, j0, einst.takte))
 
     # --- Zustand fuer die Oberflaeche -------------------------------------
     def zustand(self) -> dict:
@@ -260,6 +285,12 @@ class Wiedergabe:
     def starten(self) -> None:
         """Audio-Stream und Back-Thread starten (nicht in Tests)."""
         import sounddevice as sd
+
+        from . import stems
+
+        if stems.verfuegbar():
+            self.stem_quelle = stems.trennen
+            self.vorrechner = self._stems_vorrechnen
 
         def callback(outdata, frames, _zeit, status):
             if status.output_underflow:

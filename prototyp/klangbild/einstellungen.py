@@ -39,6 +39,7 @@ class Einstellungen:
     weiter_takte: int = 8        # Blende nach "Weiter"
     weiter_ab: str = "phrase"    # "Weiter" startet am naechsten Takt/Phrase
     lautheit: bool = True        # Pegel je Song auf -14 LUFS
+    stems: bool = True           # Stem-Trennung (Demucs) fuer Auto/Stem-Uebergaenge
 
 
 def aus_dict(roh: dict, basis: Einstellungen | None = None) -> Einstellungen:

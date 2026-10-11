@@ -23,7 +23,7 @@ Konsequenzen.
 | [ADR-015](ADR-015-stimmung-per-zero-shot.md) | Stimmung per Zero-Shot, Gemma 4 optional | angenommen |
 | [ADR-016](ADR-016-oboe-shared-statt-exclusive.md) | Oboe im geteilten Stromsparmodus | angenommen |
 | [ADR-017](ADR-017-engine-als-media3-player.md) | Eigene Engine als Media3-Player | angenommen |
-| [ADR-018](ADR-018-stems-im-uebergangsfenster.md) | Stems als Kern, nur im Übergangsfenster getrennt | **vorgeschlagen** |
+| [ADR-018](ADR-018-stems-im-uebergangsfenster.md) | Stems als Kern, nur im Übergangsfenster getrennt | angenommen (PC), Android offen |
 | [ADR-019](ADR-019-uebergang-als-datenformat.md) | Übergänge als Datenformat statt fest im Renderer | angenommen (11.10.2026, Einstellungen = Rezept) |
 | [ADR-020](ADR-020-vinyl-angleich-auf-1-prozent.md) | Vinyl-Angleich auf ±1 % begrenzen, bis Keylock kommt | angenommen, ergänzt ADR-014; mit Keylock ergänzt durch ADR-022 |
 | [ADR-021](ADR-021-pc-mixer-in-echtzeit.md) | PC-Prototyp als Echtzeit-DJ-Mixer, keine Landingpage | angenommen |
