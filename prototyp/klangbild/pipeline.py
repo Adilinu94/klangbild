@@ -411,7 +411,7 @@ def _parser() -> argparse.ArgumentParser:
         help="Blinde Paare Auto-DJ vs. Shuffle rendern (Phase 1, Hoertest-Design)",
     )
     p_ht.add_argument("--paare", type=int, default=3, help="Anzahl Paare (je ein Tempo-Cluster)")
-    p_ht.add_argument("--laenge", type=int, default=4, help="Songs je Set")
+    p_ht.add_argument("--laenge", type=int, default=3, help="Songs je Set (3: A+B unter 30 min)")
     p_ht.add_argument("--seed", type=int, default=None, help="Zufall reproduzierbar machen")
     p_ht.add_argument("--aus", default=None, help="Zielordner (Default: ergebnisse/hoertest)")
     p_ht.set_defaults(funktion=None)

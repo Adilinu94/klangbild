@@ -358,7 +358,7 @@ def laufen_hoertest(args) -> int:
 
     einstellungen = config.vorbereiten(config.aus_argumenten(args))
     paare = int(getattr(args, "paare", 0) or 3)
-    laenge = int(getattr(args, "laenge", 0) or 4)
+    laenge = int(getattr(args, "laenge", 0) or 3)  # 3 Songs: A+B je Paar bleiben unter 30 min
     rng = random.Random(getattr(args, "seed", None))
     ordner = Path(getattr(args, "aus", None) or einstellungen.ergebnisse / "hoertest")
     conn = db.verbinden(einstellungen.datenbank)

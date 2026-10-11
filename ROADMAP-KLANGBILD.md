@@ -579,7 +579,7 @@ auf allen berührten Dateien.
   ab dem ersten erkannten Downbeat (später Struktur-Labels).
 - **Dubletten:** Dieselbe Aufnahme als MP3 und FLAC (10 Gruppen) kommt nur
   einmal ins Set.
-- **Blinder Hörtest:** `python -m klangbild hoertest --paare 3 --laenge 4`
+- **Blinder Hörtest:** `python -m klangbild hoertest --paare 3` (3 Songs je Set, A+B je Paar 17–26 min)
   rendert je Tempo-Cluster ein Paar aus Auto-DJ und Shuffle (Zufallsfolge,
   6-s-Blende am Songende, ohne Takt und ohne Bass-Tausch) mit denselben Songs.
   A und B werden zufällig zugeordnet. Dazu kommen `bewertungsbogen.csv` und

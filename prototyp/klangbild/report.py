@@ -346,7 +346,11 @@ def _phase09_uebersicht(ergebnisse: Path) -> str:
     )
     zeilen.append("| Kennzahl | Treffer/N | Quote | Wilson 95 % | erreicht? |")
     zeilen.append("|---|---|---|---|---|")
-    namen = {"bpm": "Tempo richtig", "downbeat": "Downbeat richtig"}
+    grenzen = daten.get("grenzen", {})
+    praezision = grenzen.get("bpm_praezision", 0.001)
+    namen = {"bpm": "Tempo richtig",
+             "bpm_praezision": f"Tempo mischgenau (+-{praezision * 100:0.1f} %)",
+             "downbeat": "Downbeat richtig"}
     for schluessel, label in namen.items():
         t = daten.get(schluessel, {})
         zeilen.append(
