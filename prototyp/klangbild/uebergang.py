@@ -168,6 +168,20 @@ def warp(audio: np.ndarray, quell_s: np.ndarray, ziel_s: np.ndarray, keylock: bo
 
 # --- Uebergangsarten (Blenden auf gleich langen, synchronen Abschnitten) -----
 
+# Fenster (Anteile der Blende) je Band bzw. Stem: A blendet in (von, bis) aus, B ein.
+FILTER_FENSTER = (((0.45, 0.55), (0.45, 0.55)),   # Bass: kurzer Tausch in der Mitte
+                  ((0.25, 0.75), (0.25, 0.75)),   # Mitten
+                  ((0.5, 1.0), (0.0, 0.5)))       # Hoehen: B zuerst, A zuletzt
+STEM_PLAN = {
+    "drums_zuerst": {"drums": ((0.0, 0.5), (0.0, 0.5)), "bass": ((0.45, 0.55), (0.45, 0.55)),
+                     "other": ((0.5, 1.0), (0.5, 1.0)), "vocals": ((0.5, 0.7), (0.7, 1.0))},
+    "acapella": {"drums": ((0.0, 0.5), (0.0, 0.5)), "bass": ((0.45, 0.55), (0.45, 0.55)),
+                 "other": ((0.0, 0.5), (0.0, 0.5)), "vocals": ((0.85, 1.0), (0.9, 1.0))},
+    "gesangsschutz": {"drums": ((0.0, 1.0), (0.0, 1.0)), "bass": ((0.45, 0.55), (0.45, 0.55)),
+                      "other": ((0.0, 1.0), (0.0, 1.0)), "vocals": ((0.3, 0.5), (0.5, 0.7))},
+}
+
+
 def _rampe(n: int, von: float, bis: float) -> np.ndarray:
     """Equipotente Einblendkurve (0->1) zwischen den Anteilen von..bis der Laenge."""
     t = (np.arange(n) / max(1, n)).astype(np.float32)
@@ -208,9 +222,8 @@ def mischen(art: str, a: np.ndarray, b: np.ndarray, takte: int) -> np.ndarray:
         # Hochpass-Sweep auf A, Tiefpass oeffnet auf B: B's Hoehen kommen zuerst,
         # A's Hoehen gehen zuletzt; die Baesse tauschen kurz in der Mitte (nie zwei,
         # nie keiner). Je Band: A (von, bis), B (von, bis).
-        fenster = (((0.45, 0.55), (0.45, 0.55)), ((0.25, 0.75), (0.25, 0.75)), ((0.5, 1.0), (0.0, 0.5)))
         aus = np.zeros_like(a)
-        for teil_a, teil_b, ((va, ba), (vb, bb)) in zip(_baender(a), _baender(b), fenster):
+        for teil_a, teil_b, ((va, ba), (vb, bb)) in zip(_baender(a), _baender(b), FILTER_FENSTER):
             aus += teil_a * np.sqrt(1 - _rampe(n, va, ba) ** 2) + teil_b * _rampe(n, vb, bb)
         return aus
     if art == "echo":
@@ -223,6 +236,48 @@ def mischen(art: str, a: np.ndarray, b: np.ndarray, takte: int) -> np.ndarray:
     # crossfade und alles ohne Stems: equipotent
     aus_k, ein_k = mix.equal_power_blende(n)
     return a * aus_k[:, None] + b * ein_k[:, None]
+
+
+KURVEN_PUNKTE = 64
+
+
+def kurven(art: str, takte: int) -> dict[str, dict[str, list[float]]]:
+    """Automationskurven fuer die Anzeige (wie Spotify Mix), je Song und Parameter.
+
+    Werte 0..1 an KURVEN_PUNKTE gleichmaessigen Stellen der Blende. Abgetastet aus
+    denselben Fenstern/Huellkurven, die `mischen`/`mischen_stems` auf den Ton legen.
+    Parameter: lautstaerke, bass (EQ), filter (1 = Filter zu), echo, gesang, drums.
+    """
+    n = KURVEN_PUNKTE
+    ein = lambda von, bis: _rampe(n, von, bis)[:, 0]            # noqa: E731
+    aus = lambda von, bis: np.sqrt(1 - ein(von, bis) ** 2)       # noqa: E731
+    x = np.arange(n) / n
+    a: dict[str, np.ndarray] = {}
+    b: dict[str, np.ndarray] = {}
+    if art in STEM_PLAN:
+        namen = {"drums": "drums", "bass": "bass", "other": "lautstaerke", "vocals": "gesang"}
+        for stem, ((va, ba), (vb, bb)) in STEM_PLAN[art].items():
+            a[namen[stem]], b[namen[stem]] = aus(va, ba), ein(vb, bb)
+    elif art == "eq":
+        a["lautstaerke"], b["lautstaerke"] = aus(0, 1), ein(0, 1)
+        a["bass"], b["bass"] = (x < 0.5).astype(float), (x >= 0.5).astype(float)
+    elif art == "filter":
+        ab = [(aus(*fa), ein(*fb)) for fa, fb in FILTER_FENSTER]
+        a["lautstaerke"], b["lautstaerke"] = aus(0.5, 1.0), ein(0.0, 0.5)
+        a["bass"], b["bass"] = ab[0]
+        a["filter"] = 1 - np.mean([k[0] for k in ab], axis=0)    # Hochpass schliesst
+        b["filter"] = 1 - np.mean([k[1] for k in ab], axis=0)    # Tiefpass oeffnet
+    elif art == "echo":
+        takt, schlag = 1 / max(1, takte), 1 / max(1, takte) / 4
+        a["lautstaerke"] = (x < schlag).astype(float)
+        a["echo"] = np.where(x < schlag, 0.0, 0.55 ** ((x - schlag) / schlag))
+        b["lautstaerke"] = (x >= takt).astype(float)
+    elif art == "schnitt":
+        a["lautstaerke"], b["lautstaerke"] = np.zeros(n), np.ones(n)
+    else:   # crossfade
+        a["lautstaerke"], b["lautstaerke"] = aus(0, 1), ein(0, 1)
+    runden = lambda d: {k: [round(float(v), 3) for v in werte] for k, werte in d.items()}  # noqa: E731
+    return {"a": runden(a), "b": runden(b)}
 
 
 def _rms(x: np.ndarray) -> float:
@@ -244,16 +299,8 @@ def mischen_stems(art: str, a: dict[str, np.ndarray], b: dict[str, np.ndarray]) 
     - gesangsschutz: wie EQ-Mix, aber A singt nur bis 50 %, B erst ab 50 %.
     """
     n = len(a["drums"])
-    plan_ = {
-        "drums_zuerst": {"drums": ((0.0, 0.5), (0.0, 0.5)), "bass": ((0.45, 0.55), (0.45, 0.55)),
-                         "other": ((0.5, 1.0), (0.5, 1.0)), "vocals": ((0.5, 0.7), (0.7, 1.0))},
-        "acapella": {"drums": ((0.0, 0.5), (0.0, 0.5)), "bass": ((0.45, 0.55), (0.45, 0.55)),
-                     "other": ((0.0, 0.5), (0.0, 0.5)), "vocals": ((0.85, 1.0), (0.9, 1.0))},
-        "gesangsschutz": {"drums": ((0.0, 1.0), (0.0, 1.0)), "bass": ((0.45, 0.55), (0.45, 0.55)),
-                          "other": ((0.0, 1.0), (0.0, 1.0)), "vocals": ((0.3, 0.5), (0.5, 0.7))},
-    }[art]
     aus = np.zeros_like(a["drums"])
-    for k, ((va, ba), (vb, bb)) in plan_.items():
+    for k, ((va, ba), (vb, bb)) in STEM_PLAN[art].items():
         aus += a[k][:n] * np.sqrt(1 - _rampe(n, va, ba) ** 2) + b[k][:n] * _rampe(n, vb, bb)
     return aus
 
@@ -440,7 +487,12 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
     orig, buf = orig[sortiert], buf[sortiert]
     _, eindeutig = np.unique(orig, return_index=True)
     spur = Spur(b, puffer, orig[eindeutig], buf[eindeutig])
+    a_start = a.zu_original(t0)
     info = {"art": art, "takte": takte, "sync": sync, "bpm_a": round(bpm_a, 2),
             "bpm_b": round(bpm_b, 2), "modus": e.tempo_modus if sync else "frei",
-            "stems": nutze_stems, **({"hinweis": stem_grund} if stem_grund else {})}
+            "stems": nutze_stems, **({"hinweis": stem_grund} if stem_grund else {}),
+            # fuer die Deck-Ansicht: A bleibt bis zum Blendenende sichtbar
+            "blende_s": round(float(laenge), 3), "a_orig_start": round(a_start, 3),
+            "a_orig_pro_s": round((a.zu_original(ziel[-1]) - a_start) / laenge, 5) if laenge > 0 else 1.0,
+            "kurven": kurven(art, takte)}
     return Gebacken(int(round(t0 * RATE)), spur, info)

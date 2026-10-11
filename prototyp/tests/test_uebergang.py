@@ -122,3 +122,25 @@ def test_periode_robust_gegen_intro_ausreisser_und_raster():
     takte = np.concatenate([[0.0, 0.9, 2.5], takte[3:]])                 # wirres Intro
     assert abs(240.0 / u._periode(takte, 0) - 130.0) < 1.0
     assert abs(240.0 / u._periode(takte, 15) - 130.0) < 0.3
+
+
+@pytest.mark.parametrize("art", ["eq", "crossfade", "filter", "echo", "schnitt",
+                                 "drums_zuerst", "acapella", "gesangsschutz"])
+def test_kurven_a_geht_b_kommt(art):
+    k = u.kurven(art, 4)
+    assert k["b"]["lautstaerke"][-1] > 0.95
+    assert k["a"]["lautstaerke"][-1] < 0.1 or art == "acapella"   # Acapella: A-Instrumente sind schon weg
+    assert all(len(v) == u.KURVEN_PUNKTE for seite in k.values() for v in seite.values())
+
+
+def test_kurven_passen_zum_ton_crossfade():
+    # Lautstaerke-Kurve = tatsaechlicher Pegelverlauf der Blende (konstante Signale)
+    n = u.KURVEN_PUNKTE * 1000
+    y = u.mischen("crossfade", np.full((n, 2), 1.0, np.float32), np.zeros((n, 2), np.float32), 4)
+    kurve = u.kurven("crossfade", 4)["a"]["lautstaerke"]
+    assert np.allclose(y[::1000, 0], kurve, atol=0.01)
+
+
+def test_kurven_eq_bass_tausch_in_der_mitte():
+    bass_a = u.kurven("eq", 8)["a"]["bass"]
+    assert bass_a[u.KURVEN_PUNKTE // 2 - 1] == 1.0 and bass_a[u.KURVEN_PUNKTE // 2] == 0.0

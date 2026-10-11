@@ -110,3 +110,18 @@ def test_play_nimmt_den_titel_aus_der_warteschlange():
     w.einreihen(2)
     w.play(1)
     assert w.warteschlange == [2]
+
+
+def test_vorheriger_song_bleibt_bis_zum_blendenende_sichtbar():
+    w = _wiedergabe(_eintrag(1), _eintrag(2, 121.0), art="crossfade", max_bpm=5.0)
+    w.autodj_setzen(True)
+    w.play(1)
+    assert w.vorbereiten()
+    n = w.zustand()["naechster"]
+    assert n["kurven"]["b"]["lautstaerke"][-1] > 0.95 and n["blende_s"] > 0
+    w.fuellen(int(n["in_s"] * RATE) + RATE)          # 1 s in die Blende
+    z = w.zustand()
+    assert z["aktuell"]["id"] == 2 and z["vorher"]["id"] == 1
+    assert abs(z["vorher"]["seit_s"] - 1.0) < 0.05 and "kurven" not in z["verlauf"][-1]
+    w.fuellen(int(n["blende_s"] * RATE))             # Blende vorbei
+    assert "vorher" not in w.zustand()

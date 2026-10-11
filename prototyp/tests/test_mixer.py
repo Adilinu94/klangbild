@@ -45,7 +45,8 @@ def test_api_bibliothek_play_und_zustand(basis):
     z = _post(url + "/api/play", {"id": 7})
     assert z["spielt"] and z["aktuell"]["id"] == 7 and z["analyse"]["offen"] == 0
     assert _post(url + "/api/autodj", {"an": True})["autodj"] is True
-    assert _get(url + "/api/track/7")["phrasen"] == [0.0]
+    track = _get(url + "/api/track/7")
+    assert abs(track["phrasen"][0]) < 1e-6 and abs(track["takte"][1] - 1.875) < 1e-6
     with urllib.request.urlopen(url + "/", timeout=5) as r:
         assert b"Klangbild Mixer" in r.read()
 
@@ -73,3 +74,10 @@ def test_sicherer_name():
     assert mixer.sicherer_name("C:\\pfad\\Song <1>.flac") == "Song _1_.flac"
     assert mixer.sicherer_name("song.m4a") is None
     assert mixer.sicherer_name(".mp3") is None
+
+
+def test_leeren_entfernt_alle(basis):
+    url, m, _ = basis
+    m.w.einreihen(7)
+    m.w.einreihen(7)
+    assert _post(url + "/api/leeren", {})["warteschlange"] == []

@@ -68,6 +68,7 @@ class Wiedergabe:
         self._gen = 0   # verwirft Backergebnisse, die von einer Bedienung ueberholt wurden
         self._stream = None
         self.stem_quelle = None   # stems.trennen, wenn Demucs da ist (starten())
+        self.vorher: tuple[Eintrag, dict] | None = None   # Song A, solange die Blende laeuft
         self.vorrechner = None    # Stems des uebernaechsten Uebergangs vorrechnen (starten())
 
     def laden(self, e: Eintrag) -> np.ndarray:
@@ -97,7 +98,9 @@ class Wiedergabe:
 
     def _umschalten(self) -> None:
         _, spur, info = self._naechste
-        self.verlauf.append({"von": self.spur.eintrag.id, "nach": spur.eintrag.id, **info})
+        self.verlauf.append({"von": self.spur.eintrag.id, "nach": spur.eintrag.id,
+                             **{k: v for k, v in info.items() if k != "kurven"}})
+        self.vorher = (self.spur.eintrag, info) if info.get("blende_s") else None
         self.spur, self.pos, self._naechste = spur, 0, None
         # Erst beim echten Wechsel aus der Warteschlange: ein verworfener Uebergang verliert nichts.
         if self.warteschlange and self.warteschlange[0] == spur.eintrag.id:
@@ -115,6 +118,7 @@ class Wiedergabe:
         eintrag = self.bibliothek[track_id]
         audio = self.laden(eintrag)   # ausserhalb des Locks: dekodieren dauert
         with self.lock:
+            self.vorher = None
             self.spur, self.pos, self.spielt = Spur.roh(eintrag, audio), 0, True
             self._gespielt.add(track_id)
             self.warteschlange = [i for i in self.warteschlange if i != track_id]
@@ -154,6 +158,11 @@ class Wiedergabe:
             if 0 <= index < len(self.warteschlange):
                 self.warteschlange.pop(index)
                 self._verwerfen()
+
+    def leeren(self) -> None:
+        with self.lock:
+            self.warteschlange = []
+            self._verwerfen()
 
     def verschieben(self, index: int, richtung: int) -> None:
         with self.lock:
@@ -272,13 +281,27 @@ class Wiedergabe:
                 t = self.pos / RATE
                 z["aktuell"] = {"id": e.id, "titel": e.titel, "camelot": e.camelot,
                                 "bpm": round(s.bpm_bei(t), 2), "bpm_original": round(e.bpm, 2),
-                                "pos_s": round(s.zu_original(t), 2),
-                                "dauer_s": round(s.zu_original(len(s.puffer) / RATE), 2)}
+                                "pos_s": round(s.zu_original(t), 3),
+                                "dauer_s": round(s.zu_original(len(s.puffer) / RATE), 2),
+                                # Originalsekunden je Echtzeitsekunde (fuer fluessiges Scrollen)
+                                "orig_pro_s": round(s.zu_original(t + 1.0) - s.zu_original(t), 5)}
+            if self.vorher is not None:
+                e, info = self.vorher
+                seit = self.pos / RATE
+                if self.spur is not None and seit < info["blende_s"]:
+                    z["vorher"] = {"id": e.id, "titel": e.titel, "camelot": e.camelot,
+                                   "orig_pos": round(info["a_orig_start"] + seit * info["a_orig_pro_s"], 3),
+                                   "orig_pro_s": info["a_orig_pro_s"], "seit_s": round(seit, 3),
+                                   "blende_s": info["blende_s"], "art": info["art"],
+                                   "kurven": info.get("kurven")}
             if self._naechste is not None:
                 wechsel_n, spur, info = self._naechste
                 z["naechster"] = {"id": spur.eintrag.id, "titel": spur.eintrag.titel,
                                   "camelot": spur.eintrag.camelot, **info,
-                                  "in_s": round((wechsel_n - self.pos) / RATE, 2)}
+                                  "in_s": round((wechsel_n - self.pos) / RATE, 3),
+                                  "bpm_original": round(spur.eintrag.bpm, 2),
+                                  "orig_start": round(spur.zu_original(0.0), 3),
+                                  "orig_pro_s": round(spur.zu_original(1.0) - spur.zu_original(0.0), 5)}
             return z
 
     # --- Laufzeit ---------------------------------------------------------

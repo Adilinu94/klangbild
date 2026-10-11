@@ -21,7 +21,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import autodj, config, db, einstellungen, live
+from . import autodj, config, cover, db, einstellungen, live, uebergang, welle
 
 SEITE = Path(__file__).with_name("mixer.html")
 # soundfile liest kein AAC (M4A) - lieber gleich ablehnen als spaeter "fehler".
@@ -189,14 +189,24 @@ class _Handler(BaseHTTPRequestHandler):
         elif pfad == "/api/bibliothek":
             self._json([{"id": e.id, "titel": e.titel, "bpm": round(e.bpm, 2), "camelot": e.camelot}
                         for e in sorted(w.bibliothek.values(), key=lambda e: e.titel.lower())])
-        elif pfad.startswith("/api/track/"):
+        elif pfad.startswith(("/api/track/", "/api/cover/", "/api/welle/")):
             rest = pfad.rsplit("/", 1)[1]
             e = w.bibliothek.get(int(rest)) if rest.isdigit() else None
             if e is None:
                 self._json({"fehler": "unbekannt"}, 404)
+            elif pfad.startswith("/api/cover/"):
+                bild = cover.vorschau(e.id, e.pfad)
+                if bild is None:
+                    self._json({"fehler": "kein Cover"}, 404)
+                else:
+                    self._sende(bild, "image/jpeg")
+            elif pfad.startswith("/api/welle/"):
+                self._json(welle.laden(e.id, e.pfad))
             else:
-                self._json({"id": e.id, "energie": e.energie,
-                            "phrasen": e.downbeats[::autodj.PHRASEN_TAKTE]})
+                takte = uebergang.regulaer(e.downbeats, e.bpm, (e.downbeats[-1] if e.downbeats else 0) + 30,
+                                           um_s=e.downbeats[len(e.downbeats) // 2] if e.downbeats else 0)
+                self._json({"id": e.id, "energie": e.energie, "takte": [round(t, 3) for t in takte],
+                            "phrasen": [round(t, 3) for t in takte[::autodj.PHRASEN_TAKTE]]})
         else:
             self._json({"fehler": "nicht gefunden"}, 404)
 
@@ -223,6 +233,7 @@ class _Handler(BaseHTTPRequestHandler):
                 "entfernen": lambda: w.entfernen(int(daten["index"])),
                 "verschieben": lambda: w.verschieben(int(daten["index"]), int(daten["richtung"])),
                 "sortieren": w.sortieren,
+                "leeren": w.leeren,
                 "autodj": lambda: w.autodj_setzen(bool(daten["an"])),
             }
             if befehl not in aktionen:

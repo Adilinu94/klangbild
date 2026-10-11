@@ -17,36 +17,60 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 var(--sans); }
-  .app { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 1.6fr) minmax(240px, 0.9fr);
+  .app { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(460px, 1.8fr) minmax(280px, 1fr);
          height: 100vh; gap: 1px; background: var(--line); }
-  .app > section { background: var(--bg); padding: 24px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
-  .label { font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
-  h1 { font: 300 32px/1 var(--sans); margin: 0 0 18px; letter-spacing: -.01em; }
+  .app > section { background: var(--bg); padding: 22px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .label { font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  h1 { font: 300 30px/1 var(--sans); margin: 0 0 16px; letter-spacing: -.01em; }
   input[type=search] { width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--text);
-         font: 14px var(--mono); padding: 10px 12px; border-radius: 6px; outline: none; margin-bottom: 12px; }
+         font: 14px var(--mono); padding: 10px 12px; border-radius: 6px; outline: none; margin-bottom: 10px; }
   input[type=search]:focus { border-color: var(--dim); }
   .liste { overflow-y: auto; flex: 1; min-height: 0; scrollbar-color: #333 transparent; scrollbar-width: thin; }
-  .zeile { display: grid; grid-template-columns: 1fr 64px 40px 28px; gap: 8px; align-items: center;
-           padding: 9px 4px; border-bottom: 1px solid var(--surface); cursor: pointer; transition: background 150ms var(--ease); }
+  .zeile { display: grid; grid-template-columns: 1fr 50px 44px 26px; gap: 8px; align-items: center;
+           padding: 8px 4px; border-bottom: 1px solid var(--surface); cursor: pointer; transition: background 150ms var(--ease); }
   .zeile:hover { background: var(--surface); }
   .zeile.aktiv .titel { color: var(--rot); }
   .titel { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--text2); overflow-wrap: anywhere; }
-  .daten { font: 12px var(--mono); color: var(--muted); text-align: right; }
-  .plus { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 50%; width: 26px; height: 26px;
-          font: 14px var(--mono); cursor: pointer; padding: 0; }
+  .bpm { font: 700 12px var(--mono); text-align: right; }
+  .key { display: inline-block; min-width: 38px; text-align: center; border-radius: 999px; padding: 2px 6px;
+         font: 700 11px var(--mono); color: #111; }
+  .key.leer { background: var(--raised); color: var(--dim); }
+  .plus { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 50%; width: 24px; height: 24px;
+          font: 13px var(--mono); cursor: pointer; padding: 0; flex: none; }
   .plus:hover { color: var(--text); border-color: var(--dim); }
-  .player { justify-content: center; gap: 22px; }
-  .jetzt-titel { font: 500 26px/1.15 var(--sans); text-transform: uppercase; margin: 0; min-height: 60px; }
-  .instrument { font: 13px var(--mono); color: var(--muted); letter-spacing: .04em; }
-  .instrument b { color: var(--text); font-weight: 400; }
-  canvas { width: 100%; height: 120px; display: block; cursor: pointer; }
-  .zeiten { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); margin-top: 6px; }
+  .drop { border: 1px dashed var(--line); border-radius: 8px; padding: 12px; text-align: center; font: 12px var(--mono);
+          color: var(--muted); letter-spacing: .08em; margin-bottom: 10px; cursor: pointer; transition: border-color 150ms var(--ease); }
+  .drop:hover, body.ziehen .drop { border-color: var(--rot); color: var(--text); }
+  .analyse { font: 11px var(--mono); color: var(--muted); margin: -2px 0 8px; min-height: 14px; }
+
+  /* Cover-Scheiben */
+  .disc { border-radius: 50%; overflow: hidden; flex: none; position: relative; background: var(--raised);
+          box-shadow: 0 0 0 1px var(--line); }
+  .disc img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .disc::after { content: ""; position: absolute; inset: 42%; border-radius: 50%; background: var(--bg);
+                 box-shadow: 0 0 0 1px rgba(255,255,255,.15); }
+  .disc.gross { width: 112px; height: 112px; animation: drehen 8s linear infinite; animation-play-state: paused; }
+  .disc.gross.laeuft { animation-play-state: running; }
+  .disc.klein { width: 34px; height: 34px; }
+  .disc.klein::after { inset: 40%; }
+  @keyframes drehen { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .disc.gross { animation: none; } }
+
+  .player { gap: 16px; overflow-y: auto; }
+  .kopf { display: flex; gap: 18px; align-items: center; }
+  .jetzt-titel { font: 500 22px/1.15 var(--sans); text-transform: uppercase; margin: 0 0 8px; }
+  .instrument { font: 13px var(--mono); color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .decks { width: 100%; height: 190px; display: block; background: #0A0A0A; border-radius: 6px; }
+  .uebersicht { width: 100%; height: 54px; display: block; cursor: pointer; }
+  .legende { display: flex; gap: 14px; flex-wrap: wrap; min-height: 18px; margin-top: 6px; font: 11px var(--mono); color: var(--muted); }
+  .legende i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .zeiten { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); margin-top: 4px; }
   .bedienung { display: flex; align-items: center; gap: 14px; }
-  .rund { width: 64px; height: 64px; border-radius: 50%; border: none; background: var(--text); color: var(--bg);
-          font: 22px var(--mono); cursor: pointer; transition: opacity 100ms var(--ease); }
+  .rund { width: 60px; height: 60px; border-radius: 50%; border: none; background: var(--text); color: var(--bg);
+          font: 20px var(--mono); cursor: pointer; transition: opacity 100ms var(--ease); }
   .rund:active { opacity: .7; }
   .knopf { background: none; border: 1px solid var(--line); color: var(--text2); border-radius: 999px;
-           padding: 10px 18px; font: 700 12px var(--mono); letter-spacing: .1em; cursor: pointer; }
+           padding: 9px 16px; font: 700 11px var(--mono); letter-spacing: .1em; cursor: pointer; }
   .knopf:hover { border-color: var(--dim); }
   .autodj { margin-left: auto; display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none;
             font: 700 12px var(--mono); letter-spacing: .12em; color: var(--muted); background: none; border: none; }
@@ -57,30 +81,39 @@
   .autodj.an { color: var(--rot); }
   .autodj.an .schalter { background: var(--rot); border-color: var(--rot); }
   .autodj.an .schalter::after { transform: translateX(24px); background: var(--text); }
-  .naechster { border-top: 1px solid var(--line); padding-top: 16px; font: 13px var(--mono); color: var(--muted); min-height: 64px; }
-  .naechster .wer { color: var(--text2); font-family: var(--sans); font-size: 16px; display: block; margin-top: 6px; }
-  .segmente { display: flex; gap: 4px; margin-top: 10px; }
+  .naechster { border-top: 1px solid var(--line); padding-top: 14px; font: 12px var(--mono); color: var(--muted); min-height: 70px; }
+  .naechster .wer { display: flex; gap: 10px; align-items: center; margin-top: 8px; color: var(--text2);
+                    font: 15px var(--sans); }
+  .segmente { display: flex; gap: 3px; margin-top: 10px; }
   .segmente i { flex: 1; height: 6px; background: var(--raised); border-radius: 1px; }
   .segmente i.voll { background: var(--rot); }
-  .rechts .liste .zeile { grid-template-columns: 1fr 28px; cursor: default; }
-  .verlauf { font: 12px var(--mono); color: var(--muted); }
-  .verlauf div { padding: 6px 0; border-bottom: 1px solid var(--surface); }
-  .verlauf .sync { color: var(--ok); }
-  .status { font: 11px var(--mono); color: var(--dim); margin-top: 12px; }
-  .status.warn { color: var(--rot); }
-  .leer { color: var(--dim); font: 12px var(--mono); padding: 8px 0; }
-  .drop { border: 1px dashed var(--line); border-radius: 8px; padding: 14px; text-align: center; font: 12px var(--mono);
-          color: var(--muted); letter-spacing: .08em; margin-bottom: 12px; cursor: pointer; transition: border-color 150ms var(--ease); }
-  .drop:hover, body.ziehen .drop { border-color: var(--rot); color: var(--text); }
-  .analyse { font: 11px var(--mono); color: var(--muted); margin: -4px 0 10px; min-height: 14px; }
-  .tabs { display: flex; gap: 18px; margin-bottom: 14px; }
+
+  .tabs { display: flex; gap: 18px; margin-bottom: 12px; }
   .tabs button { background: none; border: none; padding: 0 0 6px; font: 700 11px var(--mono); letter-spacing: .12em;
                  color: var(--dim); cursor: pointer; border-bottom: 1px solid transparent; }
   .tabs button.an { color: var(--text); border-bottom-color: var(--rot); }
-  .rechts .liste .zeile.q { grid-template-columns: 1fr 22px 22px 22px; gap: 4px; }
-  .q .plus { width: 22px; height: 22px; font-size: 11px; }
+  .knopfreihe { display: flex; gap: 8px; margin-bottom: 10px; }
+  .knopfreihe .knopf { flex: 1; padding: 8px 6px; }
+  .qzeile { display: grid; grid-template-columns: 34px 1fr 22px 22px 22px; gap: 8px; align-items: center;
+            padding: 7px 2px; border-bottom: 1px solid var(--surface); }
+  .qzeile .plus { width: 22px; height: 22px; font-size: 10px; }
+  .qinfo { min-width: 0; }
+  .qinfo .titel { -webkit-line-clamp: 1; font-size: 14px; }
+  .qmeta { display: flex; gap: 6px; align-items: center; margin-top: 3px; }
+  .qmeta .key { min-width: 32px; font-size: 10px; padding: 1px 5px; }
+  .qmeta .bpm { font-size: 11px; }
+  .verlauf { font: 12px var(--mono); color: var(--muted); }
+  .verlauf div { padding: 6px 0; border-bottom: 1px solid var(--surface); }
+  .verlauf .sync { color: var(--ok); }
+  .status { font: 11px var(--mono); color: var(--dim); margin-top: 10px; }
+  .status.warn { color: var(--rot); }
+  .leer { color: var(--dim); font: 12px var(--mono); padding: 8px 0; }
+
   .einst { overflow-y: auto; flex: 1; min-height: 0; scrollbar-color: #333 transparent; scrollbar-width: thin; }
-  .einst label { display: block; font: 700 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+  .gruppe { border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px 12px; margin-bottom: 12px; }
+  .gruppe h3 { font: 700 11px var(--mono); letter-spacing: .12em; color: var(--text); margin: 10px 0 2px; }
+  .gruppe .zweck { font: 11px var(--sans); color: var(--dim); margin: 0 0 4px; }
+  .einst label { display: block; font: 700 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
   .einst select, .einst input[type=number] { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--line);
           border-radius: 6px; padding: 8px; font: 13px var(--sans); }
   .einst input[type=range] { width: 100%; accent-color: var(--rot); }
@@ -98,18 +131,25 @@
     <div class="drop" id="drop" role="button" tabindex="0">SONGS HIERHER ZIEHEN ODER KLICKEN</div>
     <input type="file" id="datei" multiple accept=".mp3,.flac,.wav,.ogg,.opus" hidden>
     <div class="analyse" id="analyse"></div>
-    <input type="search" id="suche" placeholder="SUCHEN" aria-label="Bibliothek durchsuchen">
+    <input type="search" id="suche" placeholder="SUCHEN (TITEL ODER KEY, Z. B. 3M)" aria-label="Bibliothek durchsuchen">
     <div class="liste" id="bibliothek" role="list"></div>
   </section>
 
   <section class="player">
-    <div>
-      <p class="label">Jetzt läuft</p>
-      <h2 class="jetzt-titel" id="titel">Nichts ausgewählt</h2>
-      <div class="instrument" id="instrument">Titel links anklicken</div>
+    <div class="kopf">
+      <div class="disc gross" id="disc"><img id="cover" alt=""></div>
+      <div style="min-width: 0">
+        <p class="label">Jetzt läuft</p>
+        <h2 class="jetzt-titel" id="titel">Nichts ausgewählt</h2>
+        <div class="instrument" id="instrument">Titel links anklicken</div>
+      </div>
     </div>
     <div>
-      <canvas id="welle" aria-label="Wellenform, klicken zum Springen"></canvas>
+      <canvas class="decks" id="decks" aria-label="Deck-Ansicht: beide Songs während der Blende, mit Effekt-Kurven"></canvas>
+      <div class="legende" id="legende"></div>
+    </div>
+    <div>
+      <canvas class="uebersicht" id="welle" aria-label="Wellenform des ganzen Songs, klicken zum Springen"></canvas>
       <div class="zeiten"><span id="pos">0:00</span><span id="dauer">0:00</span></div>
     </div>
     <div class="bedienung">
@@ -123,9 +163,12 @@
   <section class="rechts">
     <div class="tabs"><button class="an" data-tab="tab-queue">WARTESCHLANGE</button><button data-tab="tab-einst">EINSTELLUNGEN</button></div>
     <div id="tab-queue" style="display: flex; flex-direction: column; flex: 1; min-height: 0">
-      <button class="knopf" id="sortieren" style="margin-bottom: 12px">PERFEKTE REIHENFOLGE</button>
-      <div class="liste" id="queue" style="flex: 0 1 auto; max-height: 50%"></div>
-      <p class="label" style="margin-top: 24px">Übergänge</p>
+      <div class="knopfreihe">
+        <button class="knopf" id="sortieren">PERFEKTE REIHENFOLGE</button>
+        <button class="knopf" id="leeren">ALLE ENTFERNEN</button>
+      </div>
+      <div class="liste" id="queue" style="flex: 0 1 auto; max-height: 55%"></div>
+      <p class="label" style="margin-top: 20px">Übergänge</p>
       <div class="liste verlauf" id="verlauf"></div>
     </div>
     <div id="tab-einst" class="einst" style="display: none"></div>
@@ -135,89 +178,264 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-let bibliothek = [], titelVon = {}, track = null, zustand = null;
+const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+let bibliothek = [], infoVon = {}, zustand = null, tPoll = 0, bpmSpanne = [110, 140];
+const tracks = new Map(), wellen = new Map();
+
+// --- Farben: Key-Rad (Open Key, Farben aus der Vorlage) und BPM-Verlauf ---------
+const KEYFARBE = { "1d": "#B960A2", "1m": "#C680B6", "2d": "#8269AB", "2m": "#9B86BE", "3d": "#527FC0", "3m": "#7499CD",
+  "4d": "#3CC0F0", "4m": "#63CDF4", "5d": "#5BC1CF", "5m": "#7BCDD9", "6d": "#4CB686", "6m": "#70C4A0",
+  "7d": "#73B629", "7m": "#8FC555", "8d": "#9FC516", "8m": "#B2D145", "9d": "#FDD615", "9m": "#FCDF45",
+  "10d": "#F28B2E", "10m": "#F5A158", "11d": "#ED6637", "11m": "#F1855F", "12d": "#E84C4D", "12m": "#ED7171" };
+function openKey(camelot) {   // Camelot 8B = C-Dur = 1d, 8A = a-Moll = 1m
+  const m = /^(\d+)([AB])$/.exec(camelot || "");
+  return m ? `${((+m[1] - 8 + 12) % 12) + 1}${m[2] === "A" ? "m" : "d"}` : null;
+}
+const keyPill = (c) => { const o = openKey(c);
+  return o ? `<span class="key" style="background:${KEYFARBE[o]}" title="Camelot ${c}">${o}</span>` : `<span class="key leer">–</span>`; };
+const bpmFarbe = (bpm) => { const [lo, hi] = bpmSpanne;
+  return `hsl(${Math.round(120 * Math.min(1, Math.max(0, (bpm - lo) / Math.max(1, hi - lo))))}, 80%, 55%)`; };
+const bpmText = (bpm) => `<span class="bpm" style="color:${bpmFarbe(bpm)}">${bpm.toFixed(1)}</span>`;
+const disc = (id, gross) => `<div class="disc ${gross ? "gross" : "klein"}" style="background:${scheibe(id)}"><img src="/api/cover/${id}" alt="" loading="lazy" onerror="this.remove()"></div>`;
+function scheibe(id) { const o = openKey((infoVon[id] || {}).camelot); const f = o ? KEYFARBE[o] : "#333";
+  return `radial-gradient(circle, #111 0 30%, ${f} 31% 100%)`; }
 
 const zeit = (s) => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const senden = (befehl, daten = {}) =>
   fetch(`/api/${befehl}`, { method: "POST", body: JSON.stringify(daten) })
-    .then((r) => r.json()).then((z) => { if (z.fehler) $("status").textContent = z.fehler; else zeige(z); });
+    .then((r) => r.json()).then((z) => { if (z.fehler) meldung(z.fehler); else zeige(z); });
+const meldung = (t) => { $("status").textContent = t; $("status").classList.add("warn"); };
 
+function holen(id) {   // Taktraster + farbige Wellenform je Track (einmal laden)
+  if (id == null || tracks.has(id)) return;
+  tracks.set(id, null);
+  fetch(`/api/track/${id}`).then((r) => r.json()).then((t) => tracks.set(id, t));
+  fetch(`/api/welle/${id}`).then((r) => r.json()).then((w) => wellen.set(id, w));
+}
+
+// --- Bibliothek ----------------------------------------------------------------
 function zeichneBibliothek() {
   const q = $("suche").value.trim().toLowerCase();
   const aktiv = zustand && zustand.aktuell ? zustand.aktuell.id : null;
-  const treffer = bibliothek.filter((t) => !q || t.titel.toLowerCase().includes(q) || (t.camelot || "").toLowerCase() === q);
+  const treffer = bibliothek.filter((t) => !q || t.titel.toLowerCase().includes(q) || (openKey(t.camelot) || "") === q
+    || (t.camelot || "").toLowerCase() === q);
   $("bibliothek").innerHTML = treffer.map((t) => `
     <div class="zeile${t.id === aktiv ? " aktiv" : ""}" role="listitem" data-id="${t.id}">
-      <span class="titel">${t.titel.replace(/</g, "&lt;")}</span>
-      <span class="daten">${t.bpm.toFixed(1)}</span><span class="daten">${t.camelot || "–"}</span>
+      <span class="titel">${esc(t.titel)}</span>${bpmText(t.bpm)}${keyPill(t.camelot)}
       <button class="plus" data-queue="${t.id}" aria-label="Einreihen">+</button>
     </div>`).join("");
 }
-
-function zeichneWelle() {
-  const c = $("welle"), ctx = c.getContext("2d"), dpr = devicePixelRatio || 1;
-  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
-  ctx.clearRect(0, 0, c.width, c.height);
-  if (!track || !zustand || !zustand.aktuell) return;
-  const werte = track.energie, n = werte.length, dauer = zustand.aktuell.dauer_s;
-  if (!n) return;
-  const min = Math.min(...werte), max = Math.max(...werte), spanne = Math.max(1e-6, max - min);
-  const balken = Math.max(32, Math.floor(c.width / (5 * dpr))), anteil = zustand.aktuell.pos_s / dauer;
-  const breite = c.width / balken, mitte = c.height * 0.8;
-  for (let i = 0; i < balken; i++) {
-    const v = (werte[Math.floor(i / balken * n)] - min) / spanne;
-    const h = Math.max(2 * dpr, v * mitte * 0.95);
-    ctx.fillStyle = i / balken <= anteil ? "#FFFFFF" : "#333333";
-    ctx.fillRect(i * breite, mitte - h, Math.max(1, breite - 2 * dpr), h);
-  }
-  ctx.fillStyle = "#D71921";   // Phrasenanfaenge (jeder 8. Downbeat)
-  for (const p of track.phrasen) ctx.fillRect(p / dauer * c.width, mitte + 6 * dpr, dpr, 10 * dpr);
+let laedt = false;
+function ladeBibliothek() {
+  if (laedt) return;
+  laedt = true;
+  fetch("/api/bibliothek").then((r) => r.json()).then((b) => {
+    bibliothek = b; b.forEach((t) => (infoVon[t.id] = t));
+    const s = b.map((t) => t.bpm).sort((x, y) => x - y);
+    if (s.length > 4) bpmSpanne = [s[Math.floor(s.length * 0.05)], s[Math.floor(s.length * 0.95)]];
+    $("anzahl").textContent = `${b.length} Titel`; zeichneBibliothek();
+  }).finally(() => { laedt = false; });
 }
 
+// --- Wellenformen ----------------------------------------------------------------
+// Serato-Farbe: Bass rot, Mitten gruen, Hoehen blau; Mischfarben ergeben sich selbst.
+function spalte(w, i0, i1) {
+  let p = 0, r = 0, g = 0, b = 0, n = 0;
+  for (let i = Math.max(0, i0); i < Math.min(w.peak.length, Math.max(i0 + 1, i1)); i++) {
+    p = Math.max(p, w.peak[i]); r += w.r[i]; g += w.g[i]; b += w.b[i]; n++;
+  }
+  if (!n) return null;
+  const m = Math.max(r, g, b) || 1;
+  return { p: p / 255, farbe: `rgb(${Math.round(r / m * 255)},${Math.round(g / m * 255)},${Math.round(b / m * 255)})` };
+}
+function welleZeichnen(ctx, w, zuZeit, x0, breite, mitte, halb, alpha) {
+  // zuZeit(px) -> Originalsekunde des Songs oder null (nicht hoerbar)
+  for (let x = 0; x < breite; x++) {
+    const t0 = zuZeit(x), t1 = zuZeit(x + 1);
+    if (t0 == null || t1 == null) continue;
+    const s = spalte(w, Math.floor(Math.min(t0, t1) * w.spalten_pro_s), Math.ceil(Math.max(t0, t1) * w.spalten_pro_s));
+    if (!s) continue;
+    const h = Math.max(1, s.p * halb);
+    ctx.globalAlpha = typeof alpha === "function" ? alpha(t0) : alpha;
+    ctx.fillStyle = s.farbe;
+    ctx.fillRect(x0 + x, mitte - h, 1, 2 * h);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function position() {   // fluessige Abspielposition zwischen den Abfragen
+  const a = zustand && zustand.aktuell;
+  if (!a) return 0;
+  return a.pos_s + (zustand.spielt ? (performance.now() - tPoll) / 1000 * (a.orig_pro_s || 1) : 0);
+}
+
+const FENSTER_S = 6;   // Deck-Ansicht: ±6 s um den Abspielkopf
+// Kurvenfarben wie bei Spotify Mix: Lautstaerke blau, EQ gelb, Filter pink, Effekte weiss
+const KURVE = { lautstaerke: ["#3BA8E0", "Lautstärke"], bass: ["#F5C518", "EQ · Bass"], filter: ["#F28AD8", "Filter"],
+  echo: ["#E8E0D0", "Echo"], gesang: ["#FF8A3D", "Gesang"], drums: ["#4AC97A", "Drums"] };
+const deckVon = new Map();   // Track-ID -> Reihe 0/1; ein Song behaelt seine Reihe, bis er ganz zu Ende ist
+function reihenVergeben(z) {
+  const a = z.aktuell, v = z.vorher, nx = z.naechster;
+  const lebend = new Set([a && a.id, v && v.id, !v && nx && nx.id].filter((i) => i != null));
+  for (const id of [...deckVon.keys()]) if (!lebend.has(id)) deckVon.delete(id);
+  if (v && !deckVon.has(v.id)) deckVon.set(v.id, deckVon.has(a.id) ? 1 - deckVon.get(a.id) : 0);
+  if (a && !deckVon.has(a.id)) deckVon.set(a.id, v ? 1 - deckVon.get(v.id) : 0);
+  if (!v && nx && !deckVon.has(nx.id)) deckVon.set(nx.id, 1 - deckVon.get(a.id));
+}
+function zeichneDecks() {
+  const c = $("decks"), ctx = c.getContext("2d"), dpr = devicePixelRatio || 1;
+  const B = Math.round(c.clientWidth * dpr), H = Math.round(c.clientHeight * dpr);
+  if (c.width !== B || c.height !== H) { c.width = B; c.height = H; }
+  ctx.clearRect(0, 0, B, H);
+  const z = zustand;
+  if (!z || !z.aktuell) return;
+  reihenVergeben(z);
+  const a = z.aktuell, v = z.vorher, jetzt = performance.now(), vergangen = z.spielt ? (jetzt - tPoll) / 1000 : 0;
+  const echt = (x) => (x / B - 0.5) * 2 * FENSTER_S;   // Echtzeit-Offset in s zum Abspielkopf
+  const posA = position(), rateA = a.orig_pro_s || 1, reihe = H / 2;
+  const nx = v ? null : z.naechster;   // waehrend einer Blende ist die freie Reihe noch belegt
+  const wechsel = nx ? nx.in_s - vergangen : null, blende = nx ? (nx.blende_s || 0) : 0;
+  const seit = v ? v.seit_s + vergangen : 0;
+  // Zeitachsen je Spur: Originalsekunde des Songs je Pixel, null = nicht hoerbar
+  const spuren = [{ id: a.id, alpha: (t) => (t < posA ? 0.55 : 1), zeit: (x) => { const o = echt(x);
+      if (v && o < -seit) return null; if (wechsel != null && o > wechsel + blende) return null; return posA + o * rateA; } }];
+  if (v) spuren.push({ id: v.id, alpha: 0.8, zeit: (x) => { const o = echt(x);
+      return o > v.blende_s - seit ? null : v.orig_pos + (vergangen + o) * v.orig_pro_s; } });
+  if (nx) spuren.push({ id: nx.id, alpha: 1, zeit: (x) => { const o = echt(x);
+      return o < wechsel ? null : nx.orig_start + (o - wechsel) * (nx.orig_pro_s || 1); } });
+  for (const s of spuren) {
+    const r = deckVon.get(s.id) || 0;
+    takteZeichnen(ctx, tracks.get(s.id), s.zeit, B, r * reihe, reihe, dpr);
+    if (wellen.get(s.id)) welleZeichnen(ctx, wellen.get(s.id), s.zeit, 0, B, r * reihe + reihe / 2, reihe * 0.42, s.alpha);
+  }
+  // Automationskurven der laufenden bzw. naechsten Blende: A-Kurven auf A's Reihe, B-Kurven auf B's
+  const ueb = v ? { k: v.kurven, von: -seit, dauer: v.blende_s, ra: deckVon.get(v.id), rb: deckVon.get(a.id) }
+    : nx && nx.kurven ? { k: nx.kurven, von: wechsel, dauer: blende, ra: deckVon.get(a.id), rb: deckVon.get(nx.id) } : null;
+  if (ueb && ueb.k) {
+    for (const [seite, r] of [["a", ueb.ra], ["b", ueb.rb]]) kurvenZeichnen(ctx, ueb.k[seite], ueb, r * reihe, reihe, B, dpr);
+  }
+  legende(ueb && ueb.k);
+  ctx.fillStyle = "#262626"; ctx.fillRect(0, reihe, B, dpr);
+  ctx.fillStyle = "#FFFFFF"; ctx.fillRect(B / 2 - dpr / 2, 0, dpr, H);   // Abspielkopf
+}
+function kurvenZeichnen(ctx, kurven, ueb, y0, h, B, dpr) {
+  const px = (o) => (o / (2 * FENSTER_S) + 0.5) * B, rand = 8 * dpr;
+  ctx.lineWidth = 2 * dpr; ctx.lineJoin = "round";
+  for (const [name, werte] of Object.entries(kurven || {})) {
+    const farbe = (KURVE[name] || ["#FFF"])[0];
+    ctx.strokeStyle = farbe; ctx.beginPath();
+    werte.forEach((w, i) => {
+      const x = px(ueb.von + ueb.dauer * i / werte.length), y = y0 + rand + (1 - w) * (h - 2 * rand);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    const y = y0 + rand + (1 - werte[werte.length - 1]) * (h - 2 * rand);
+    ctx.lineTo(px(ueb.von + ueb.dauer), y);
+    ctx.stroke();
+  }
+}
+let legendeAlt = "";
+function legende(k) {
+  const namen = k ? [...new Set([...Object.keys(k.a || {}), ...Object.keys(k.b || {})])] : [];
+  const html = namen.map((n) => `<span><i style="background:${KURVE[n][0]}"></i>${KURVE[n][1]}</span>`).join("");
+  if (html !== legendeAlt) { $("legende").innerHTML = html; legendeAlt = html; }
+}
+function takteZeichnen(ctx, t, zuZeit, B, y0, h, dpr) {
+  // Taktlinien grau, Phrasenanfaenge (jeder 8. Takt) rot mit Marken oben/unten
+  if (!t) return;
+  let von = null, bis = null;
+  for (let x = 0; x < B; x++) { const s = zuZeit(x); if (s != null) { if (von == null) von = { x, s }; bis = { x, s }; } }
+  if (!von || bis.x === von.x) return;
+  const proPx = (bis.s - von.s) / (bis.x - von.x);
+  t.takte.forEach((takt, i) => {
+    if (takt < von.s || takt > bis.s) return;
+    const x = Math.round(von.x + (takt - von.s) / proPx);
+    const phrase = i % 8 === 0;
+    ctx.fillStyle = phrase ? "#D71921" : "#2A2A2A";
+    ctx.fillRect(x, y0, dpr, h);
+    if (phrase) { ctx.fillRect(x - 3 * dpr, y0, 7 * dpr, 6 * dpr); ctx.fillRect(x - 3 * dpr, y0 + h - 6 * dpr, 7 * dpr, 6 * dpr); }
+  });
+}
+
+function zeichneUebersicht() {
+  const c = $("welle"), ctx = c.getContext("2d"), dpr = devicePixelRatio || 1;
+  const B = Math.round(c.clientWidth * dpr), H = Math.round(c.clientHeight * dpr);
+  if (c.width !== B || c.height !== H) { c.width = B; c.height = H; }
+  ctx.clearRect(0, 0, B, H);
+  const a = zustand && zustand.aktuell, w = a && wellen.get(a.id), t = a && tracks.get(a.id);
+  if (!w) return;
+  const pos = position(), dauer = a.dauer_s;
+  welleZeichnen(ctx, w, (x) => x / B * dauer, 0, B, H / 2, H * 0.46, (s) => (s < pos ? 1 : 0.4));
+  if (t) { ctx.fillStyle = "#D71921"; for (const p of t.phrasen) ctx.fillRect(p / dauer * B, H - 5 * dpr, dpr, 5 * dpr); }
+  ctx.fillStyle = "#FFFFFF"; ctx.fillRect(pos / dauer * B - dpr / 2, 0, dpr, H);
+  $("pos").textContent = zeit(pos);
+}
+function schleife() { zeichneDecks(); zeichneUebersicht(); requestAnimationFrame(schleife); }
+
+// --- Zustand anzeigen --------------------------------------------------------------
 function zeige(z) {
   const altId = zustand && zustand.aktuell ? zustand.aktuell.id : null;
-  zustand = z;
+  zustand = z; tPoll = performance.now();
   const a = z.aktuell;
   $("play").textContent = z.spielt ? "❚❚" : "▶";
   $("autodj").classList.toggle("an", z.autodj);
   $("autodj").setAttribute("aria-pressed", z.autodj);
+  $("disc").classList.toggle("laeuft", z.spielt);
   if (a) {
-    $("titel").textContent = a.titel;
+    holen(a.id);
+    if (a.id !== altId) {
+      $("titel").textContent = a.titel;
+      $("disc").style.background = scheibe(a.id);
+      $("cover").style.display = "";
+      $("cover").onerror = () => { $("cover").style.display = "none"; };
+      $("cover").src = `/api/cover/${a.id}`;
+      zeichneBibliothek();
+    }
     const diff = a.bpm - a.bpm_original;
-    $("instrument").innerHTML = `<b>${a.bpm.toFixed(1)}</b> BPM · <b>${a.camelot || "–"}</b>` +
+    $("instrument").innerHTML = `${keyPill(a.camelot)} ${bpmText(a.bpm)} BPM` +
       (Math.abs(diff) > 0.05 ? ` · ORIGINAL ${a.bpm_original.toFixed(1)} (${diff > 0 ? "+" : ""}${diff.toFixed(1)})` : "");
-    $("pos").textContent = zeit(a.pos_s); $("dauer").textContent = zeit(a.dauer_s);
-    if (a.id !== altId) fetch(`/api/track/${a.id}`).then((r) => r.json()).then((t) => { track = t; zeichneWelle(); zeichneBibliothek(); });
+    $("dauer").textContent = zeit(a.dauer_s);
   }
+  if (z.vorher) holen(z.vorher.id);   // z. B. Seite mitten in einer Blende neu geladen
   const nx = z.naechster;
   if (nx) {
+    holen(nx.id);
     const takt = a ? 240 / a.bpm : 2, rest = Math.max(0, nx.in_s), n = nx.takte || 0;
     const tempo = (nx.sync ? `${nx.bpm_a} → ${nx.bpm_b} BPM · ${MODUS[nx.modus] || ""}` : (nx.modus === "aus" ? "" : "TEMPO FREI"))
       + (nx.stems ? " · MIT STEMS" : "") + (nx.hinweis ? ` · ${nx.hinweis.toUpperCase()}` : "");
-    const voll = n ? Math.max(0, n - Math.ceil(rest / takt)) : 0;
+    const voll = n ? Math.max(0, Math.min(n, n - Math.ceil(rest / takt))) : 0;
     $("naechster").innerHTML = `NÄCHSTER · ${(ARTEN[nx.art] || nx.art).toUpperCase()}${n ? ` · ${n} TAKTE` : ""} · IN ${zeit(rest)}` +
-      `<span class="wer">${nx.titel.replace(/</g, "&lt;")} · ${nx.camelot || "–"}</span>${tempo ? `<div style="margin-top:6px">${tempo}</div>` : ""}` +
+      `<div class="wer">${disc(nx.id, false)}<span>${esc(nx.titel)}</span>${keyPill(nx.camelot)}</div>` +
+      (tempo ? `<div style="margin-top:6px">${tempo}</div>` : "") +
       (n && rest < n * takt ? `<div class="segmente">${"<i class=voll></i>".repeat(voll)}${"<i></i>".repeat(n - voll)}</div>` : "");
   } else {
     $("naechster").innerHTML = z.autodj ? "NÄCHSTER · WIRD GEWÄHLT …" : (z.warteschlange.length ? "NÄCHSTER · WIRD GELADEN …" : "WARTESCHLANGE LEER");
   }
-  $("queue").innerHTML = z.warteschlange.length ? z.warteschlange.map((q, i) => `
-    <div class="zeile q"><span class="titel">${i + 1}. ${q.titel.replace(/</g, "&lt;")}</span>
-    <button class="plus" data-hoch="${i}" aria-label="Nach oben">▲</button>
-    <button class="plus" data-runter="${i}" aria-label="Nach unten">▼</button>
-    <button class="plus" data-entfernen="${i}" aria-label="Entfernen">×</button></div>`).join("") : `<div class="leer">LEER · TITEL MIT + EINREIHEN ODER SORTIEREN</div>`;
+  const qSchluessel = JSON.stringify(z.warteschlange.map((q) => q.id));
+  if ($("queue").dataset.ids !== qSchluessel) {   // nur neu bauen, wenn sich etwas aendert (Cover flackern nicht)
+    $("queue").dataset.ids = qSchluessel;
+    $("queue").innerHTML = z.warteschlange.length ? z.warteschlange.map((q, i) => { const t = infoVon[q.id] || {};
+      return `<div class="qzeile">${disc(q.id, false)}
+        <div class="qinfo"><span class="titel">${i + 1}. ${esc(q.titel)}</span>
+          <div class="qmeta">${keyPill(t.camelot)}${t.bpm ? bpmText(t.bpm) : ""}</div></div>
+        <button class="plus" data-hoch="${i}" aria-label="Nach oben">▲</button>
+        <button class="plus" data-runter="${i}" aria-label="Nach unten">▼</button>
+        <button class="plus" data-entfernen="${i}" aria-label="Entfernen">×</button></div>`; }).join("")
+      : `<div class="leer">LEER · TITEL MIT + EINREIHEN ODER SORTIEREN</div>`;
+  }
   $("verlauf").innerHTML = z.verlauf.slice().reverse().map((v) =>
-    `<div><span class="${v.sync ? "sync" : ""}">${(ARTEN[v.art] || v.art).toUpperCase()}</span> → ${(titelVon[v.nach] || v.nach).replace(/</g, "&lt;")}` +
+    `<div><span class="${v.sync ? "sync" : ""}">${(ARTEN[v.art] || v.art).toUpperCase()}${v.stems ? " · STEMS" : ""}</span> → ${esc((infoVon[v.nach] || {}).titel || v.nach)}` +
     (v.sync ? ` · ${v.bpm_a}→${v.bpm_b}` : "") + `</div>`).join("") || `<div class="leer">NOCH KEINE</div>`;
   const an = z.analyse || {};
   $("analyse").textContent = an.aktuell ? `ANALYSIERE ${an.aktuell} · NOCH ${an.offen}` :
     (an.fertig || an.fehler ? `${an.fertig} ANALYSIERT${an.fehler ? ` · ${an.fehler} FEHLER` : ""}${an.meldung ? " · " + an.meldung : ""}` : "");
   if (z.bibliothek_anzahl !== bibliothek.length) ladeBibliothek();
-  $("status").textContent = z.underflows ? `AUSSETZER: ${z.underflows}` : "AUDIO OK";
-  $("status").classList.toggle("warn", z.underflows > 0);
-  zeichneWelle();
+  if (!$("status").classList.contains("warn") || z.underflows) {
+    $("status").textContent = z.underflows ? `AUSSETZER: ${z.underflows}` : "AUDIO OK";
+    $("status").classList.toggle("warn", z.underflows > 0);
+  }
 }
 
+// --- Bedienung ---------------------------------------------------------------------
 $("bibliothek").addEventListener("click", (e) => {
   const q = e.target.dataset.queue;
   if (q) return senden("queue", { id: +q });
@@ -231,19 +449,29 @@ $("queue").addEventListener("click", (e) => {
   if (d.runter) senden("verschieben", { index: +d.runter, richtung: 1 });
 });
 $("sortieren").onclick = () => senden("sortieren");
+$("leeren").onclick = () => { if (!zustand || !zustand.warteschlange.length || confirm(`Alle ${zustand.warteschlange.length} Titel aus der Warteschlange entfernen?`)) senden("leeren"); };
+$("play").onclick = () => senden("pause");
+$("weiter").onclick = () => senden("weiter");
+$("autodj").onclick = () => senden("autodj", { an: !(zustand && zustand.autodj) });
+$("suche").oninput = zeichneBibliothek;
+$("welle").onclick = (e) => {
+  if (!zustand || !zustand.aktuell) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  senden("seek", { s: (e.clientX - r.left) / r.width * zustand.aktuell.dauer_s });
+};
+addEventListener("keydown", (e) => { if (e.code === "Space" && !["INPUT", "SELECT"].includes(e.target.tagName)) { e.preventDefault(); senden("pause"); } });
 document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("an", x === b));
   $("tab-queue").style.display = b.dataset.tab === "tab-queue" ? "flex" : "none";
   $("tab-einst").style.display = b.dataset.tab === "tab-einst" ? "block" : "none";
 });
 
-// --- Upload ---
+// --- Upload ------------------------------------------------------------------------
 async function hochladen(dateien) {
   for (const f of dateien) {
     $("analyse").textContent = `LADE HOCH: ${f.name}`;
-    const r = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
-    const j = await r.json();
-    if (j.fehler) { $("status").textContent = j.fehler; $("status").classList.add("warn"); }
+    const j = await (await fetch(`/api/upload?name=${encodeURIComponent(f.name)}`, { method: "POST", body: f })).json();
+    if (j.fehler) meldung(j.fehler);
   }
 }
 $("drop").onclick = () => $("datei").click();
@@ -253,7 +481,7 @@ addEventListener("dragover", (e) => { e.preventDefault(); document.body.classLis
 addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("ziehen"); });
 addEventListener("drop", (e) => { e.preventDefault(); document.body.classList.remove("ziehen"); hochladen([...e.dataTransfer.files]); });
 
-// --- Einstellungen ---
+// --- Einstellungen (in Gruppen) --------------------------------------------------------
 const ARTEN = { auto: "Automatisch", eq: "EQ-Mix mit Bass-Tausch", crossfade: "Crossfade", filter: "Filter-Sweep",
   echo: "Echo-Out", schnitt: "Harter Schnitt", drums_zuerst: "Stems: Drums zuerst", acapella: "Stems: Acapella-Übergabe",
   gesangsschutz: "Stems: Gesangsschutz" };
@@ -264,37 +492,42 @@ const NAMEN = {
   ausstieg: ["Ausstieg aktueller Song", { outro: "Im Outro", phrase: "Letzte Phrase", vor_ende: "N Takte vor Ende" }],
   vor_ende_takte: ["N Takte vor Ende"],
   einstieg: ["Einstieg nächster Song", { intro: "Mit dem Intro", drop: "Nach dem Intro (Drop)" }],
+  stems: ["Stems nutzen (Gesang/Instrumente trennen)"],
+  weiter_takte: ["Übergangslänge (Takte)"],
+  weiter_ab: ["Übergang startet", { takt: "Ab nächstem Takt", phrase: "Ab nächster Phrase" }],
   tempo_modus: ["BPM angleichen", MODUS],
   max_bpm: ["Max. BPM-Anpassung ±"],
   keylock: ["Tonhöhe halten (Keylock)"],
   harmonie: ["Tonart beim Sortieren", { streng: "Streng (nur passende)", locker: "Locker (bevorzugen)", aus: "Ignorieren" }],
-  weiter_takte: ["Übergang bei WEITER (Takte)"],
-  weiter_ab: ["WEITER startet", { takt: "Ab nächstem Takt", phrase: "Ab nächster Phrase" }],
   lautheit: ["Lautheit angleichen (−14 LUFS)"],
-  stems: ["Stems nutzen (Gesang/Instrumente trennen)"],
 };
+const GRUPPEN = [
+  ["AUTO-MIX", "Automatisches Überleiten zum nächsten Song.", ["art", "takte", "ausstieg", "vor_ende_takte", "einstieg", "stems"]],
+  ["MANUELLER ÜBERGANG (WEITER)", "Was passiert, wenn du WEITER drückst.", ["weiter_takte", "weiter_ab"]],
+  ["TEMPO", "Gilt für Auto-Mix und WEITER.", ["tempo_modus", "max_bpm", "keylock"]],
+  ["REIHENFOLGE & KLANG", "Sortierung der Bibliothek und Pegel.", ["harmonie", "lautheit"]],
+];
 const TAKT_FELDER = ["takte", "weiter_takte"];
+function feld(k, v, auswahl, takte, grenzen) {
+  const [name, texte] = NAMEN[k];
+  if (typeof v === "boolean")
+    return `<label class="check"><input type="checkbox" data-k="${k}" ${v ? "checked" : ""}> ${name}</label>`;
+  if (auswahl[k] || TAKT_FELDER.includes(k)) {
+    const opts = auswahl[k] || takte;
+    return `<label>${name}</label><select data-k="${k}">${opts.map((o) =>
+      `<option value="${o}" ${o == v ? "selected" : ""}>${texte ? texte[o] : o}</option>`).join("")}</select>`;
+  }
+  if (k === "max_bpm")
+    return `<label>${name}<span class="wert" id="max_bpm_wert">${v} BPM</span></label>
+      <input type="range" data-k="${k}" min="${grenzen.max_bpm[0]}" max="${grenzen.max_bpm[1]}" step="0.5" value="${v}">
+      <div class="hinweis">Über der Grenze: Echo-Out statt Mix im Takt</div>`;
+  return `<label>${name}</label><input type="number" data-k="${k}" min="${grenzen[k][0]}" max="${grenzen[k][1]}" value="${v}">`;
+}
 async function ladeEinstellungen() {
   const { werte, auswahl, takte, grenzen } = await (await fetch("/api/einstellungen")).json();
-  let html = "";
-  for (const [k, [name, texte]] of Object.entries(NAMEN)) {
-    const v = werte[k];
-    if (typeof v === "boolean") {
-      html += `<label class="check"><input type="checkbox" data-k="${k}" ${v ? "checked" : ""}> ${name}</label>`;
-    } else if (auswahl[k] || TAKT_FELDER.includes(k)) {
-      const opts = auswahl[k] || takte;
-      html += `<label>${name}</label><select data-k="${k}">${opts.map((o) =>
-        `<option value="${o}" ${o == v ? "selected" : ""}>${texte ? texte[o] : o}</option>`).join("")}</select>`;
-    } else if (k === "max_bpm") {
-      html += `<label>${name}<span class="wert" id="max_bpm_wert">${v} BPM</span></label>
-        <input type="range" data-k="${k}" min="${grenzen.max_bpm[0]}" max="${grenzen.max_bpm[1]}" step="0.5" value="${v}">
-        <div class="hinweis">Über der Grenze: Echo-Out statt Mix im Takt</div>`;
-    } else {
-      html += `<label>${name}</label><input type="number" data-k="${k}" min="${grenzen[k][0]}" max="${grenzen[k][1]}" value="${v}">`;
-    }
-  }
-  $("tab-einst").innerHTML = html + `<div class="hinweis" style="margin-top:16px">Stems werden im Hintergrund vorgerechnet
-    (~2 min je Übergang). Reicht die Zeit nicht, z. B. nach WEITER, mischt der Auto-DJ ohne Stems.</div>`;
+  $("tab-einst").innerHTML = GRUPPEN.map(([titel, zweck, felder]) =>
+    `<div class="gruppe"><h3>${titel}</h3><p class="zweck">${zweck}</p>${felder.map((k) => feld(k, werte[k], auswahl, takte, grenzen)).join("")}</div>`).join("")
+    + `<div class="hinweis">Stems werden im Hintergrund vorgerechnet (~2 min je Übergang). Reicht die Zeit nicht, z. B. nach WEITER, mischt der Auto-DJ ohne Stems.</div>`;
 }
 $("tab-einst").addEventListener("change", async (e) => {
   const k = e.target.dataset.k; if (!k) return;
@@ -304,32 +537,11 @@ $("tab-einst").addEventListener("change", async (e) => {
   ladeEinstellungen();
 });
 $("tab-einst").addEventListener("input", (e) => { if (e.target.dataset.k === "max_bpm") $("max_bpm_wert").textContent = `${e.target.value} BPM`; });
-ladeEinstellungen();
-$("play").onclick = () => senden("pause");
-$("weiter").onclick = () => senden("weiter");
-$("autodj").onclick = () => senden("autodj", { an: !(zustand && zustand.autodj) });
-$("suche").oninput = zeichneBibliothek;
-$("welle").onclick = (e) => {
-  if (!zustand || !zustand.aktuell) return;
-  const r = e.currentTarget.getBoundingClientRect();
-  senden("seek", { s: (e.clientX - r.left) / r.width * zustand.aktuell.dauer_s });
-};
-addEventListener("keydown", (e) => { if (e.code === "Space" && e.target.tagName !== "INPUT") { e.preventDefault(); senden("pause"); } });
-addEventListener("resize", zeichneWelle);
 
-let laedt = false;
-function ladeBibliothek() {
-  if (laedt) return;
-  laedt = true;
-  fetch("/api/bibliothek").then((r) => r.json()).then((b) => {
-    bibliothek = b; b.forEach((t) => (titelVon[t.id] = t.titel));
-    $("anzahl").textContent = `${b.length} Titel`; zeichneBibliothek();
-  }).finally(() => { laedt = false; });
-}
+ladeEinstellungen();
 ladeBibliothek();
-setInterval(() => fetch("/api/zustand").then((r) => r.json()).then(zeige).catch(() => {
-  $("status").textContent = "SERVER NICHT ERREICHBAR"; $("status").classList.add("warn");
-}), 250);
+requestAnimationFrame(schleife);
+setInterval(() => fetch("/api/zustand").then((r) => r.json()).then(zeige).catch(() => meldung("SERVER NICHT ERREICHBAR")), 250);
 </script>
 </body>
 </html>
