@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Vorlaeufige Plattform-Theme-Vorlage. T9.1 setzt die Tokens aus ui/DIRECTION.md. -->
+    <style name="Theme.Klangbild" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/klangbild_schwarz</item>
+        <item name="android:navigationBarColor">@color/klangbild_schwarz</item>
+        <item name="android:windowBackground">@color/klangbild_schwarz</item>
+    </style>
+</resources>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Bibliothek lesen (§2.2 A5, §6.5) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Hintergrundwiedergabe (A1) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
+      KEINE INTERNET-Berechtigung (BAUPLAN §0 Regel 6): Abnahmekriterium "kein Netzwerkverkehr".
+      Keine Bibliothek mit Netzwerkanforderung einbauen.
+      Hinweis: WorkManager fuegt ACCESS_NETWORK_STATE und RECEIVE_BOOT_COMPLETED aus seiner
+      eigenen Manifest-Vorlage dazu. Ohne INTERNET ist damit trotzdem kein Verkehr moeglich
+      (T12.3 prueft beides: aapt2 dump permissions ohne INTERNET, netstats mit 0 Byte).
+    -->
+
+    <application
+        android:name=".KlangbildApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Klangbild"
+        tools:targetApi="31">
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Klangbild"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          A1: Hintergrundwiedergabe, Benachrichtigung, Sperrbildschirm folgt in T4.1
+          (PlaybackService als MediaSessionService). Bis dahin bewusst kein Eintrag.
+        -->
+
+    </application>
+
+</manifest>

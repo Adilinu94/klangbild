@@ -38,10 +38,13 @@ def basis(tmp_path):
     srv.server_close()
 
 
-def test_api_bibliothek_play_und_zustand(basis):
-    url, _, _ = basis
+def test_api_bibliothek_play_und_zustand(basis, monkeypatch):
+    from klangbild import stems
+
+    url, _, tmp = basis
+    monkeypatch.setattr(stems, "VORRAT", tmp / "vorrat")
     assert _get(url + "/api/bibliothek") == [
-        {"id": 7, "titel": "Song - Kuenstler", "bpm": 128.0, "camelot": "8A"}]
+        {"id": 7, "titel": "Song - Kuenstler", "bpm": 128.0, "camelot": "8A", "stems": False}]
     z = _post(url + "/api/play", {"id": 7})
     assert z["spielt"] and z["aktuell"]["id"] == 7 and z["analyse"]["offen"] == 0
     assert _post(url + "/api/autodj", {"an": True})["autodj"] is True
@@ -81,3 +84,13 @@ def test_leeren_entfernt_alle(basis):
     m.w.einreihen(7)
     m.w.einreihen(7)
     assert _post(url + "/api/leeren", {})["warteschlange"] == []
+
+
+def test_zweiter_server_auf_demselben_port_scheitert():
+    """Windows liess zwei Server auf 8767 zu; der Browser sprach mit dem alten Uebergangstest."""
+    erster = mixer.EinzelServer(("127.0.0.1", 0), mixer._Handler)
+    try:
+        with pytest.raises(OSError):
+            mixer.EinzelServer(("127.0.0.1", erster.server_address[1]), mixer._Handler)
+    finally:
+        erster.server_close()

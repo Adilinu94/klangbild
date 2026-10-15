@@ -120,6 +120,38 @@ nur die Drums überlagern (§4, S3).
   `mix.py` nutzt offline Butterworth nullphasig plus Komplement. Für den Render
   ist das gut, auf Android braucht es LR4.
 
+### 2.6 Genre-Praxis: wie lang und wie Profis wechseln (Stand 14.10.2026)
+
+Grundregel aller Quellen: Gedacht wird in **Phrasen** (8/16/32 Takte), die Länge
+richtet sich nach Tempo und Aufbau der Titel, nicht nach festen Sekunden.
+„Abrupt" ist kein Fehler an sich: Ein harter Wechsel **in einen Drop** ist ein
+gewolltes Stilmittel. Abrupt klingt nur ein A, das ohne Grund mitten in einer
+Phrase verschwindet.
+
+| Genre (Tempo) | Typische Blende | Was Profis machen | Quelle |
+|---|---|---|---|
+| Drum & Bass (170–180) | 8–16 Takte (11–22 s), Double Drop bis 32 | Mix im Intro von B, **Drops übereinander** (Double Drop) oder Wechsel genau auf B's Drop; lange Blenden gelten als Fehler | [mixgraph DnB](https://www.mixgraph.io/mixing-guide/drum-and-bass), [dj.studio DnB](https://dj.studio/blog/mix-drum-and-bass) |
+| Techno (125–140) | 16–32 Takte, oft länger | lange, sich entwickelnde Überlagerung, EQ-Tausch, wenig Effekte | [vibesdj Phrasing](https://vibesdj.io/learn/techniques/phrase-mixing), [CMUSE](https://www.cmuse.org/dj-transition-bar-calculator) |
+| House / Tech House (120–128) | 16–32 Takte (30–60 s), bei passender Harmonie bis 64 | Profi-EQ-Blend, Bass-Tausch auf der Phrase | [mixgraph Tech House](https://www.mixgraph.io/mixing-guide/tech-house) |
+| Afro House / Deep / Melodic (115–124) | 32 Takte und mehr, minutenlange Überlagerung | Percussion von B zuerst, Grooves überlagern, Loops verlängern, kaum Drops | [mixgraph Afro House](https://www.mixgraph.io/mixing-guide/afro-house), [House → Afro House](https://www.mixgraph.io/mixing-guide/transitions/house-to-afro-house) |
+| Hip-Hop / Open Format (80–115) | kurz, oft unter 8 Takten | Quick Cut auf die 1, Echo-Out auf das letzte Wort, Drop on the one | [Violet Recording](https://violetrecording.com/how-to-do-smooth-dj-transitions/), [Pirate](https://pirate.com/en/blog/beginner-dj-transitions), [mixgraph Techniken](https://www.mixgraph.io/learn/dj-transition-techniques) |
+
+Belege aus echten Mixen (Kim et al., ISMIR 2020, 1 557 Mixe, 20 765 Übergänge):
+Ausstiege liegen gehäuft auf Vielfachen von 32 Schlägen, Einstiege meist am
+Anfang von B; 86 % der Titel werden um weniger als 5 % im Tempo verändert, nur
+2,5 % transponiert ([arXiv 2008.10267](https://arxiv.org/abs/2008.10267v1)).
+
+**Umsetzung in Klangbild (regie.py, 14.10.2026):**
+- Blendenlänge als **Zeit je Stil** statt fester Takte (`regie.laengen`):
+  Kurz 14–32 s, Ausgewogen 28–64 s, Lang 45–66 s, WEITER 14–34 s. Daraus folgen
+  bei 174 BPM 16 Takte, bei 120 BPM 8–32 Takte, bei 90 BPM 8–24 Takte.
+- **Abrupt nur in einen Drop:** Echo-Out und Loop-Rolle in „Kurz" nur, wenn B
+  nach der Blende mit seinem Drop übernimmt.
+- Grenze: Ein Genre wird nicht erkannt. Tempo und Struktur (Intro/Outro-Länge,
+  Drops) aus dem Profil stehen dafür. Afro House (lang) und Deep House sind am
+  Tempo nicht zu unterscheiden; dort entscheidet der Stil, den der Nutzer wählt.
+- Noch offen: Double Drop (DnB), Quick Cut on the one (Hip-Hop) als eigene Rezepte.
+
 ---
 
 ## 3 · Übergangsrezepte ohne Stems (Werkzeugkasten)

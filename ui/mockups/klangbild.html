@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klangbild · Nothing-UI Mockups (Rev. 2: Poweramp-Aufbau)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ============ TOKENS (Nothing-Skill, Dark first) ============ */
+:root{
+  --bg:#000000; --surface:#111111; --raised:#1A1A1A;
+  --border:#222222; --border-vis:#333333;
+  --dis:#666666; --sec:#999999; --pri:#E8E8E8; --dsp:#FFFFFF;
+  --accent:#D71921; --ok:#4A9E5C; --warn:#D4A843;
+  --page:#0A0A0A;
+}
+body.light{
+  --bg:#F5F5F5; --surface:#FFFFFF; --raised:#F0F0F0;
+  --border:#E8E8E8; --border-vis:#CCCCCC;
+  --dis:#999999; --sec:#666666; --pri:#1A1A1A; --dsp:#000000;
+  --page:#EDEDED;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--page); color:var(--pri);
+  font-family:"Space Grotesk",system-ui,sans-serif; padding:32px 16px 64px;}
+
+.topbar{max-width:1400px; margin:0 auto 24px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+.topbar h1{font-family:Doto,monospace; font-size:28px; color:var(--dsp);}
+.topbar .sub{font-family:"Space Mono",monospace; font-size:11px; letter-spacing:.08em; color:var(--sec);}
+.modebtn{margin-left:auto; font-family:"Space Mono",monospace; font-size:13px; letter-spacing:.06em;
+  background:transparent; color:var(--pri); border:1px solid var(--border-vis);
+  border-radius:999px; padding:12px 24px; cursor:pointer; min-height:44px;}
+
+.grid{max-width:1400px; margin:0 auto; display:flex; flex-wrap:wrap; gap:32px;}
+.shot{display:flex; flex-direction:column; gap:10px;}
+.shot .cap{font-family:"Space Mono",monospace; font-size:11px; letter-spacing:.08em; color:var(--sec); text-transform:uppercase;}
+.phone{width:340px; height:740px; background:var(--bg); border:1px solid var(--border-vis);
+  border-radius:28px; overflow:hidden; display:flex; flex-direction:column; position:relative;}
+.statusbar{display:flex; justify-content:space-between; align-items:center;
+  padding:12px 20px 6px; font-family:"Space Mono",monospace; font-size:11px; color:var(--sec);}
+.screen{flex:1; overflow:hidden; display:flex; flex-direction:column; padding:8px 18px 0; position:relative;}
+
+/* type utils */
+.doto{font-family:Doto,monospace; color:var(--dsp);}
+.mono{font-family:"Space Mono",monospace;}
+.lbl{font-family:"Space Mono",monospace; font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--sec);}
+.hero{font-size:56px; line-height:1; letter-spacing:-.02em;}
+.bighead{font-size:38px; font-weight:300; color:var(--dsp); letter-spacing:.02em;}
+.title{font-size:22px; font-weight:500; color:var(--dsp);}
+.row{display:flex; align-items:center; gap:12px;}
+.grow{flex:1; min-width:0;}
+.ellipsis{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+/* segmented bar */
+.segbar{display:flex; gap:2px; height:10px; margin:8px 0;}
+.segbar i{flex:1; background:var(--border); display:block;}
+.segbar i.f{background:var(--dsp);}
+.segbar i.r{background:var(--accent);}
+.segbar.thin{height:3px; margin:6px 0 0;}
+
+/* category list (Bibliothek) */
+.catrow{display:flex; align-items:center; gap:16px; padding:11px 0;}
+.vic{width:48px; height:48px; border-radius:50%; background:var(--surface);
+  border:1px solid var(--border-vis); display:flex; align-items:center; justify-content:center;
+  color:var(--dsp); flex:none;}
+.vic svg{width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round;}
+.catrow .cl{font-size:20px; font-weight:300; letter-spacing:.04em; color:var(--pri); text-transform:uppercase;}
+.catrow .cnt{font-family:"Space Mono",monospace; font-size:12px; color:var(--sec); margin-left:8px;}
+
+/* toolbar (Alle Titel) */
+.toolbar{display:flex; align-items:center; gap:14px; padding:12px 2px;}
+.toolbar button{background:none; border:none; color:var(--sec); cursor:pointer; min-width:44px; min-height:44px;
+  display:flex; align-items:center; justify-content:center;}
+.toolbar button svg{width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round;}
+.toolbar button.play{color:var(--dsp);}
+.toolbar .sel{font-family:"Space Mono",monospace; font-size:12px; letter-spacing:.08em; color:var(--sec); margin-left:auto;}
+
+/* track row */
+.trow{display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--border);}
+.cover{width:56px; height:56px; flex:none; border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:Doto,monospace; font-size:24px; color:#fff;}
+.trow .tt{font-size:18px; font-weight:500; color:var(--dsp);}
+.trow .ta{font-family:"Space Mono",monospace; font-size:12px; color:var(--sec);}
+.trow .meta{font-family:"Space Mono",monospace; font-size:11px; color:var(--sec);}
+.trow .meta svg{width:11px; height:11px; stroke:currentColor; fill:none; stroke-width:1.5; vertical-align:-1px;}
+.disc-ph{width:56px; height:56px; border-radius:50%; background:var(--surface);
+  border:1px solid var(--border-vis); display:flex; align-items:center; justify-content:center; flex:none;}
+.disc-ph::after{content:""; width:18px; height:18px; border-radius:50%; background:var(--border-vis);}
+
+/* player disc */
+.discwrap{display:flex; justify-content:center; padding:14px 0 6px;}
+.disc{width:252px; height:252px; border-radius:50%; position:relative; flex:none;
+  background:conic-gradient(from 0deg,#23232e,#101014,#23232e,#101014,#23232e);
+  display:flex; align-items:center; justify-content:center;
+  animation:spin 8s linear infinite;
+  /* transform-only = Compositor-Thread, kein Layout/Paint pro Frame */
+  will-change:transform;}
+.disc.paused, body.lowpower .disc, body.lowpower .mdisc{animation:none;}
+/* Low-Power-Fallback (Low-RAM-Geräte): Scheibe steht, Fortschritt läuft über Segmente */
+body.lowpower .disc{border:2px solid var(--border-vis);}
+.disc::before{content:""; position:absolute; inset:0; border-radius:50%;
+  background:repeating-radial-gradient(circle at center, transparent 0 3px, rgba(255,255,255,.045) 3px 4px);}
+.disc .art{width:150px; height:150px; border-radius:50%; background:#101014;
+  overflow:hidden; position:relative; z-index:1;
+  display:flex; align-items:center; justify-content:center;
+  font-family:Doto,monospace; font-size:64px; color:#fff;}
+/* echtes Cover (covers/track-NN.jpg): ersetzt den Buchstaben, rotiert als Label mit */
+.disc .art img{width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;}
+.disc .hole{position:absolute; width:22px; height:22px; border-radius:50%; background:var(--bg);
+  border:2px solid var(--border-vis); z-index:2;}
+.disc.paused{animation-play-state:paused;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.ptitle{text-align:center; font-size:24px; font-weight:500; letter-spacing:.06em; color:var(--dsp); text-transform:uppercase; margin-top:10px;}
+.partist{text-align:center; font-family:"Space Mono",monospace; font-size:13px; color:var(--sec); margin-top:4px; text-transform:uppercase;}
+.dataline{text-align:center; font-family:"Space Mono",monospace; font-size:12px; color:var(--pri); margin-top:8px;}
+.iconrow{display:flex; justify-content:space-around; padding:12px 10px 2px;}
+.iconrow button{background:none; border:none; color:var(--dis); min-width:44px; min-height:44px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;}
+.iconrow button svg{width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round;}
+.iconrow button.on{color:var(--dsp);}
+
+/* waveform */
+.wavewrap{position:relative; margin:8px 0 2px; padding-left:78px;}
+.wave{display:flex; align-items:center; gap:2px; height:104px;}
+.wave i{flex:1; min-width:2px; border-radius:1px; background:var(--border-vis); display:block;}
+.wave i.f{background:var(--dsp);}
+.ticks{display:flex; gap:2px; height:8px; margin-top:3px;}
+.ticks i{flex:1; min-width:2px; display:block;}
+.ticks i.t{background:var(--accent);}
+.playcircle{position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:68px; height:68px; border-radius:50%; background:var(--dsp); color:var(--bg);
+  border:none; cursor:pointer; z-index:2;
+  display:flex; align-items:center; justify-content:center;}
+.playcircle svg{width:26px; height:26px; fill:currentColor; stroke:none;}
+.playcircle.redring{box-shadow:0 0 0 3px var(--accent);}
+.times{display:flex; justify-content:space-between; align-items:center; font-family:"Space Mono",monospace; font-size:11px; color:var(--sec); margin-top:2px;}
+/* countdown segments: 8 Takte Blende = 8 Segmente, füllen sich rot */
+.countdown{display:flex; gap:2px; align-items:center;}
+.countdown i{width:10px; height:5px; background:var(--border-vis); display:block; border-radius:1px;}
+.countdown i.f{background:var(--accent);}
+.countdown b{font-weight:400; margin-left:6px;}
+
+/* mini player + icon bar */
+.mini{display:flex; align-items:center; gap:10px; padding:8px 2px 2px; border-top:1px solid var(--border);}
+.mdisc{width:40px; height:40px; border-radius:50%; flex:none;
+  background:conic-gradient(from 0deg,#2a2a35,#101014,#2a2a35,#101014,#2a2a35);
+  display:flex; align-items:center; justify-content:center;
+  font-family:Doto,monospace; font-size:16px; color:#fff;
+  animation:spin 6s linear infinite;}
+.mini .mt{font-size:13px; color:var(--dsp);}
+.mini .ma{font-family:"Space Mono",monospace; font-size:11px; color:var(--sec);}
+/* echtes Mini-Cover: <img> ersetzt den Buchstaben, Grösse wie .mdisc */
+.mdisc img, .cover img{width:100%; height:100%; object-fit:cover; display:block;}
+.mdisc img{border-radius:50%;}
+.cover{overflow:hidden;}
+.cover img{border-radius:12px;}
+.mini button{background:none; border:none; color:var(--dsp); min-width:44px; min-height:44px;
+  display:flex; align-items:center; justify-content:center;}
+.mini button svg{width:20px; height:20px; fill:currentColor; stroke:none;}
+.iconbar{display:flex; border-top:1px solid var(--border); padding:10px 4px 18px; margin-top:2px;}
+.iconbar button{flex:1; background:none; border:none; color:var(--dis); cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  font-family:"Space Mono",monospace; font-size:9px; letter-spacing:.08em; min-height:48px;}
+.iconbar button svg{width:23px; height:23px; stroke:currentColor; fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round;}
+.iconbar button.act{color:var(--dsp);}
+.iconbar button .livedot{width:5px; height:5px; border-radius:50%; background:var(--accent);}
+
+/* console leftovers */
+.pill{font-family:"Space Mono",monospace; font-size:13px; letter-spacing:.06em; text-transform:uppercase;
+  border:1px solid var(--border-vis); background:transparent; color:var(--pri);
+  border-radius:999px; padding:12px 20px; min-height:44px; cursor:pointer;}
+.pill.solid{background:var(--dsp); color:var(--bg); border-color:var(--dsp);}
+.pillrow{display:flex; gap:8px; flex-wrap:wrap;}
+.sw{width:64px; height:36px; border-radius:999px; border:1px solid var(--border-vis); position:relative; flex:none;}
+.sw::after{content:""; position:absolute; top:3px; left:4px; width:28px; height:28px; border-radius:50%; background:var(--dis);}
+.sw.on{background:var(--accent); border-color:var(--accent);}
+.sw.on::after{left:30px; background:#fff;}
+.sect{margin:16px 0 6px;}
+.camelot{font-family:"Space Mono",monospace; font-size:14px; color:var(--pri); letter-spacing:.04em;}
+.camelot b{color:var(--ok);}
+.pline{font-family:"Space Mono",monospace; font-size:12px; color:var(--sec); padding:8px 0; border-top:1px solid var(--border);}
+.pline b{color:var(--pri);}
+.dotgrid{background-image:radial-gradient(circle, var(--border-vis) 1px, transparent 1px);
+  background-size:14px 14px; border-radius:12px; padding:16px;}
+.dot{width:8px; height:8px; border-radius:50%; background:var(--dis); display:inline-block;}
+.dot.red{background:var(--accent); animation:blink 1s steps(2,start) infinite;}
+@keyframes blink{50%{opacity:.25;}}
+.chip{font-family:"Space Mono",monospace; font-size:11px; border:1px solid var(--border-vis);
+  border-radius:4px; padding:3px 8px; color:var(--pri); white-space:nowrap;}
+.chip.ok{border-color:var(--ok); color:var(--ok);}
+.segctl{display:flex; border:1px solid var(--border-vis); border-radius:999px; overflow:hidden; margin:12px 0;}
+.segctl span{flex:1; text-align:center; font-family:"Space Mono",monospace; font-size:11px;
+  letter-spacing:.06em; padding:10px 0; color:var(--sec); text-transform:uppercase;}
+.segctl span.on{background:var(--dsp); color:var(--bg);}
+.kv{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-top:1px solid var(--border); font-size:14px;}
+.kv .k{font-family:"Space Mono",monospace; font-size:11px; letter-spacing:.06em; color:var(--sec); text-transform:uppercase;}
+.sheet{border-top:1px solid var(--border-vis); background:var(--surface); border-radius:16px 16px 0 0;
+  margin:12px -18px 0; padding:8px 18px 12px; flex:1; overflow:hidden;}
+.handle{width:40px; height:4px; border-radius:2px; background:var(--border-vis); margin:0 auto 8px;}
+.eq{display:flex; align-items:flex-end; gap:8px; height:130px; margin:12px 0;}
+.eq div{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;}
+.eq .f{width:100%; background:var(--border); border-radius:2px; position:relative;}
+.eq .f i{position:absolute; bottom:0; left:0; right:0; background:var(--dsp); border-radius:2px; display:block;}
+.eq span{font-family:"Space Mono",monospace; font-size:10px; color:var(--sec);}
+.chart{border:1px solid var(--border); border-radius:8px; padding:12px; margin:10px 0;}
+.note{font-family:"Space Mono",monospace; font-size:11px; color:var(--sec); line-height:1.6;}
+/* mini-player screen: states + gestures */
+.ministate{border:1px solid var(--border); border-radius:12px; padding:14px; margin:10px 0;}
+.ministate .mini{border-top:none; padding:2px;}
+.gesture{display:flex; align-items:center; gap:12px; padding:9px 0; border-top:1px solid var(--border); font-size:13px;}
+.gesture .g{font-family:"Space Mono",monospace; font-size:11px; color:var(--dsp); border:1px solid var(--border-vis);
+  border-radius:4px; padding:4px 10px; white-space:nowrap;}
+.gesture .d{color:var(--sec); font-size:12px;}
+@media (prefers-reduced-motion:reduce){.disc,.mdisc,.dot.red{animation:none;}}
+/* Low-Power-Testschalter: ?lowpower=1 hängt body.lowpower an (s. Skript unten) */
+.topbar .modebtn.low{margin-left:8px;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>klangbild.ui</h1>
+  <span class="sub">REV. 2 · POWERAMP-AUFBAU × NOTHING-HAUT · DARK + LIGHT · STAND 10.10.2026</span>
+  <button class="modebtn" id="modebtn" onclick="document.body.classList.toggle('light');this.textContent=document.body.classList.contains('light')?'[ MODE: LIGHT ]':'[ MODE: DARK ]';">[ MODE: DARK ]</button>
+  <button class="modebtn low" id="lowbtn" title="Low-Power-Fallback: Rotation aus, Segmente tragen den Fortschritt">[ LOW-POWER: AUS ]</button>
+</div>
+
+<div class="grid">
+
+<!-- 01 BIBLIOTHEK (Kategorie-Liste) -->
+<div class="shot"><div class="cap">01 · Bibliothek — Kategorie-Liste</div>
+<div class="phone"><div class="statusbar"><span>9:38</span><span>76%</span></div>
+<div class="screen">
+  <div class="row"><div class="grow bighead">BIBLIOTHEK</div><button style="background:none;border:none;color:var(--sec);min-width:44px;min-height:44px"><svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button></div>
+  <div style="margin-top:6px">
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div><div class="grow cl">Alle Titel</div><span class="cnt">8.214</span></div>
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div><div class="grow cl">Ordner</div><span class="cnt">37</span></div>
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></div><div class="grow cl">Interpreten</div><span class="cnt">1.204</span></div>
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M12 12V3"/><path d="M9.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg></div><div class="grow cl">Wiedergabelisten</div><span class="cnt">12</span></div>
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg></div><div class="grow cl">Warteschlange</div><span class="cnt">1/1</span></div>
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="grow cl">Häufig gespielt</div></div>
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="grow cl">Kürzlich gespielt</div></div>
+    <div class="catrow"><div class="vic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="16"/><line x1="8" x2="16" y1="12" y2="12"/></svg></div><div class="grow cl">Kürzlich hinzugefügt</div><span class="cnt">46</span></div>
+  </div>
+  <div style="margin-top:auto">
+    <div class="mini"><div class="mdisc">A</div><div class="grow"><div class="mt ellipsis">ANCE.-ACTIN-TOUGH-[MASTER]</div><div class="ma">UNBEKANNTER INTERPRET</div></div><button title="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button></div>
+    <div class="segbar thin"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="iconbar">
+      <button class="act"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 02 ALLE TITEL -->
+<div class="shot"><div class="cap">02 · Alle Titel — Toolbar + Zeilen + Mini-Player</div>
+<div class="phone"><div class="statusbar"><span>9:38</span><span>76%</span></div>
+<div class="screen">
+  <div class="lbl">‹ Bibliothek</div>
+  <div class="row" style="margin-top:4px"><div class="vic"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div><div class="grow bighead" style="font-size:32px">ALLE TITEL</div></div>
+  <div class="toolbar"><button title="Shuffle"><svg viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg></button><button class="play" title="Abspielen"><svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></svg></button><button title="Suchen"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg></button><span class="sel">AUSWÄHLEN</span><button title="Mehr"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button></div>
+  <div>
+    <div class="trow"><div class="cover" style="background:#4a2c1a">B</div><div class="grow"><div class="tt ellipsis">BURN</div><div class="ta">REAPER &amp; XLVR – BURN</div><div class="meta"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> 3:36 | MP3 | 140 · 8A</div></div></div>
+    <div class="trow"><div class="cover" style="background:#1a2c4a">C</div><div class="grow"><div class="tt ellipsis">CANDY FLIPPING</div><div class="ta">WHAT SO NOT &amp; JACK BLOM …</div><div class="meta"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> 3:32 | MP3 | 128 · 9A</div></div></div>
+    <div class="trow"><div class="cover" style="background:#1a3a5a">D</div><div class="grow"><div class="tt ellipsis">DAYDREAMING</div><div class="ta">FRED V &amp; AYAH MARAR</div><div class="meta"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> 3:08 | MP3 | 174 · 5A</div></div></div>
+    <div class="trow"><div class="disc-ph"></div><div class="grow"><div class="tt ellipsis">FISHER X BBYCLOSE – B …</div><div class="ta">UNBEKANNTER INTERPRET</div><div class="meta"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> 3:45 | WAV 32-BIT | 127 · <span class="chip ok">8A</span></div></div></div>
+  </div>
+  <div style="margin-top:auto">
+    <div class="mini"><div class="mdisc">A</div><div class="grow"><div class="mt ellipsis">ANCE.-ACTIN-TOUGH-[MASTER]</div><div class="ma">UNBEKANNTER INTERPRET</div></div><button title="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button></div>
+    <div class="segbar thin"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="iconbar">
+      <button class="act"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 03 PLAYER (rund + Waveform) -->
+<div class="shot"><div class="cap">03 · Player — Scheibe + Waveform + Play-Kreis</div>
+<div class="phone"><div class="statusbar"><span>9:38</span><span>76%</span></div>
+<div class="screen">
+  <div class="discwrap"><div class="disc"><div class="art"><img src="covers/track-11.jpg" alt="Cover Angel of Mine" onerror="this.remove()"></div><div class="hole"></div></div></div>
+  <div class="ptitle" id="pt1">Rumpta</div>
+  <div class="partist" id="pa1">Solomun – Rumpta</div>
+  <div class="dataline" id="pd1"><b>122</b> BPM · <b style="color:var(--ok)">11B</b> · −10.8 LUFS · <span class="dot red"></span></div>
+  <div class="iconrow"><button title="Favorit"><svg viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button><button title="Sleep-Timer"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button><button title="Repeat"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></button><button class="on" title="Shuffle an"><svg viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg></button></div>
+  <div class="wavewrap">
+    <button class="playcircle" id="pc"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button>
+    <div class="wave" id="wave1"></div>
+    <div class="ticks" id="ticks1" style="padding-left:0"></div>
+  </div>
+  <div class="times"><span>0:10</span><span>[NÄCHSTER: RUSTY NAILS · 11B]</span><span>2:42</span></div>
+  <div class="row" style="margin-top:8px"><span class="lbl">Übergang in</span><div class="grow countdown" id="cd1"><b class="mono" style="font-size:11px;color:var(--pri)">0:42</b></div><span class="lbl">8 Takte</span></div>
+  <div style="margin-top:auto">
+    <div class="iconbar">
+      <button><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 04 PLAYER AUTO-DJ AN -->
+<div class="shot"><div class="cap">04 · Player — Auto-DJ an (roter Ring + Ticks)</div>
+<div class="phone"><div class="statusbar"><span>21:47</span><span>76%</span></div>
+<div class="screen">
+  <div class="discwrap"><div class="disc"><div class="art"><img src="covers/track-12.jpg" alt="Cover Arcade" onerror="this.remove()"></div><div class="hole"></div></div></div>
+  <div class="ptitle" id="pt2">Xtal</div>
+  <div class="partist" id="pa2">Aphex Twin — Syro</div>
+  <div class="dataline" id="pd2"><b>127</b> BPM · <b style="color:var(--ok)">8A</b> · −11.2 LUFS · <span class="mono" style="color:var(--accent)">ON AIR</span></div>
+  <div class="iconrow"><button title="Favorit"><svg viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button><button title="Sleep-Timer"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button><button title="Repeat"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></button><button class="on" title="Shuffle an"><svg viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg></button></div>
+  <div class="wavewrap">
+    <button class="playcircle redring"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button>
+    <div class="wave" id="wave2"></div>
+    <div class="ticks" id="ticks2"></div>
+  </div>
+  <div class="times"><span>1:58</span><span>BLENDE ×1.012</span><span>4:10</span></div>
+  <div class="row" style="margin-top:8px"><span class="lbl" style="color:var(--accent)">Blende läuft</span><div class="grow countdown" id="cd2"><b class="mono" style="font-size:11px;color:var(--pri)">TAKT 5/8</b></div><span class="lbl">8 Takte</span></div>
+  <div style="margin-top:auto">
+    <div class="iconbar">
+      <button><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 05 AUTO-DJ KONSOLE -->
+<div class="shot"><div class="cap">05 · Auto-DJ-Konsole</div>
+<div class="phone"><div class="statusbar"><span>21:47</span><span>76%</span></div>
+<div class="screen">
+  <div class="row"><div class="grow"><div class="lbl">Auto-DJ · Vinyl-Modus</div>
+    <div class="doto" style="font-size:38px;color:var(--accent)">ON AIR</div></div>
+    <div class="sw on"></div></div>
+  <div class="dotgrid" style="margin-top:12px">
+    <div class="lbl">Set · 14 Tracks · 58:32 · Master 124 BPM</div>
+    <div class="segbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="r"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="camelot"><b>8A → 9A → 9B</b> → 10B → 10A …</div>
+  </div>
+  <div class="sect lbl">Eingreifen · jederzeit</div>
+  <div class="pillrow"><button class="pill solid">Nächster</button><button class="pill">Mehr Energie</button><button class="pill">Ruhiger</button></div>
+  <div class="sect lbl">Übergangs-Protokoll</div>
+  <div class="pline"><b>XTAL → RUSTY NAILS</b> · 8 TAKTE · ×1.012 · NACHBAR</div>
+  <div class="pline"><b>RUSTY NAILS → STROBE</b> · 8 TAKTE · ×1.049 · ENERGIE+</div>
+  <div style="margin-top:auto">
+    <div class="mini"><div class="mdisc">X</div><div class="grow"><div class="mt">Xtal</div><div class="ma">APHEX TWIN · <span style="color:var(--accent)">ON AIR</span></div></div><button title="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button></div>
+    <div class="segbar thin"><i class="f"></i><i class="f"></i><i class="f"></i><i class="r"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="iconbar">
+      <button><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 06 QUEUE -->
+<div class="shot"><div class="cap">06 · Queue-Sheet</div>
+<div class="phone"><div class="statusbar"><span>21:47</span><span>76%</span></div>
+<div class="screen">
+  <div class="lbl">Jetzt läuft</div>
+  <div class="title" style="font-size:26px">Xtal — Aphex Twin</div>
+  <div class="mono" style="font-size:12px;color:var(--pri);margin:6px 0"><b>127</b> BPM · <b>8A</b> · 2:14 / 4:54</div>
+  <div class="sheet"><div class="handle"></div>
+    <div class="lbl">Queue · Auto-DJ plant</div>
+    <div class="trow" style="border-left:2px solid var(--accent);padding-left:10px"><div class="cover" style="background:#2a2a35">X</div><div class="grow"><div class="tt" style="font-size:16px">Xtal <span class="dot red"></span></div><div class="ta">LÄUFT · 8A</div></div></div>
+    <div class="trow"><div class="cover" style="background:#24382c">R</div><div class="grow"><div class="tt" style="font-size:16px">Rusty Nails</div><div class="ta">[AUTO] NACHBAR 11B · IN 0:42</div></div></div>
+    <div class="trow"><div class="cover" style="background:#333">S</div><div class="grow"><div class="tt" style="font-size:16px">Strobe</div><div class="ta">[AUTO] ENERGIE+ · IN 5:10</div></div></div>
+  </div>
+  <div style="margin-top:auto">
+    <div class="iconbar">
+      <button><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 07 SUCHE -->
+<div class="shot"><div class="cap">07 · Klang-Suche</div>
+<div class="phone"><div class="statusbar"><span>21:47</span><span>76%</span></div>
+<div class="screen">
+  <div class="lbl">Suche mit Worten · Zero-Shot</div>
+  <div class="doto" style="font-size:32px;border-bottom:1px solid var(--border-vis);padding-bottom:8px">ruhig zum einschlafen<span style="color:var(--accent)">▌</span></div>
+  <div class="sect lbl">Stimmung</div>
+  <div class="pillrow"><button class="pill solid">Ruhig</button><button class="pill">Treibend</button><button class="pill">Gitarre</button><button class="pill">Einschlafen</button></div>
+  <div class="sect lbl">Treffer · nach Klang</div>
+  <div class="trow"><div class="cover" style="background:#2c3440">A</div><div class="grow"><div class="tt" style="font-size:16px">An Ending (Ascent)</div><div class="ta">BRIAN ENO · AMBIENT</div></div><div class="mono" style="color:var(--ok)">94%</div></div>
+  <div class="trow"><div class="cover" style="background:#3a2f28">D</div><div class="grow"><div class="tt" style="font-size:16px">Dayvan Cowboy</div><div class="ta">BOARDS OF CANADA</div></div><div class="mono">71%</div></div>
+  <div class="trow"><div class="grow"><div class="ta">[KEIN TREFFER FÜR „ELEKTRGAUNER"]</div></div></div>
+  <div style="margin-top:auto">
+    <div class="iconbar">
+      <button><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button class="act"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 08 EINSTELLUNGEN + EQ -->
+<div class="shot"><div class="cap">08 · Einstellungen + EQ</div>
+<div class="phone"><div class="statusbar"><span>21:47</span><span>76%</span></div>
+<div class="screen">
+  <div class="lbl">Einstellungen · 12 Zeilen, dann ist Schluss</div>
+  <div class="doto" style="font-size:32px">Setup</div>
+  <div class="sect lbl">Wiedergabe</div>
+  <div class="kv"><span class="k">Gapless</span><div class="sw on" style="width:52px;height:30px"></div></div>
+  <div class="kv"><span class="k">Lautheit −14 LUFS</span><div class="sw on" style="width:52px;height:30px"></div></div>
+  <div class="sect lbl">Auto-DJ</div>
+  <div class="kv"><span class="k">Blende · 8 Takte</span><span class="mono" style="font-size:12px">8 / 16</span></div>
+  <div class="kv"><span class="k">Bass-Tausch</span><div class="sw on" style="width:52px;height:30px"></div></div>
+  <div class="sect lbl">Equalizer · 10 Bänder</div>
+  <div class="eq">
+    <div><div class="f" style="height:80px"><i style="height:55%"></i></div><span>31</span></div>
+    <div><div class="f" style="height:80px"><i style="height:62%"></i></div><span>62</span></div>
+    <div><div class="f" style="height:80px"><i style="height:50%"></i></div><span>125</span></div>
+    <div><div class="f" style="height:80px"><i style="height:48%"></i></div><span>250</span></div>
+    <div><div class="f" style="height:80px"><i style="height:52%"></i></div><span>500</span></div>
+    <div><div class="f" style="height:80px"><i style="height:58%"></i></div><span>1K</span></div>
+    <div><div class="f" style="height:80px"><i style="height:64%"></i></div><span>2K</span></div>
+    <div><div class="f" style="height:80px"><i style="height:60%"></i></div><span>4K</span></div>
+    <div><div class="f" style="height:80px"><i style="height:54%"></i></div><span>8K</span></div>
+    <div><div class="f" style="height:80px"><i style="height:50%"></i></div><span>16K</span></div>
+  </div>
+  <div style="margin-top:auto">
+    <div class="iconbar">
+      <button><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button class="act"><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+<!-- 09 MINI-PLAYER ZUSTÄNDE -->
+<div class="shot"><div class="cap">09 · Mini-Player — Zustände + Gesten</div>
+<div class="phone"><div class="statusbar"><span>21:47</span><span>76%</span></div>
+<div class="screen">
+  <div class="lbl">Mini-Player · fixiert über Icon-Bar</div>
+  <div class="doto" style="font-size:30px">Mini</div>
+  <div class="sect lbl">Normal · spielt</div>
+  <div class="ministate">
+    <div class="mini"><div class="mdisc">X</div><div class="grow"><div class="mt">Xtal</div><div class="ma">APHEX TWIN · 127 · 8A</div></div><button title="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button></div>
+    <div class="segbar thin"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div class="sect lbl">Auto-DJ · Blende läuft</div>
+  <div class="ministate">
+    <div class="mini"><div class="mdisc">R</div><div class="grow"><div class="mt">Rusty Nails</div><div class="ma">MODERAT · <span style="color:var(--accent)">BLENDE 5/8</span></div></div><button title="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button></div>
+    <div class="segbar thin"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="r"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div class="sect lbl">Gesten</div>
+  <div class="gesture"><span class="g">TAP</span><span class="d">→ Player (Zoom, 400 ms Feder)</span></div>
+  <div class="gesture"><span class="g">SWIPE ↑</span><span class="d">→ Player (folgt Finger 1:1)</span></div>
+  <div class="gesture"><span class="g">SWIPE ←/→</span><span class="d">→ Track vor/zurück (Haptic-Snap)</span></div>
+  <div class="gesture"><span class="g">TAP ⏸</span><span class="d">→ Pause, Scheibe friert (kein Snap)</span></div>
+  <div style="margin-top:auto">
+    <div class="iconbar">
+      <button class="act"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>BIBL.</button>
+      <button><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg>EQ</button>
+      <button><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>SUCHE</button>
+      <button><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>MENÜ</button>
+    </div>
+  </div>
+</div></div></div>
+
+</div><!-- /grid -->
+<div style="max-width:1400px;margin:32px auto 0" class="note">REV. 2 + R2: AUFBAU = POWERAMP (KATEGORIE-LISTE, RUNDE SCHEIBE, WAVEFORM + PLAY-KREIS, TOOLBAR, MINI-PLAYER, 4ER-ICON-BAR) · HAUT = NOTHING (DOTO/SPACE, MONOCHROM + ROT, SEGMENTE, INLINE-STATUS) · R2: LUCIDE-SVGS STATT UNICODE, COUNTDOWN-SEGMENTE (8 TAKTE, ROT) IN 03+04, MINI-PLAYER-SCREEN 09 MIT ZUSTÄNDEN + GESTEN · ANIMATIONEN S. UI-KONZEPT §5 · WAVEFORM: ECHTE 64 RMS-BALKEN AUS KLANGDB (WAVE_BUILD.PY), WEISS/GRAU, ROTE PHRASEN-TICKS, KEIN GLOSS</div>
+
+<script src="waveform-data.json" onerror="void 0"></script>
+<script>
+// Waveform: echte 64 RMS-Peak-Balken aus klangbild.db (energie_json, track-relativ
+// normiert) + Phrasen-Ticks (jeder 8. Downbeat). Quelle: ui/mockups/waveform-data.json,
+// gebaut mit prototyp/wave_build.py. Faellt die JSON, greift die Demo-Kurve.
+var DEMO1=[38,52,44,61,55,70,48,66,72,58,64,80,75,88,62,77,84,69,73,90,82,68,60,74,66,52,48,58,44,50,62,56,70,64,78,72,60,66,82,76,58,52,64,70,48,56,62,44,50,58,66,54,72,68,60,74,52,48,56,62,46,52,58,50];var DEMO_PHRASE=[0,5,10,16,22,28,34,40,45,51,57,63];
+var DEMO2=[45,58,62,74,68,82,76,88,70,64,78,84,60,72,66,80,92,78,70,62,58,66,72,54,48,60,56,68,74,62,70,84,78,66,58,72,64,52,60,68,56,62,76,70,58,52,64,60,72,66,54,62,70,58,48,56,64,52,60,58,50,54,62,56];var DEMO2_PHRASE=[0,3,7,11,14,18,22,25,29,33,36,39,43,47,50,54,58,61];
+function wave(id,tid,bars,phrase,played){
+  var w=document.getElementById(id), t=document.getElementById(tid);
+  if(!w) return;
+  w.innerHTML=''; if(t) t.innerHTML='';
+  var n=bars.length, cut=Math.floor(n*played);
+  var pset={}; for(var j=0;j<phrase.length;j++) pset[phrase[j]]=1;
+  for(var k=0;k<n;k++){
+    var b=document.createElement('i');
+    b.style.height=Math.max(8,bars[k])+'%';
+    if(k<cut) b.className='f';
+    w.appendChild(b);
+    var tk=document.createElement('i');
+    if(pset[k]) tk.className='t';
+    if(t) t.appendChild(tk);
+  }
+}
+function loadWaves(data){
+  var p=(data&&data.player)||{bars:DEMO1,ticks_phrase:DEMO_PHRASE};
+  var o=(data&&data.onair)||{bars:DEMO2,ticks_phrase:DEMO2_PHRASE};
+  wave('wave1','ticks1',p.bars,p.ticks_phrase||p.ticks||[],0.06);
+  wave('wave2','ticks2',o.bars,o.ticks_phrase||o.ticks||[],0.47);
+  // echte Track-Namen in die Player-Screens spiegeln
+  if(data&&data.player){setText('pt1',data.player.titel);setText('pa1',data.player.interpret+' · '+fmtDur(data.player.dauer_s));setText('pd1',data.player.bpm+' BPM · '+data.player.camelot+' · '+data.player.lufs+' LUFS');}
+  if(data&&data.onair){setText('pt2',data.onair.titel);setText('pa2',data.onair.interpret+' · '+fmtDur(data.onair.dauer_s));setText('pd2',data.onair.bpm+' BPM · '+data.onair.camelot+' · '+data.onair.lufs+' LUFS');}
+}
+function setText(id,v){var e=document.getElementById(id);if(e&&v)e.textContent=v;}
+function fmtDur(s){var m=Math.floor(s/60),ss=Math.floor(s%60);return m+':'+(ss<10?'0':'')+ss;}
+fetch('waveform-data.json').then(function(r){return r.json();}).then(loadWaves).catch(function(){loadWaves(null);});
+// Countdown-Segmente: 8 Takte Blende. Screen 03 wartet (2/8 rot), Screen 04
+// mitten in der Blende (5/8 rot). Animiert: 1 Takt = 60/BPM*4 s.
+function countdown(id,filled){
+  var c=document.getElementById(id); if(!c) return;
+  var label=c.querySelector('b');
+  for(var k=7;k>=0;k--){var s=document.createElement('i');if(k<filled)s.className='f';c.insertBefore(s,label);}
+}
+countdown('cd1',2);
+countdown('cd2',5);
+// Play/Pause-Demo auf Screen 03 (SVG-Umschaltung Pause <-> Play)
+var pc=document.getElementById('pc');
+var SVG_PAUSE='<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+var SVG_PLAY='<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>';
+var spielt=true;
+if(pc){pc.onclick=function(){
+  var d=document.querySelectorAll('.disc')[0];
+  spielt=!spielt;
+  pc.innerHTML=spielt?SVG_PAUSE:SVG_PLAY;
+  if(d){if(spielt)d.classList.remove('paused');else d.classList.add('paused');}
+};}
+// Low-Power-Schalter: Rotation aus, Segmente + Countdown tragen den Fortschritt
+var lb=document.getElementById('lowbtn');
+function setLow(on){document.body.classList.toggle('lowpower',on);
+  if(lb)lb.textContent=on?'[ LOW-POWER: AN ]':'[ LOW-POWER: AUS ]';}
+if(lb){lb.onclick=function(){setLow(!document.body.classList.contains('lowpower'));};if(location.search.indexOf('lowpower=1')>=0)setLow(true);}
+</script>
+</body>
+</html>

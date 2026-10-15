@@ -26,10 +26,12 @@
          font: 14px var(--mono); padding: 10px 12px; border-radius: 6px; outline: none; margin-bottom: 10px; }
   input[type=search]:focus { border-color: var(--dim); }
   .liste { overflow-y: auto; flex: 1; min-height: 0; scrollbar-color: #333 transparent; scrollbar-width: thin; }
-  .zeile { display: grid; grid-template-columns: 1fr 50px 44px 26px; gap: 8px; align-items: center;
+  .zeile { display: grid; grid-template-columns: 1fr 14px 50px 44px 26px; gap: 8px; align-items: center;
            padding: 8px 4px; border-bottom: 1px solid var(--surface); cursor: pointer; transition: background 150ms var(--ease); }
   .zeile:hover { background: var(--surface); }
   .zeile.aktiv .titel { color: var(--rot); }
+  .haken { font: 700 12px var(--mono); color: #333; text-align: center; }
+  .haken.ja { color: #4AC97A; }
   .titel { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--text2); overflow-wrap: anywhere; }
   .bpm { font: 700 12px var(--mono); text-align: right; }
   .key { display: inline-block; min-width: 38px; text-align: center; border-radius: 999px; padding: 2px 6px;
@@ -85,6 +87,9 @@
   .naechster .wer { display: flex; gap: 10px; align-items: center; margin-top: 8px; color: var(--text2);
                     font: 15px var(--sans); }
   .segmente { display: flex; gap: 3px; margin-top: 10px; }
+  .naechster .grund { margin-top: 6px; color: var(--text2); font: 12px var(--mono); line-height: 1.5; }
+  .knopf.klein { float: right; padding: 4px 8px; font-size: 10px; margin-top: -4px; }
+  .einst .aus { opacity: .4; pointer-events: none; }
   .segmente i { flex: 1; height: 6px; background: var(--raised); border-radius: 1px; }
   .segmente i.voll { background: var(--rot); }
 
@@ -221,11 +226,13 @@ function zeichneBibliothek() {
     || (t.camelot || "").toLowerCase() === q);
   $("bibliothek").innerHTML = treffer.map((t) => `
     <div class="zeile${t.id === aktiv ? " aktiv" : ""}" role="listitem" data-id="${t.id}">
-      <span class="titel">${esc(t.titel)}</span>${bpmText(t.bpm)}${keyPill(t.camelot)}
+      <span class="titel">${esc(t.titel)}</span>` +
+      `<span class="haken${t.stems ? " ja" : ""}" title="${t.stems ? "Stems vorberechnet: Stem-Übergänge sofort möglich" : "Stems noch nicht vorberechnet"}">✓</span>` +
+      `${bpmText(t.bpm)}${keyPill(t.camelot)}
       <button class="plus" data-queue="${t.id}" aria-label="Einreihen">+</button>
     </div>`).join("");
 }
-let laedt = false;
+let laedt = false, letzterStem = null;
 function ladeBibliothek() {
   if (laedt) return;
   laedt = true;
@@ -271,8 +278,10 @@ function position() {   // fluessige Abspielposition zwischen den Abfragen
 
 const FENSTER_S = 6;   // Deck-Ansicht: ±6 s um den Abspielkopf
 // Kurvenfarben wie bei Spotify Mix: Lautstaerke blau, EQ gelb, Filter pink, Effekte weiss
-const KURVE = { lautstaerke: ["#3BA8E0", "Lautstärke"], bass: ["#F5C518", "EQ · Bass"], filter: ["#F28AD8", "Filter"],
-  echo: ["#E8E0D0", "Echo"], gesang: ["#FF8A3D", "Gesang"], drums: ["#4AC97A", "Drums"] };
+const KURVE = { lautstaerke: ["#3BA8E0", "Lautstärke"], bass: ["#F5C518", "EQ · Bass"], mitten: ["#F59E0B", "EQ · Mitten"],
+  hoehen: ["#FDE68A", "EQ · Höhen"], filter: ["#F28AD8", "Filter"],
+  echo: ["#E8E0D0", "Echo/Delay"], hall: ["#A78BFA", "Hall"], loop: ["#2DD4BF", "Loop"],
+  gesang: ["#FF8A3D", "Gesang"], drums: ["#4AC97A", "Drums"] };
 const deckVon = new Map();   // Track-ID -> Reihe 0/1; ein Song behaelt seine Reihe, bis er ganz zu Ende ist
 function reihenVergeben(z) {
   const a = z.aktuell, v = z.vorher, nx = z.naechster;
@@ -298,9 +307,14 @@ function zeichneDecks() {
   const seit = v ? v.seit_s + vergangen : 0;
   // Zeitachsen je Spur: Originalsekunde des Songs je Pixel, null = nicht hoerbar
   const spuren = [{ id: a.id, alpha: (t) => (t < posA ? 0.55 : 1), zeit: (x) => { const o = echt(x);
-      if (v && o < -seit) return null; if (wechsel != null && o > wechsel + blende) return null; return posA + o * rateA; } }];
+      if (v && o < -seit) return null; if (wechsel != null && o > wechsel + blende) return null;
+      if (nx && nx.a_loop && nx.a_loop.length && o > wechsel)   // A loopt in der kommenden Blende
+        return nx.a_orig_start + loopZeit(nx.a_loop, o - wechsel) * (nx.a_orig_pro_s || 1);
+      return posA + o * rateA; } }];
   if (v) spuren.push({ id: v.id, alpha: 0.8, zeit: (x) => { const o = echt(x);
-      return o > v.blende_s - seit ? null : v.orig_pos + (vergangen + o) * v.orig_pro_s; } });
+      if (o > v.blende_s - seit) return null;
+      if (v.a_loop && v.a_loop.length) return v.a_orig_start + loopZeit(v.a_loop, seit + o) * v.orig_pro_s;
+      return v.orig_pos + (vergangen + o) * v.orig_pro_s; } });
   if (nx) spuren.push({ id: nx.id, alpha: 1, zeit: (x) => { const o = echt(x);
       return o < wechsel ? null : nx.orig_start + (o - wechsel) * (nx.orig_pro_s || 1); } });
   for (const s of spuren) {
@@ -317,6 +331,11 @@ function zeichneDecks() {
   legende(ueb && ueb.k);
   ctx.fillStyle = "#262626"; ctx.fillRect(0, reihe, B, dpr);
   ctx.fillStyle = "#FFFFFF"; ctx.fillRect(B / 2 - dpr / 2, 0, dpr, H);   // Abspielkopf
+}
+// Blendenzeit -> Zeit im (gedehnten) Ausschnitt von A, mit Loop-Spruengen
+function loopZeit(abschnitte, t) {
+  for (const l of abschnitte) if (t >= l.von && t < l.bis) return l.quelle + ((t - l.von) % l.laenge);
+  return t;
 }
 function kurvenZeichnen(ctx, kurven, ueb, y0, h, B, dpr) {
   const px = (o) => (o / (2 * FENSTER_S) + 0.5) * B, rand = 8 * dpr;
@@ -339,6 +358,8 @@ function legende(k) {
   const html = namen.map((n) => `<span><i style="background:${KURVE[n][0]}"></i>${KURVE[n][1]}</span>`).join("");
   if (html !== legendeAlt) { $("legende").innerHTML = html; legendeAlt = html; }
 }
+const ABSCHNITT = { intro: ["#3BA8E0", "INTRO"], aufbau: ["#F5C518", "AUFBAU"], drop: ["#D71921", "DROP"],
+  haupt: ["#777777", "HAUPTTEIL"], break: ["#A78BFA", "BREAK"], outro: ["#4AC97A", "OUTRO"] };
 function takteZeichnen(ctx, t, zuZeit, B, y0, h, dpr) {
   // Taktlinien grau, Phrasenanfaenge (jeder 8. Takt) rot mit Marken oben/unten
   if (!t) return;
@@ -346,6 +367,16 @@ function takteZeichnen(ctx, t, zuZeit, B, y0, h, dpr) {
   for (let x = 0; x < B; x++) { const s = zuZeit(x); if (s != null) { if (von == null) von = { x, s }; bis = { x, s }; } }
   if (!von || bis.x === von.x) return;
   const proPx = (bis.s - von.s) / (bis.x - von.x);
+  const xVon = (s) => von.x + (s - von.s) / proPx;
+  (t.abschnitte || []).forEach((a, i, alle) => {   // Etiketten der Regie als Farbstreifen oben
+    const ende = i + 1 < alle.length ? alle[i + 1].von : bis.s + 1;
+    if (ende < von.s || a.von > bis.s) return;
+    const x0 = Math.max(von.x, xVon(a.von)), x1 = Math.min(bis.x, xVon(ende));
+    ctx.fillStyle = ABSCHNITT[a.etikett][0]; ctx.fillRect(x0, y0, x1 - x0, 5 * dpr);
+    if (x1 - x0 > 60 * dpr && (i === 0 || alle[i - 1].etikett !== a.etikett)) {
+      ctx.font = `700 ${9 * dpr}px "Space Mono", monospace`; ctx.fillText(ABSCHNITT[a.etikett][1], x0 + 4 * dpr, y0 + 17 * dpr);
+    }
+  });
   t.takte.forEach((takt, i) => {
     if (takt < von.s || takt > bis.s) return;
     const x = Math.round(von.x + (takt - von.s) / proPx);
@@ -403,12 +434,22 @@ function zeige(z) {
     const tempo = (nx.sync ? `${nx.bpm_a} → ${nx.bpm_b} BPM · ${MODUS[nx.modus] || ""}` : (nx.modus === "aus" ? "" : "TEMPO FREI"))
       + (nx.stems ? " · MIT STEMS" : "") + (nx.hinweis ? ` · ${nx.hinweis.toUpperCase()}` : "");
     const voll = n ? Math.max(0, Math.min(n, n - Math.ceil(rest / takt))) : 0;
+    const auto = regieAn();
     $("naechster").innerHTML = `NÄCHSTER · ${(ARTEN[nx.art] || nx.art).toUpperCase()}${n ? ` · ${n} TAKTE` : ""} · IN ${zeit(rest)}` +
+      (auto && nx.plan ? `<button class="knopf klein" id="anders" title="Nächstbesten Plan der Regie nehmen">ANDERER ÜBERGANG (${nx.plan}/3)</button>` : "") +
       `<div class="wer">${disc(nx.id, false)}<span>${esc(nx.titel)}</span>${keyPill(nx.camelot)}</div>` +
+      (nx.grund ? `<div class="grund">${esc(nx.grund)}</div>` : "") +
       (tempo ? `<div style="margin-top:6px">${tempo}</div>` : "") +
       (n && rest < n * takt ? `<div class="segmente">${"<i class=voll></i>".repeat(voll)}${"<i></i>".repeat(n - voll)}</div>` : "");
   } else {
-    $("naechster").innerHTML = z.autodj ? "NÄCHSTER · WIRD GEWÄHLT …" : (z.warteschlange.length ? "NÄCHSTER · WIRD GELADEN …" : "WARTESCHLANGE LEER");
+    const v = z.vorschau;
+    $("naechster").innerHTML = v
+      ? `NÄCHSTER · ${v.rezept ? `${esc(v.rezept.replace(/_/g, " ").toUpperCase())}${v.takte ? ` · ${v.takte} TAKTE` : ""}` +
+          `${v.in_s != null ? ` · IN ${zeit(Math.max(0, v.in_s))}` : ""} · ` : ""}WIRD GEBACKEN …` +
+        `<div class="wer">${disc(v.id, false)}<span>${esc(v.titel)}</span>${keyPill(v.camelot)}</div>` +
+        (v.grund ? `<div class="grund">${esc(v.grund)}</div>` : "")
+      : z.autodj ? "NÄCHSTER · WIRD GEWÄHLT …" : (z.warteschlange.length ? "NÄCHSTER · WIRD GELADEN …" : "WARTESCHLANGE LEER");
+    if (v) holen(v.id);
   }
   const qSchluessel = JSON.stringify(z.warteschlange.map((q) => q.id));
   if ($("queue").dataset.ids !== qSchluessel) {   // nur neu bauen, wenn sich etwas aendert (Cover flackern nicht)
@@ -428,7 +469,10 @@ function zeige(z) {
   const an = z.analyse || {};
   $("analyse").textContent = an.aktuell ? `ANALYSIERE ${an.aktuell} · NOCH ${an.offen}` :
     (an.fertig || an.fehler ? `${an.fertig} ANALYSIERT${an.fehler ? ` · ${an.fehler} FEHLER` : ""}${an.meldung ? " · " + an.meldung : ""}` : "");
-  if (z.bibliothek_anzahl !== bibliothek.length) ladeBibliothek();
+  const sv = z.stems_vorrat || {};
+  if (!an.aktuell && sv.aktuell) $("analyse").textContent = `STEMS: ${sv.aktuell}`;
+  if (z.bibliothek_anzahl !== bibliothek.length || (letzterStem && letzterStem !== sv.aktuell)) ladeBibliothek();
+  letzterStem = sv.aktuell;
   if (!$("status").classList.contains("warn") || z.underflows) {
     $("status").textContent = z.underflows ? `AUSSETZER: ${z.underflows}` : "AUDIO OK";
     $("status").classList.toggle("warn", z.underflows > 0);
@@ -452,6 +496,7 @@ $("sortieren").onclick = () => senden("sortieren");
 $("leeren").onclick = () => { if (!zustand || !zustand.warteschlange.length || confirm(`Alle ${zustand.warteschlange.length} Titel aus der Warteschlange entfernen?`)) senden("leeren"); };
 $("play").onclick = () => senden("pause");
 $("weiter").onclick = () => senden("weiter");
+$("naechster").addEventListener("click", (e) => { if (e.target.id === "anders") senden("anders"); });
 $("autodj").onclick = () => senden("autodj", { an: !(zustand && zustand.autodj) });
 $("suche").oninput = zeichneBibliothek;
 $("welle").onclick = (e) => {
@@ -482,17 +527,30 @@ addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.class
 addEventListener("drop", (e) => { e.preventDefault(); document.body.classList.remove("ziehen"); hochladen([...e.dataTransfer.files]); });
 
 // --- Einstellungen (in Gruppen) --------------------------------------------------------
-const ARTEN = { auto: "Automatisch", eq: "EQ-Mix mit Bass-Tausch", crossfade: "Crossfade", filter: "Filter-Sweep",
+const ARTEN = { auto: "Automatisch (Auto-DJ wählt je Paar, Stil „Ausgewogen“)", eigen: "Eigene Kombination", eq: "EQ-Mix mit Bass-Tausch", crossfade: "Crossfade", filter: "Filter-Sweep",
   echo: "Echo-Out", schnitt: "Harter Schnitt", drums_zuerst: "Stems: Drums zuerst", acapella: "Stems: Acapella-Übergabe",
-  gesangsschutz: "Stems: Gesangsschutz" };
+  gesangsschutz: "Stems: Gesangsschutz", gesang_zuerst: "Stems: Gesang von B zuerst",
+  double_drop: "Stems: Double Drop (Bass und Stimme tauschen auf dem Drop)" };
 const MODUS = { b_an_a: "Nächster an aktuellen", a_an_b: "Aktueller an nächsten", rampe: "Gleitend (Rampe)", frei: "frei" };
 const NAMEN = {
+  modus: ["Mix-Stil", { manuell: "Manuell (alles selbst einstellen)", kurz: "Kurz & sauber",
+    ausgewogen: "Ausgewogen", lang: "Lang & komplex" }],
+  experimente: ["Experimente", { klassisch: "Klassisch: saubere Blends, Loops, Gesangsübergaben",
+    kreativ: "Kreativ: ab und zu Double Drop, Drop-Tricks und Effekte",
+    wild: "Wild: Double Drops, Tape-Stop, Backspin, Riser, Teaser-Cuts, Flanger wo immer es passt" }],
+  trick: ["DJ-Trick (ausgehender Song)", { keiner: "Kein Trick", bremse: "Tape-Stop am Ende", spinback: "Backspin am Ende",
+    riser: "Noise-Riser (letzte 8 Takte)", flanger: "Flanger (schleicht sich ein)", teaser: "Teaser-Cuts (B blitzt vor dem Ende auf)",
+    wechsel: "Drop-Cuts (ab dem Drop taktweise hin und her)", phaser: "Phaser (schleicht sich ein)", gate: "Trans/Gate (zerhackt die letzten 2 Takte)", crush: "Bitcrusher (wird immer gröber)" }],
+  spielanteil: ["Spielanteil je Titel", { schnell: "Schnell: Wechsel nach dem Drop der 2. Hälfte, kurze Übergänge mit Effekten",
+    lang: "Lang: Titel möglichst ganz, unhörbare Übergänge (Loops, Effekte wenn es passt)" }],
   art: ["Übergangsart", ARTEN],
   takte: ["Übergangslänge (Takte)"],
   ausstieg: ["Ausstieg aktueller Song", { outro: "Im Outro", phrase: "Letzte Phrase", vor_ende: "N Takte vor Ende" }],
   vor_ende_takte: ["N Takte vor Ende"],
   einstieg: ["Einstieg nächster Song", { intro: "Mit dem Intro", drop: "Nach dem Intro (Drop)" }],
   stems: ["Stems nutzen (Gesang/Instrumente trennen)"],
+  stems_vorrat: ["Stems vorberechnen", { aus: "Aus", upload: "Neue Uploads + Warteschlange",
+    alle: "Ganze Bibliothek (ohne Grafikkarte: Stunden)" }],
   weiter_takte: ["Übergangslänge (Takte)"],
   weiter_ab: ["Übergang startet", { takt: "Ab nächstem Takt", phrase: "Ab nächster Phrase" }],
   tempo_modus: ["BPM angleichen", MODUS],
@@ -500,22 +558,77 @@ const NAMEN = {
   keylock: ["Tonhöhe halten (Keylock)"],
   harmonie: ["Tonart beim Sortieren", { streng: "Streng (nur passende)", locker: "Locker (bevorzugen)", aus: "Ignorieren" }],
   lautheit: ["Lautheit angleichen (−14 LUFS)"],
+  lautstaerke: ["Lautstärke", { nahtlos: "Nahtloser Übergang", linear: "Einblenden und ausblenden (linear)",
+    ueberlappung: "Überlappung", hart_ein: "Hart einblenden, weich ausblenden", hart_aus: "Weich einblenden, hart ausblenden", letzter_takt: "A bis zum letzten Takt, dann ausklingen",
+    hart_beide: "Hart einblenden und hart ausblenden", mitte: "Zentraler Schnitt", frueh: "Kurz am Anfang (erstes Viertel)",
+    spaet: "Kurz am Ende (letztes Viertel)", drop: "Drop-Swap: A bis zum Schluss, B erst danach (auf die Eins)",
+    doppel: "Double Drop: B voll im ersten Takt, A geht im letzten", mitte_weich: "Schnitt in der Mitte, B kommt über einen Takt" }],
+  eq: ["EQ", { keiner: "Kein EQ", profi: "Profi: Höhen → Mitten → Bass-Tausch (Fader voll)", bass_mitte: "Basswechsel in der Übergangsmitte", bass_anfang: "Basswechsel am Übergangsanfang",
+    bass_ende: "Basswechsel am Übergangsende", drei_band: "3-Frequenz-Überblendung", bass_schnell: "Schnelle Bassabsenkung",
+    bass_lang: "Lange Bassabsenkung", bass_takt: "Basswechsel auf dem Bass-Takt (Double Drop)" }],
+  filter: ["Filter", { keiner: "Kein Filter", tp_aus: "Tiefpass ausgehend", tp_ein: "Tiefpass eingehend",
+    tp_beide: "Tiefpass ein- und ausgehend", hp_aus: "Hochpass ausgehend", hp_ein: "Hochpass eingehend",
+    hp_beide: "Hochpass ein- und ausgehend", tp_ein_hp_aus: "Tiefpass eingehend, Hochpass ausgehend",
+    hp_ein_tp_aus: "Hochpass eingehend, Tiefpass ausgehend", hp_aus_reso: "Hochpass ausgehend, resonant (pfeift)",
+    tp_aus_reso: "Tiefpass ausgehend, resonant (pfeift)" }],
+  effekt: ["Effekt ausgehender Song", null],   // Texte: effektText()
+  effekt_ein: ["Effekt eingehender Song", { keiner: "Kein Effekt", hall: "Hall-Einstieg (kommt aus dem Hall)",
+    rueckhall: "Reverse-Reverb (schwillt bis zum Einsatz an)" }],
+  loop: ["Looping (ausgehender Song)", { keiner: "Kein Loop", auto: "Automatisch (saubere Stelle, 4–32 Beats)",
+    1: "1-Beat-Loop", 2: "2-Beat-Loop", 4: "4-Beat-Loop", 8: "8-Beat-Loop", 16: "16-Beat-Loop", 32: "32-Beat-Loop",
+    rolle: "Loop-Rolle (4 → 2 → 1 → ½ Beat)" }],
 };
+const FX_TYP = { hall: "Hall", echo50: "Echo (50 %)", echo75: "Echo (75 %)", echo100: "Echo (100 %)",
+  delay50: "Delay (50 %)", delay75: "Delay (75 %)", delay100: "Delay (100 %)",
+  pingpong50: "Ping-Pong (50 %)", pingpong75: "Ping-Pong (75 %)" };
+const FX_MODUS = { mitte_aus: "deaktivieren (Mitte)", ende_ab: "abschneiden (Ende)", ende_aus: "deaktivieren (Ende)" };
+const DETAIL = ["lautstaerke", "eq", "filter", "effekt", "effekt_ein", "loop", "trick"];
+const DETAIL_HINWEIS = {
+  lautstaerke: "Wie die Lautstärken von aktuellem und nächstem Song verlaufen.",
+  eq: "Basswechsel immer auf einer Taktgrenze: nie zwei Bässe gleichzeitig.",
+  filter: "Ausgehend: der aktuelle Song wird zugefiltert. Eingehend: der nächste öffnet sich.",
+  effekt: "50/75/100 % = Echozeit ½, ¾, 1 Schlag. Deaktivieren: der Song endet, die Fahne klingt aus. Abschneiden: endet hart.",
+  loop: "Der aktuelle Song wiederholt Takte im Raster, während der nächste übernimmt. Automatisch: die Stelle, die sich im Original schon fast gleich wiederholt (ohne Gesang).",
+};
+function effektOptionen(v) {
+  const opt = (w, t) => `<option value="${w}" ${w === v ? "selected" : ""}>${t}</option>`;
+  const gruppen = { Hall: ["hall"], Echo: ["echo50", "echo75", "echo100"], Delay: ["delay50", "delay75", "delay100"], "Ping-Pong": ["pingpong50", "pingpong75"] };
+  return opt("keiner", "Kein Effekt") + Object.entries(gruppen).map(([g, typen]) => `<optgroup label="${g}">${
+    typen.flatMap((t) => Object.keys(FX_MODUS).map((m) => opt(`${t}_${m}`, `${FX_TYP[t]} ${FX_MODUS[m]}`))).join("")}</optgroup>`).join("");
+}
 const GRUPPEN = [
-  ["AUTO-MIX", "Automatisches Überleiten zum nächsten Song.", ["art", "takte", "ausstieg", "vor_ende_takte", "einstieg", "stems"]],
-  ["MANUELLER ÜBERGANG (WEITER)", "Was passiert, wenn du WEITER drückst.", ["weiter_takte", "weiter_ab"]],
+  ["AUTO-DJ", "Der Auto-DJ wählt für jedes Titelpaar selbst Ausstieg, Einsatz, Länge, Loops und Effekte. Im Stil „Manuell“ nur, wenn die Übergangsart „Automatisch“ ist.", ["modus", "spielanteil", "experimente"]],
+  ["STEMS", "Gesang, Drums, Bass und Rest getrennt (Grafikkarte).", ["stems", "stems_vorrat"]],
+  ["ÜBERGANG (MANUELL)", "Nur im Mix-Stil „Manuell“.", ["art", "takte", "ausstieg", "vor_ende_takte", "einstieg"]],
+  ["ÜBERGANG IM DETAIL", "Gilt für die Übergangsart „Eigene Kombination“ (Auto-Mix und WEITER). Jede Auswahl hier stellt die Art darauf um.", DETAIL],
+  ["WEITER (MANUELL)", "Was passiert, wenn du WEITER drückst. Im Auto-Modus wählt die Regie.", ["weiter_takte", "weiter_ab"]],
   ["TEMPO", "Gilt für Auto-Mix und WEITER.", ["tempo_modus", "max_bpm", "keylock"]],
   ["REIHENFOLGE & KLANG", "Sortierung der Bibliothek und Pegel.", ["harmonie", "lautheit"]],
 ];
 const TAKT_FELDER = ["takte", "weiter_takte"];
+// Im Auto-Modus entscheidet die Regie diese Felder selbst: gesperrt.
+const AUTO_FELDER = ["art", "takte", "ausstieg", "vor_ende_takte", "einstieg", "weiter_takte", "weiter_ab", "tempo_modus",
+  "lautstaerke", "eq", "filter", "effekt", "effekt_ein", "loop", "trick"];
+let einstWerte = null;
+// Die Regie (Auto-DJ) plant, wenn ein Mix-Stil gewaehlt ist - oder im Stil "Manuell" die Art "Automatisch".
+const regieAn = () => !!einstWerte && (einstWerte.modus !== "manuell" || einstWerte.art === "auto");
 function feld(k, v, auswahl, takte, grenzen) {
+  const html = feldHtml(k, v, auswahl, takte, grenzen);
+  const gesperrt = einstWerte && AUTO_FELDER.includes(k) &&
+    (einstWerte.modus !== "manuell" || (einstWerte.art === "auto" && k !== "art"));
+  return gesperrt ? `<div class="aus">${html}</div>` : html;
+}
+function feldHtml(k, v, auswahl, takte, grenzen) {
   const [name, texte] = NAMEN[k];
   if (typeof v === "boolean")
     return `<label class="check"><input type="checkbox" data-k="${k}" ${v ? "checked" : ""}> ${name}</label>`;
+  if (k === "effekt")
+    return `<label>${name}</label><select data-k="${k}">${effektOptionen(v)}</select><div class="hinweis">${DETAIL_HINWEIS[k]}</div>`;
   if (auswahl[k] || TAKT_FELDER.includes(k)) {
     const opts = auswahl[k] || takte;
     return `<label>${name}</label><select data-k="${k}">${opts.map((o) =>
-      `<option value="${o}" ${o == v ? "selected" : ""}>${texte ? texte[o] : o}</option>`).join("")}</select>`;
+      `<option value="${o}" ${o == v ? "selected" : ""}>${texte ? texte[o] : o}</option>`).join("")}</select>` +
+      (DETAIL_HINWEIS[k] ? `<div class="hinweis">${DETAIL_HINWEIS[k]}</div>` : "");
   }
   if (k === "max_bpm")
     return `<label>${name}<span class="wert" id="max_bpm_wert">${v} BPM</span></label>
@@ -525,15 +638,17 @@ function feld(k, v, auswahl, takte, grenzen) {
 }
 async function ladeEinstellungen() {
   const { werte, auswahl, takte, grenzen } = await (await fetch("/api/einstellungen")).json();
+  einstWerte = werte;
   $("tab-einst").innerHTML = GRUPPEN.map(([titel, zweck, felder]) =>
     `<div class="gruppe"><h3>${titel}</h3><p class="zweck">${zweck}</p>${felder.map((k) => feld(k, werte[k], auswahl, takte, grenzen)).join("")}</div>`).join("")
-    + `<div class="hinweis">Stems werden im Hintergrund vorgerechnet (~2 min je Übergang). Reicht die Zeit nicht, z. B. nach WEITER, mischt der Auto-DJ ohne Stems.</div>`;
+    + `<div class="hinweis">Stems werden im Hintergrund vorberechnet (Anfang und Ende jedes Titels). Grünes ✓ in der Bibliothek = fertig, Stem-Übergänge dann sofort möglich, auch nach WEITER. Ohne Vorrat und bei knapper Zeit mischt der Auto-DJ ohne Stems.</div>`;
 }
 $("tab-einst").addEventListener("change", async (e) => {
   const k = e.target.dataset.k; if (!k) return;
   let v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
   if (e.target.type === "range" || e.target.type === "number" || TAKT_FELDER.includes(k)) v = +v;
-  await fetch("/api/einstellungen", { method: "POST", body: JSON.stringify({ [k]: v }) });
+  const neu = DETAIL.includes(k) ? { [k]: v, art: "eigen" } : { [k]: v };   // Detail-Auswahl gilt fuer "eigen"
+  await fetch("/api/einstellungen", { method: "POST", body: JSON.stringify(neu) });
   ladeEinstellungen();
 });
 $("tab-einst").addEventListener("input", (e) => { if (e.target.dataset.k === "max_bpm") $("max_bpm_wert").textContent = `${e.target.value} BPM`; });

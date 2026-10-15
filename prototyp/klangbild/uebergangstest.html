@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klangbild · Übergangstest</title>
+<style>
+  :root { --bg: #000; --fl: #111; --fl2: #1a1a1a; --linie: #222; --text: #fff; --text2: #e8e8e8;
+          --grau: #999; --dunkel: #666; --rot: #d71921; --gruen: #4a9e5c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text2); font: 15px/1.5 system-ui, sans-serif; }
+  .app { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  .label { font: 11px/1.4 ui-monospace, Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--grau); margin: 0; }
+  h1 { font-weight: 300; font-size: 32px; letter-spacing: .02em; margin: 4px 0 0; color: var(--text); }
+  .kopf { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+  .segmente { display: flex; gap: 2px; margin: 16px 0 24px; }
+  .segmente i { flex: 1; height: 6px; background: var(--fl2); }
+  .segmente i.bereit { background: #333; } .segmente i.note { background: var(--text); }
+  .segmente i.jetzt { background: var(--rot); } .segmente i.aus { background: transparent; }
+  .karte { background: var(--fl); border: 1px solid var(--linie); border-radius: 8px; padding: 20px; }
+  .paar { font-size: 14px; color: var(--grau); margin: 6px 0 16px; word-break: break-word; }
+  .paar b { color: var(--text2); font-weight: 500; }
+  .leiste { position: relative; height: 44px; background: var(--fl2); border-radius: 4px; cursor: pointer; overflow: hidden; }
+  .leiste .blende { position: absolute; top: 0; bottom: 0; background: rgba(215, 25, 33, .28); border-left: 1px solid var(--rot); border-right: 1px solid var(--rot); }
+  .leiste .kopfpos { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
+  .zeiten { display: flex; justify-content: space-between; font: 12px ui-monospace, Consolas, monospace; color: var(--grau); margin-top: 6px; }
+  .reihe { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+  button { font: 12px/1 ui-monospace, Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--text);
+           background: var(--fl2); border: 1px solid #333; border-radius: 999px; padding: 11px 16px; cursor: pointer; min-height: 40px; }
+  button:hover { border-color: var(--dunkel); } button:disabled { opacity: .35; cursor: default; }
+  button.haupt { background: var(--text); color: #000; border-color: var(--text); }
+  button.rot { background: var(--rot); border-color: var(--rot); }
+  .noten { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 20px; }
+  .noten button { border-radius: 8px; padding: 12px 4px; min-height: 64px; display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; }
+  .noten button span { font-size: 22px; letter-spacing: 0; }
+  .noten button small { font-size: 10px; color: var(--grau); text-transform: none; letter-spacing: 0; }
+  .noten button.an { background: var(--text); color: #000; } .noten button.an small { color: #333; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+  .chips button { text-transform: none; letter-spacing: 0; font: 13px system-ui, sans-serif; padding: 8px 12px; min-height: 34px; color: var(--grau); }
+  .chips button.an { color: var(--text); border-color: var(--text); }
+  input[type=text] { width: 100%; margin-top: 12px; background: var(--fl2); border: 1px solid #333; border-radius: 6px; color: var(--text2);
+                     padding: 10px 12px; font: 14px system-ui, sans-serif; }
+  .status { font: 12px ui-monospace, Consolas, monospace; color: var(--grau); margin-top: 14px; min-height: 18px; }
+  .hinweis { font-size: 13px; color: var(--dunkel); margin-top: 20px; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+  .overlay.an { display: flex; }
+  .overlay h2 { font-weight: 300; font-size: 28px; color: var(--text); margin: 0 0 8px; }
+  pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--text2); background: var(--fl); border: 1px solid var(--linie); border-radius: 8px; padding: 16px; max-height: 60vh; overflow: auto; text-align: left; }
+  :focus-visible { outline: 2px solid var(--rot); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kopf">
+    <div><p class="label">Klangbild</p><h1>ÜBERGANGSTEST</h1></div>
+    <div class="reihe" style="margin: 0">
+      <span class="label" id="zaehler">–</span>
+      <button class="rot" id="stopp">STOPP</button>
+    </div>
+  </div>
+  <div class="segmente" id="segmente" aria-hidden="true"></div>
+
+  <div class="karte" id="karte">
+    <p class="label" id="fallname">–</p>
+    <p class="paar" id="paar"></p>
+    <div class="leiste" id="leiste" role="slider" aria-label="Position im Ausschnitt" tabindex="0">
+      <div class="blende" id="blende"></div><div class="kopfpos" id="kopfpos"></div>
+    </div>
+    <div class="zeiten"><span id="pos">0:00</span><span>BLENDE = ROT</span><span id="dauer">0:00</span></div>
+    <div class="reihe">
+      <button class="haupt" id="play">▶ ABSPIELEN</button>
+      <button id="nochmal">⟲ NOCHMAL</button>
+      <button id="zurblende">↦ ZUR BLENDE</button>
+    </div>
+    <div class="noten" id="noten" role="radiogroup" aria-label="Note"></div>
+    <div class="chips" id="chips" aria-label="Was ist aufgefallen?"></div>
+    <input type="text" id="kommentar" placeholder="Kommentar (optional)" maxlength="500">
+    <div class="reihe">
+      <button id="zurueck">← ZURÜCK</button>
+      <button id="spaeter">SPÄTER</button>
+      <button class="haupt" id="speichern" disabled>SPEICHERN &amp; WEITER ↵</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+  <p class="hinweis">Tasten: Leertaste Play/Pause · R nochmal · B zur Blende · 1–5 Note · Enter speichern.
+    Jede Note wird sofort gespeichert. Fenster schließen ist jederzeit erlaubt; beim nächsten Start geht es hier weiter.</p>
+</div>
+
+<div class="overlay" id="gestoppt" role="dialog" aria-modal="true">
+  <div><p class="label">Pause</p><h2>GESTOPPT</h2>
+    <p>Fortschritt ist gespeichert, das Backen ruht.<br>Du kannst das Fenster schließen und später weitermachen.</p>
+    <button class="haupt" id="fortsetzen">FORTSETZEN</button></div>
+</div>
+<div class="overlay" id="fertig" role="dialog" aria-modal="true">
+  <div style="max-width: 720px; width: 100%"><p class="label">Alle Übergänge bewertet</p><h2>FERTIG</h2>
+    <pre id="auswertung">…</pre>
+    <div class="reihe" style="justify-content: center"><button id="nochmalansehen">ZURÜCK ZUM LETZTEN</button></div></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const NOTEN = [[1, "Unfall"], [2, "schlecht"], [3, "okay"], [4, "gut"], [5, "wie ein Profi"]];
+const audio = new Audio();
+let zustand = null, fall = null, nr = null, verlauf = [], note = null, stichworte = new Set(), gehoert = 0, letzteZeit = 0;
+const zeit = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const post = (url, daten) => fetch(url, { method: "POST", body: JSON.stringify(daten) }).then((r) => r.json());
+
+$("noten").innerHTML = NOTEN.map(([n, t]) =>
+  `<button role="radio" aria-checked="false" data-note="${n}"><span>${n}</span><small>${t}</small></button>`).join("");
+$("noten").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setzeNote(+b.dataset.note); });
+function setzeNote(n) {
+  note = n;
+  for (const b of $("noten").children) { const an = +b.dataset.note === n; b.classList.toggle("an", an); b.setAttribute("aria-checked", an); }
+  $("speichern").disabled = !fall || note === null;
+}
+$("chips").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  const s = b.dataset.s; stichworte.has(s) ? stichworte.delete(s) : stichworte.add(s);
+  b.classList.toggle("an", stichworte.has(s)); b.setAttribute("aria-pressed", stichworte.has(s));
+});
+
+function naechster() {
+  const offen = zustand.reihe.filter((f) => !f.aus && f.note === null);
+  return (offen.find((f) => !f.spaeter) || offen[0] || null);
+}
+function zeigeSegmente() {
+  $("segmente").innerHTML = zustand.reihe.map((f) =>
+    `<i class="${f.aus ? "aus" : f.nr === nr ? "jetzt" : f.note !== null ? "note" : f.bereit ? "bereit" : ""}"></i>`).join("");
+  const gueltig = zustand.reihe.filter((f) => !f.aus);
+  const bewertet = gueltig.filter((f) => f.note !== null).length;
+  const bereit = gueltig.filter((f) => f.bereit).length;
+  $("zaehler").textContent = `BEWERTET ${bewertet}/${gueltig.length} · GEBACKEN ${bereit}/${gueltig.length}`;
+}
+
+async function laden(ziel, merken = true) {
+  audio.pause();
+  if (merken && nr !== null && nr !== ziel) verlauf.push(nr);
+  nr = ziel; fall = null; note = null; stichworte = new Set(); gehoert = 0;
+  setzeNote(null); $("kommentar").value = ""; zeigeSegmente(); zeigeChips();
+  const f = zustand.reihe.find((x) => x.nr === ziel);
+  $("fallname").textContent = `FALL ${zustand.reihe.indexOf(f) + 1} VON ${zustand.reihe.length}`;
+  if (!f.bereit) { $("paar").textContent = ""; $("status").textContent = `[WIRD GEBACKEN …] ${zustand.backt || ""}`; return; }
+  fall = await (await fetch(`/api/fall/${ziel}`)).json();
+  const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  $("paar").innerHTML = `<b>${esc(fall.a.titel)}</b> → <b>${esc(fall.b.titel)}</b>`;
+  $("blende").style.left = `${100 * fall.blende_von_s / fall.dauer_s}%`;
+  $("blende").style.width = `${100 * (fall.blende_bis_s - fall.blende_von_s) / fall.dauer_s}%`;
+  $("dauer").textContent = zeit(fall.dauer_s);
+  const alt = fall.bewertung;
+  if (alt && alt.note) {
+    setzeNote(alt.note); (alt.stichworte || []).forEach((s) => stichworte.add(s)); $("kommentar").value = alt.kommentar || "";
+  }
+  zeigeChips();
+  $("status").textContent = alt && alt.note ? "[BEREITS BEWERTET – ÄNDERN MÖGLICH]" : "";
+  const blob = await (await fetch(`/clip/${ziel}.flac`)).blob();
+  if (nr !== ziel) return;   // inzwischen weitergeklickt
+  if (audio.src) URL.revokeObjectURL(audio.src);
+  audio.src = URL.createObjectURL(blob);
+  if (!zustand.gestoppt) audio.play().catch(() => {});
+}
+function zeigeChips() {
+  $("chips").innerHTML = zustand.stichworte.map((s) =>
+    `<button data-s="${s}" aria-pressed="${stichworte.has(s)}" class="${stichworte.has(s) ? "an" : ""}">${s}</button>`).join("");
+}
+
+async function weiterZumNaechsten() {
+  zustand = await (await fetch("/api/zustand")).json();
+  const n = naechster();
+  if (!n) { audio.pause(); $("fertig").classList.add("an"); $("auswertung").textContent = await (await fetch("/api/auswertung")).text(); return; }
+  laden(n.nr);
+}
+$("speichern").onclick = async () => {
+  if (!fall || note === null) return;
+  zustand = await post("/api/bewerten", { nr, note, stichworte: [...stichworte], kommentar: $("kommentar").value, gehoert_s: gehoert });
+  weiterZumNaechsten();
+};
+$("spaeter").onclick = async () => { if (nr === null) return; zustand = await post("/api/bewerten", { nr, spaeter: true }); weiterZumNaechsten(); };
+$("zurueck").onclick = () => { if (verlauf.length) laden(verlauf.pop(), false); };
+$("nochmalansehen").onclick = () => { $("fertig").classList.remove("an"); if (verlauf.length) laden(verlauf.pop(), false); };
+
+const playPause = () => { if (!audio.src) return; audio.paused ? audio.play() : audio.pause(); };
+$("play").onclick = playPause;
+$("nochmal").onclick = () => { audio.currentTime = 0; audio.play(); };
+$("zurblende").onclick = () => { if (fall) { audio.currentTime = Math.max(0, fall.blende_von_s - 2); audio.play(); } };
+$("leiste").onclick = (e) => { if (!fall) return; const r = $("leiste").getBoundingClientRect(); audio.currentTime = (e.clientX - r.left) / r.width * fall.dauer_s; };
+audio.onplay = audio.onpause = () => { $("play").textContent = audio.paused ? "▶ ABSPIELEN" : "❚❚ PAUSE"; };
+audio.ontimeupdate = () => {
+  if (!fall) return;
+  const t = audio.currentTime;
+  if (!audio.paused && t > letzteZeit && t - letzteZeit < 1) gehoert += t - letzteZeit;
+  letzteZeit = t;
+  $("pos").textContent = zeit(t);
+  $("kopfpos").style.left = `${100 * t / fall.dauer_s}%`;
+};
+
+async function stoppen(an) {
+  audio.pause();
+  zustand = await post("/api/stopp", { an });
+  $("gestoppt").classList.toggle("an", an);
+  if (!an && fall) audio.play().catch(() => {});
+}
+$("stopp").onclick = () => stoppen(true);
+$("fortsetzen").onclick = () => stoppen(false);
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") { if (e.key === "Enter") $("speichern").click(); return; }
+  if ($("gestoppt").classList.contains("an")) return;
+  if (e.key === " ") { e.preventDefault(); playPause(); }
+  else if (e.key >= "1" && e.key <= "5") setzeNote(+e.key);
+  else if (e.key === "r" || e.key === "R") $("nochmal").click();
+  else if (e.key === "b" || e.key === "B") $("zurblende").click();
+  else if (e.key === "Enter") $("speichern").click();
+});
+
+// Warten auf gebackene Faelle: alle 2 s nachsehen
+setInterval(async () => {
+  if (!zustand) return;
+  const vorher = zustand.reihe.find((f) => f.nr === nr);
+  zustand = await (await fetch("/api/zustand")).json();
+  zeigeSegmente();
+  const jetzt = zustand.reihe.find((f) => f.nr === nr);
+  if (jetzt && vorher && !vorher.bereit && jetzt.bereit) laden(nr, false);
+  else if (jetzt && !jetzt.bereit) $("status").textContent = `[WIRD GEBACKEN …] ${zustand.backt || ""}`;
+}, 2000);
+
+(async () => {
+  zustand = await (await fetch("/api/zustand")).json();
+  zeigeChips();
+  if (zustand.gestoppt) $("gestoppt").classList.add("an");
+  weiterZumNaechsten();
+})();
+</script>
+</body>
+</html>

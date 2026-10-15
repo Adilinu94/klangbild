@@ -74,8 +74,10 @@ def _modell_laden():
         # still an einem Download haengt. Ein Fehler hier darf nicht je Track
         # wiederholt werden: _MODELL bleibt None, der Fehler wird gemerkt.
         try:
+            from . import stems
+
             _MODELL = Audio2Beats(checkpoint_path=str(checkpoint_pfad()),
-                                  device="cpu", dbn=False)
+                                  device=stems.geraet(), dbn=False)
         except Exception as fehler:  # Ursache an den Aufrufer
             global _LADEFEHLER
             _LADEFEHLER = fehler

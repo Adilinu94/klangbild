@@ -1,0 +1,21 @@
+# Muster sind relativ zu diesem Ordner (android/).
+# Ausgeklonte Fremd-Quellen (Oboe, Signalsmith, KissFFT) - eigene Historie.
+engine/src/main/cpp/third_party/
+
+# Gradle- und Build-Ausgaben
+.gradle/
+build/
+app/build/
+core/build/
+engine/build/
+.cxx/
+engine/.cxx/
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.hprof
+
+# Native Build
+build/hosttest/

@@ -246,19 +246,21 @@ def baue_set(
 
 # --- Phase 2: Bibliothek sortieren / naechsten Song waehlen (mit Keylock) ------
 
-def naechster(
+def rangliste(
     aktuell: Track, kandidaten: list[Track], max_bpm: float, harmonie: str = "locker",
-) -> Track | None:
-    """Bester naechster Song nach Tempo-Grenze (absolute BPM), Harmonie, Energie.
+    n: int = 6, bonus=None,
+) -> list[Track]:
+    """Die `n` besten naechsten Songs nach Tempo-Grenze (absolute BPM), Harmonie, Energie.
 
     Mit Keylock darf das Tempo um `max_bpm` angeglichen werden (ADR-022). Liegt kein
-    Kandidat in der Grenze, wird der tempo-naechste genommen - der Uebergang
-    faellt dann auf Echo/Schnitt zurueck, statt das Set abzubrechen.
+    Kandidat in der Grenze, kommen die tempo-naechsten - der Uebergang faellt dann auf
+    Echo/Schnitt zurueck, statt das Set abzubrechen.
     `harmonie`: "streng" = nur gleiche Tonart/Camelot-Nachbar, falls vorhanden;
     "locker" = Harmonie zaehlt in der Note; "aus" = ignorieren.
+    `bonus(aktuell, kandidat) -> float` (0..1) fliesst mit 20 % ein (z. B. saubere Mischstellen).
     """
     if not kandidaten:
-        return None
+        return []
     basis = aktuell.bpm or 0.0
 
     def abstand(k: Track) -> float:
@@ -266,7 +268,7 @@ def naechster(
 
     pool = [k for k in kandidaten if abstand(k) <= max_bpm + 1e-9]
     if not pool:
-        return min(kandidaten, key=lambda k: (abstand(k), k.id))
+        return sorted(kandidaten, key=lambda k: (abstand(k), k.id))[:n]
     if harmonie == "streng":
         passend = [k for k in pool if harmonie_note(aktuell.camelot, k.camelot)[1] != "fremd"]
         pool = passend or pool
@@ -275,13 +277,25 @@ def naechster(
         harm = harmonie_note(aktuell.camelot, k.camelot)[0] if harmonie != "aus" else 0.5
         energie = energie_note(aktuell.energie_db, k.energie_db, config.PLANER_ENERGIE_MAX_SPRUNG_DB)[0]
         tempo = 1.0 - abstand(k) / max(max_bpm, 1.0)
-        return (0.5 * harm + 0.25 * energie + 0.25 * tempo, -k.id)
+        wert = 0.5 * harm + 0.25 * energie + 0.25 * tempo
+        if bonus is not None:
+            wert = 0.8 * wert + 0.2 * bonus(aktuell, k)
+        return (wert, -k.id)
 
-    return max(pool, key=note)
+    return sorted(pool, key=note, reverse=True)[:n]
+
+
+def naechster(
+    aktuell: Track, kandidaten: list[Track], max_bpm: float, harmonie: str = "locker", bonus=None,
+) -> Track | None:
+    """Bester naechster Song (siehe `rangliste`)."""
+    beste = rangliste(aktuell, kandidaten, max_bpm, harmonie, 1, bonus)
+    return beste[0] if beste else None
 
 
 def sortiere_alle(
     tracks: list[Track], max_bpm: float, harmonie: str = "locker", start_id: int | None = None,
+    bonus=None,
 ) -> list[int]:
     """Alle Tracks in eine Reihenfolge bringen (gierig, jeder Song einmal).
 
@@ -301,7 +315,7 @@ def sortiere_alle(
     uebrig = [t for t in tracks if t.id != start_id]
     folge = [start_id]
     while uebrig:
-        aktuell = naechster(aktuell, uebrig, max_bpm, harmonie)
+        aktuell = naechster(aktuell, uebrig, max_bpm, harmonie, bonus)
         uebrig.remove(aktuell)
         folge.append(aktuell.id)
     return folge

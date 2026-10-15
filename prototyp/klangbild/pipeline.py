@@ -431,6 +431,21 @@ def _parser() -> argparse.ArgumentParser:
     p_mx.add_argument("--port", type=int, default=8766)
     p_mx.set_defaults(funktion=None)
 
+    p_ut = unter.add_parser("uebergangstest", parents=[pfade],
+                            help="Blinder Hoertest nur fuer Uebergaenge (1-5), mit Stopp/Fortsetzen")
+    p_ut.add_argument("--paare", type=int, default=30, help="Titelpaare (jedes dritte mit Plan 2 und 3)")
+    p_ut.add_argument("--seed", type=int, default=7, help="Zufall reproduzierbar machen")
+    p_ut.add_argument("--neu", action="store_true", help="alten Test archivieren, neuen beginnen")
+    p_ut.add_argument("--auswertung", action="store_true", help="nur auswerten (auswertung.md)")
+    p_ut.add_argument("--nur-ordner", default=None, help="nur Titel aus diesem Ordner (A und B)")
+    p_ut.add_argument("--stil", choices=("kurz", "ausgewogen", "lang"), default=None,
+                      help="alle Faelle in diesem Stil (sonst reihum)")
+    p_ut.add_argument("--experimente", default="klassisch",
+                      help="Stufe(n) reihum, z. B. kreativ,wild (klassisch/kreativ/wild)")
+    p_ut.add_argument("--host", default="127.0.0.1")
+    p_ut.add_argument("--port", type=int, default=8767)
+    p_ut.set_defaults(funktion=None)
+
     return parser
 
 
@@ -496,6 +511,11 @@ def main(argv: list[str] | None = None) -> int:
         from . import mixer
 
         return mixer.laufen(args)
+
+    if args.befehl == "uebergangstest":
+        from . import uebergangstest
+
+        return uebergangstest.laufen(args)
 
     return int(args.funktion(args))
 

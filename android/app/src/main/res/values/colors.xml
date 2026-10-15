@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ui/DIRECTION.md: Dark-OLED-Panel, weisse Daten, ein Rot als Signalfarbe. -->
+    <color name="klangbild_schwarz">#FF000000</color>
+    <color name="klangbild_panel">#FF111111</color>
+    <color name="klangbild_weiss">#FFFFFFFF</color>
+    <color name="klangbild_rot">#FFD71921</color>
+    <color name="ic_launcher_background">#FF000000</color>
+</resources>
