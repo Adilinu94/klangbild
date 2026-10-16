@@ -1,0 +1,17 @@
+{
+  "expected": {
+    "count": 213444,
+    "dtype": "float32-le",
+    "file": "hall_ir.f32",
+    "offset": 0,
+    "sha256": "2b589ccf4a4ddb0176231f8a709d708d7be0b818ee338143c76525445356704f",
+    "shape": [
+      106722,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang._hall_ir",
+  "inputs": {},
+  "tolerance": "reverb"
+}

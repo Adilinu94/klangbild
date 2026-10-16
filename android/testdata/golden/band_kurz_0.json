@@ -1,0 +1,14 @@
+{
+  "expected": [
+    [],
+    []
+  ],
+  "format_version": 1,
+  "function": "mix.band_teilen",
+  "inputs": {
+    "rate": 44100,
+    "signal": [],
+    "trenn_hz": 200
+  },
+  "tolerance": "dsp"
+}

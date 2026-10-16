@@ -1,0 +1,31 @@
+{
+  "expected": {
+    "count": 235492,
+    "dtype": "float32-le",
+    "file": "nass_hall_expected.f32",
+    "offset": 0,
+    "sha256": "6c520e0012db57491f5705479f8c9b16056cae50ee087408fe260e87e8116391",
+    "shape": [
+      117746,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang._nass",
+  "inputs": {
+    "schlag_n": 22050.0,
+    "send": {
+      "count": 22050,
+      "dtype": "float32-le",
+      "file": "nass_hall_inputs_send.f32",
+      "offset": 0,
+      "sha256": "21bb55da4dfc6949472fe11ae59cb1cfed43d231f68564bbd09f204a5a98bd01",
+      "shape": [
+        11025,
+        2
+      ]
+    },
+    "typ": "hall"
+  },
+  "tolerance": "reverb"
+}

@@ -1,0 +1,26 @@
+{
+  "expected": [
+    -1.1694515497558127e-16,
+    1.9999999999999998,
+    4.0,
+    6.0,
+    8.0,
+    10.0,
+    12.0,
+    14.0
+  ],
+  "format_version": 1,
+  "function": "uebergang.regulaer",
+  "inputs": {
+    "bis_s": 12,
+    "bpm": 120,
+    "downbeats": [
+      0,
+      2,
+      4,
+      6
+    ],
+    "um_s": 6
+  },
+  "tolerance": "values"
+}

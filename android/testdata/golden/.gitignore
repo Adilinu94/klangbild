@@ -1,0 +1,16 @@
+# Der komplette Golden-Satz ist mit EINEM Befehl deterministisch reproduzierbar:
+#
+#     cd prototyp && .venv/Scripts/python -m klangbild golden ../android/testdata/golden
+#
+# Große Audio-Referenzarrays (bis 4 MB je Fall, zusammen ~170 MB) gehören darum
+# nicht in die Git-Historie: sie blähen das Repo dauerhaft auf und entstehen aus
+# denselben Eingaben immer wieder neu (fester SEED; siehe manifest.json,
+# Schlüssel "sources" = SHA-256 aller erzeugenden .py-Dateien).
+#
+# Im Repo bleiben: alle .json (Eingaben, Skalare, kurze Arrays, Hashes, Manifest),
+# der Reader-Fall für T0.3 und die synthetischen Hash-Nutzlasten.
+*.f32
+
+# Ausnahme: der winzige Reader-Dummy (T0.3) bleibt, damit der Leser-Test ohne
+# vorherigen Export läuft.
+!reader_dummy.f32

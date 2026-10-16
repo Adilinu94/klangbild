@@ -1,0 +1,180 @@
+{
+  "expected": [
+    13,
+    14,
+    2,
+    15,
+    16,
+    3
+  ],
+  "format_version": 1,
+  "function": "plan.rangliste",
+  "inputs": {
+    "aktuell": {
+      "bpm": 119,
+      "camelot": "2A",
+      "energie_db": -13,
+      "id": 1,
+      "pfad": "synthetic-1",
+      "vektor": null
+    },
+    "harmonie": "locker",
+    "kandidaten": [
+      {
+        "bpm": 120,
+        "camelot": "3A",
+        "energie_db": -14,
+        "id": 2,
+        "pfad": "synthetic-2",
+        "vektor": null
+      },
+      {
+        "bpm": 121,
+        "camelot": "4A",
+        "energie_db": -15,
+        "id": 3,
+        "pfad": "synthetic-3",
+        "vektor": null
+      },
+      {
+        "bpm": 122,
+        "camelot": "5A",
+        "energie_db": -16,
+        "id": 4,
+        "pfad": "synthetic-4",
+        "vektor": null
+      },
+      {
+        "bpm": 123,
+        "camelot": "6A",
+        "energie_db": -12,
+        "id": 5,
+        "pfad": "synthetic-5",
+        "vektor": null
+      },
+      {
+        "bpm": 124,
+        "camelot": "7A",
+        "energie_db": -13,
+        "id": 6,
+        "pfad": "synthetic-6",
+        "vektor": null
+      },
+      {
+        "bpm": 125,
+        "camelot": "8A",
+        "energie_db": -14,
+        "id": 7,
+        "pfad": "synthetic-7",
+        "vektor": null
+      },
+      {
+        "bpm": 126,
+        "camelot": "9A",
+        "energie_db": -15,
+        "id": 8,
+        "pfad": "synthetic-8",
+        "vektor": null
+      },
+      {
+        "bpm": 127,
+        "camelot": "10A",
+        "energie_db": -16,
+        "id": 9,
+        "pfad": "synthetic-9",
+        "vektor": null
+      },
+      {
+        "bpm": 128,
+        "camelot": "11A",
+        "energie_db": -12,
+        "id": 10,
+        "pfad": "synthetic-10",
+        "vektor": null
+      },
+      {
+        "bpm": 129,
+        "camelot": "12A",
+        "energie_db": -13,
+        "id": 11,
+        "pfad": "synthetic-11",
+        "vektor": null
+      },
+      {
+        "bpm": 130,
+        "camelot": "1A",
+        "energie_db": -14,
+        "id": 12,
+        "pfad": "synthetic-12",
+        "vektor": null
+      },
+      {
+        "bpm": 118,
+        "camelot": "2A",
+        "energie_db": -15,
+        "id": 13,
+        "pfad": "synthetic-13",
+        "vektor": null
+      },
+      {
+        "bpm": 119,
+        "camelot": "3A",
+        "energie_db": -16,
+        "id": 14,
+        "pfad": "synthetic-14",
+        "vektor": null
+      },
+      {
+        "bpm": 120,
+        "camelot": "4A",
+        "energie_db": -12,
+        "id": 15,
+        "pfad": "synthetic-15",
+        "vektor": null
+      },
+      {
+        "bpm": 121,
+        "camelot": "5A",
+        "energie_db": -13,
+        "id": 16,
+        "pfad": "synthetic-16",
+        "vektor": null
+      },
+      {
+        "bpm": 122,
+        "camelot": "6A",
+        "energie_db": -14,
+        "id": 17,
+        "pfad": "synthetic-17",
+        "vektor": null
+      },
+      {
+        "bpm": 123,
+        "camelot": "7A",
+        "energie_db": -15,
+        "id": 18,
+        "pfad": "synthetic-18",
+        "vektor": null
+      },
+      {
+        "bpm": 124,
+        "camelot": "8A",
+        "energie_db": -16,
+        "id": 19,
+        "pfad": "synthetic-19",
+        "vektor": null
+      },
+      {
+        "bpm": 125,
+        "camelot": "9A",
+        "energie_db": -12,
+        "id": 20,
+        "pfad": "synthetic-20",
+        "vektor": null
+      }
+    ],
+    "max_bpm": 5,
+    "n": 6
+  },
+  "tolerance": "values"
+}

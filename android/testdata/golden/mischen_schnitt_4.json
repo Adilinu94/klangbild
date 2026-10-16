@@ -1,0 +1,42 @@
+{
+  "expected": {
+    "count": 705600,
+    "dtype": "float32-le",
+    "file": "mischen_schnitt_1_expected.f32",
+    "offset": 0,
+    "sha256": "02772c71b02c1e0067af8d12dc4ebac483f013ebf38c3e212783cc12686d45b0",
+    "shape": [
+      352800,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang.mischen",
+  "inputs": {
+    "a": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "art": "schnitt",
+    "b": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_b.f32",
+      "offset": 0,
+      "sha256": "a234572e1aa3296b444b8cde390c62f417258351f6b3259a8a21e8efcd5ea02a",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "takte": 4
+  },
+  "tolerance": "dsp"
+}

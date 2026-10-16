@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     // AGP 9 bringt Kotlin-Unterstuetzung mit (org.jetbrains.kotlin.android entfaellt).
@@ -72,12 +74,18 @@ dependencies {
 // Voraussetzung: Host-Compiler (MSVC/MinGW/clang) und ein auffindbares CMake.
 // ---------------------------------------------------------------------------
 
-/** Liefert den Android-SDK-Pfad aus local.properties oder ANDROID_HOME, oder null. */
+/**
+ * Liefert den Android-SDK-Pfad aus local.properties oder ANDROID_HOME, oder null.
+ *
+ * `java.util.Properties` loest die in local.properties ueblichen Escapes auf
+ * (`sdk.dir=C\:\\Users\\...`), ein einfaches Zeilen-Lesen nicht.
+ */
 fun sdkPfad(): String? {
     val lokal = rootProject.file("local.properties")
     if (lokal.isFile) {
-        val zeile = lokal.readLines().firstOrNull { it.trimStart().startsWith("sdk.dir=") }
-        val wert = zeile?.substringAfter("=")?.trim(' ', '"', '\'')
+        val props = Properties()
+        lokal.inputStream().use { props.load(it) }
+        val wert = props.getProperty("sdk.dir")?.trim()
         if (!wert.isNullOrBlank()) return wert
     }
     return System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
@@ -98,49 +106,52 @@ fun hostCmake(): String? {
     return pfad.takeIf { it.isFile }?.absolutePath
 }
 
-/** Fuehrt einen Host-Prozess aus und wirft bei Fehler mit voller Ausgabe. */
-fun hostProzess(vararg argumente: String) {
-    val prozess = ProcessBuilder(*argumente)
-        .redirectErrorStream(true)
-        .start()
-    val ausgabe = prozess.inputStream.bufferedReader().readText()
-    val code = prozess.waitFor()
-    if (code != 0) {
-        throw GradleException(
-            "Host-Prozess mit Code $code beendet: ${argumente.joinToString(" ")}\n$ausgabe"
-        )
-    }
-}
-
-val hostTest = tasks.register<Task>("hostTest") {
+val hostTest = tasks.register("hostTest") {
     group = "verification"
     description = "Baut und laeuft die C++-Golden-Tests auf dem Host (CMake + GoogleTest)."
 
-    val quelle = file("src/test/cpp/CMakeLists.txt")
-    val quelleDir = quelle.parentFile
-    val bau = layout.buildDirectory.dir("hosttest").get().asFile
-    val goldendaten = rootProject.layout.projectDirectory.dir("testdata/golden").asFile
+    // Pfade als einfache Werte festhalten (configuration-cache-fest).
+    val quelleDir = file("src/test/cpp").absolutePath
+    val cmakeListe = "$quelleDir/CMakeLists.txt"
+    val bau = layout.buildDirectory.dir("hosttest").get().asFile.absolutePath
+    val goldendaten = rootProject.layout.projectDirectory.dir("testdata/golden").asFile.absolutePath
+    val exe = hostCmake()
 
     inputs.dir(quelleDir)
+    inputs.dir(goldendaten)
     outputs.dir(bau)
 
-    val cmakeExe = hostCmake()
-    val ctestUeberspringen = project.findProperty("klangbild.skipHostTest") == "true"
-    onlyIf { !ctestUeberspringen }
-    onlyIf { !file("src/test/cpp").isDirectory || quelle.exists() }
+    val ueberspringen = project.findProperty("klangbild.skipHostTest") == "true"
+    onlyIf { !ueberspringen }
+
+    // Dieser Task ruft externe Prozesse auf und liest den SDK-Pfad aus der
+    // Umgebung; er ist bewusst nicht configuration-cache-faehig (Gradle-API).
+    notCompatibleWithConfigurationCache("Ruft CMake/CTest als externe Prozesse auf.")
 
     doLast {
-        check(quelle.exists()) { "Host-Test-Quelle fehlt: ${quelle.absolutePath}" }
-        val exe = cmakeExe ?: throw GradleException(
+        check(File(cmakeListe).exists()) { "Host-Test-Quelle fehlt: $cmakeListe" }
+        val cmake = exe ?: throw GradleException(
             "Kein Host-CMake gefunden. SDK-CMake installieren oder " +
                 "-Pklangbild.cmake=<pfad/zum/cmake> setzen."
         )
-        hostProzess(
-            exe, "-S", quelleDir.absolutePath, "-B", bau.absolutePath,
+
+        fun prozess(vararg argumente: String) {
+            val p = ProcessBuilder(*argumente).redirectErrorStream(true).start()
+            val ausgabe = p.inputStream.bufferedReader().readText()
+            val code = p.waitFor()
+            if (code != 0) {
+                throw GradleException(
+                    "Host-Prozess mit Code $code beendet: ${argumente.joinToString(" ")}\n$ausgabe"
+                )
+            }
+        }
+
+        prozess(
+            cmake, "-S", quelleDir, "-B", bau,
             "-DCMAKE_BUILD_TYPE=Release",
-            "-DKLINGBILD_GOLDENDIR=${goldendaten.absolutePath}"
+            "-DKLINGBILD_GOLDENDIR=$goldendaten"
         )
-        hostProzess(exe, "--build", bau.absolutePath, "--config", "Release", "--parallel")
-        hostProzess(exe, "--build", bau.absolutePath, "--config", "Release", "--target", "test")
+        prozess(cmake, "--build", bau, "--config", "Release", "--parallel")
+        prozess(cmake, "--build", bau, "--config", "Release", "--target", "test")
     }
 }

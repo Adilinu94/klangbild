@@ -1,0 +1,43 @@
+{
+  "expected": {
+    "count": 705600,
+    "dtype": "float32-le",
+    "file": "loop_1_expected.f32",
+    "offset": 0,
+    "sha256": "e78b39721dd6318b99fd5b61ef81dd429befaa8d64232c0f7474798facd77166",
+    "shape": [
+      352800,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang._loopen",
+  "inputs": {
+    "a": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "plan": [
+      [
+        8,
+        32,
+        2
+      ]
+    ],
+    "takt_n": [
+      0,
+      88200,
+      176400,
+      264600,
+      352800
+    ]
+  },
+  "tolerance": "dsp"
+}

@@ -1,0 +1,44 @@
+{
+  "expected": {
+    "count": 683550,
+    "dtype": "float32-le",
+    "file": "warp_vinyl_expected.f32",
+    "offset": 0,
+    "sha256": "4f7497c29db0b52f80f9b791e536807f76884b1a8684e4197885a621f773fdac",
+    "shape": [
+      341775,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang.warp",
+  "inputs": {
+    "audio": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "keylock": false,
+    "quell_s": [
+      0.0,
+      2.0,
+      4.0,
+      6.0,
+      8.0
+    ],
+    "ziel_s": [
+      0.0,
+      1.9,
+      3.82,
+      5.77,
+      7.75
+    ]
+  },
+  "tolerance": "dsp"
+}

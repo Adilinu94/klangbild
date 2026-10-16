@@ -1,0 +1,31 @@
+{
+  "expected": {
+    "count": 705600,
+    "dtype": "float32-le",
+    "file": "limiter_stille_inputs_x.f32",
+    "offset": 0,
+    "sha256": "4d5dfececf9ba311f7dce724f3e5f00f9d05c24c267d4f94905ce0be10c7ebee",
+    "shape": [
+      352800,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang._begrenzen",
+  "inputs": {
+    "bis": 352800,
+    "decke": 0.966,
+    "x": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "limiter_stille_inputs_x.f32",
+      "offset": 0,
+      "sha256": "4d5dfececf9ba311f7dce724f3e5f00f9d05c24c267d4f94905ce0be10c7ebee",
+      "shape": [
+        352800,
+        2
+      ]
+    }
+  },
+  "tolerance": "dsp"
+}

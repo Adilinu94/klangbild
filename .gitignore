@@ -10,6 +10,12 @@
 *.ape
 *.cue
 
+# Ausnahme: die synthetischen Hash-Nutzlasten der Golden-Tests (T0.2) sind keine
+# Musik, sondern zufaellige Bytes, und brauchen die Endung fuer die Bereichs-
+# Erkennung (audio_bereich nach .mp3/.wav). Eng gefasst: nur dieser eine Ordner.
+!android/testdata/golden/hash_*.mp3
+!android/testdata/golden/hash_*.wav
+
 # Modelle und Gewichte (mehrere GB, werden beim Lauf heruntergeladen)
 *.onnx
 *.safetensors

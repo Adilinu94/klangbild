@@ -1,0 +1,42 @@
+{
+  "expected": {
+    "count": 705600,
+    "dtype": "float32-le",
+    "file": "mischen_eq_1_expected.f32",
+    "offset": 0,
+    "sha256": "18c99ab48534f5130c0f016ee67975ef4201a413a2246313a9aede99885f2c68",
+    "shape": [
+      352800,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang.mischen",
+  "inputs": {
+    "a": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "art": "eq",
+    "b": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_b.f32",
+      "offset": 0,
+      "sha256": "a234572e1aa3296b444b8cde390c62f417258351f6b3259a8a21e8efcd5ea02a",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "takte": 1
+  },
+  "tolerance": "dsp"
+}

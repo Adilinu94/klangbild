@@ -1,0 +1,28 @@
+{
+  "expected": {
+    "channels": 2,
+    "frames": 2,
+    "values": [
+      0.0,
+      1.0,
+      -0.5,
+      0.25
+    ]
+  },
+  "format_version": 1,
+  "function": "identity",
+  "inputs": {
+    "audio": {
+      "count": 4,
+      "dtype": "float32-le",
+      "file": "reader_dummy.f32",
+      "offset": 0,
+      "sha256": "8f33d64277492d8502650c2906b34f1ce29e7ece4189d7b91b862ac91b82a372",
+      "shape": [
+        2,
+        2
+      ]
+    }
+  },
+  "tolerance": "values"
+}

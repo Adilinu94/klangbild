@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "camelot": "9A",
+    "name": "Em",
+    "punkte": 0.5213271728681967,
+    "vertrauen": 0.031771564837626
+  },
+  "format_version": 1,
+  "function": "keyestimate.tonart_schaetzen",
+  "inputs": {
+    "profile": "aarden",
+    "rate": 22050,
+    "signal": {
+      "count": 176400,
+      "dtype": "float32-le",
+      "file": "synthetic_mono.f32",
+      "offset": 0,
+      "sha256": "bc4055ceedcc401c72dc91b2e0db46f8cf6d7ffb1e7494c9e202098a5b2e7a38",
+      "shape": [
+        176400
+      ]
+    }
+  },
+  "tolerance": "values"
+}

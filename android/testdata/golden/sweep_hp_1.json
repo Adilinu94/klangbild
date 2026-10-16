@@ -1,0 +1,41 @@
+{
+  "expected": {
+    "count": 705600,
+    "dtype": "float32-le",
+    "file": "sweep_hp_1_expected.f32",
+    "offset": 0,
+    "sha256": "960ea9c3f213d57e77827912310b2e75b94e7b3e7a737f349019de088832648d",
+    "shape": [
+      352800,
+      2
+    ]
+  },
+  "format_version": 1,
+  "function": "uebergang._sweep",
+  "inputs": {
+    "art": "hp",
+    "menge": {
+      "count": 352800,
+      "dtype": "float32-le",
+      "file": "sweep_tp_0_inputs_menge.f32",
+      "offset": 0,
+      "sha256": "57014040517d0e04d1b989217846ff6b152d40227c39249c55114e7c407a64e6",
+      "shape": [
+        352800
+      ]
+    },
+    "reso": true,
+    "x": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    }
+  },
+  "tolerance": "dsp"
+}

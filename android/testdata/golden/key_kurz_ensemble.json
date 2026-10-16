@@ -1,0 +1,25 @@
+{
+  "expected": {
+    "camelot": "8A",
+    "name": "Am",
+    "punkte": 0.6216466281230038,
+    "vertrauen": 0.4721606212013256
+  },
+  "format_version": 1,
+  "function": "keyestimate.tonart_schaetzen",
+  "inputs": {
+    "profile": "ensemble",
+    "rate": 22050,
+    "signal": {
+      "count": 221,
+      "dtype": "float32-le",
+      "file": "kurz_mono.f32",
+      "offset": 0,
+      "sha256": "674f83a17daac596443c9a4d6a56210fc0cef443e46364bba3abd48835044b6a",
+      "shape": [
+        221
+      ]
+    }
+  },
+  "tolerance": "values"
+}

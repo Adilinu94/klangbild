@@ -28,6 +28,10 @@ Konsequenzen.
 | [ADR-020](ADR-020-vinyl-angleich-auf-1-prozent.md) | Vinyl-Angleich auf ±1 % begrenzen, bis Keylock kommt | angenommen, ergänzt ADR-014; mit Keylock ergänzt durch ADR-022 |
 | [ADR-021](ADR-021-pc-mixer-in-echtzeit.md) | PC-Prototyp als Echtzeit-DJ-Mixer, keine Landingpage | angenommen |
 | [ADR-022](ADR-022-keylock-und-tempo-als-einstellung.md) | Keylock jetzt, Tempo-Grenze als Einstellung, Taktraster aus dem Tempo | angenommen |
+| [ADR-023](ADR-023-eine-engine-fuer-alles.md) | Eine Engine für alles (auch der normale Modus) | vorgeschlagen (löst ADR-017 Option 3 ein) |
+| [ADR-024](ADR-024-vorausbacken-auf-android.md) | Vorausbacken auf Android statt Echtzeit-Signalgraph | vorgeschlagen |
+| [ADR-025](ADR-025-pcm-cache.md) | PCM-Cache auf der Platte statt Songs im RAM | vorgeschlagen |
+| [ADR-026](ADR-026-analyse-import-vom-pc.md) | Analyse und Stems vom PC importieren, nicht auf dem Handy rechnen | vorgeschlagen |
 
 Die Nummer 008 bleibt vergeben und wird nicht neu belegt.
 

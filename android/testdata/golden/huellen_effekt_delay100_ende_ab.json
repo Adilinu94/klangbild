@@ -1,0 +1,113 @@
+{
+  "expected": {
+    "a_hoch": null,
+    "a_hp": null,
+    "a_mitte": null,
+    "a_send": {
+      "count": 1000,
+      "dtype": "float32-le",
+      "file": "huellen_effekt_hall_ende_ab_expected_a_send.f32",
+      "offset": 0,
+      "sha256": "fbe1d8175929ad9c4dcfb0fc99780e0d0dd7df1e237110384b616c868f996bff",
+      "shape": [
+        1000
+      ]
+    },
+    "a_tief": {
+      "count": 1000,
+      "dtype": "float32-le",
+      "file": "huellen_lautstaerke_nahtlos_expected_a_tief.f32",
+      "offset": 0,
+      "sha256": "d5e83ba7c2b9448b176acc9e8c565a47981ce99499fb7eeeab65b4d5e883d15d",
+      "shape": [
+        1000
+      ]
+    },
+    "a_tp": null,
+    "a_vol": {
+      "count": 1000,
+      "dtype": "float32-le",
+      "file": "huellen_lautstaerke_nahtlos_expected_a_vol.f32",
+      "offset": 0,
+      "sha256": "55fd6c537b8d51a5dbdb65cd3a3cecc6898cf83bff27bf490cfb35891e42d414",
+      "shape": [
+        1000
+      ]
+    },
+    "b_hoch": null,
+    "b_hp": null,
+    "b_mitte": null,
+    "b_rueck": null,
+    "b_send": null,
+    "b_tief": {
+      "count": 1000,
+      "dtype": "float32-le",
+      "file": "huellen_lautstaerke_nahtlos_expected_b_tief.f32",
+      "offset": 0,
+      "sha256": "1b99769aba59c9aefd50bc9fbad76164ba9436c168ab769767c6ad65c99648b9",
+      "shape": [
+        1000
+      ]
+    },
+    "b_tp": null,
+    "b_vol": {
+      "count": 1000,
+      "dtype": "float32-le",
+      "file": "huellen_lautstaerke_nahtlos_expected_b_vol.f32",
+      "offset": 0,
+      "sha256": "e81ff3ce14e1769d9ac3716d27f574bc16a2a1f9910f05109239570bf369a9f3",
+      "shape": [
+        1000
+      ]
+    },
+    "nass_ab": {
+      "count": 1000,
+      "dtype": "float32-le",
+      "file": "huellen_lautstaerke_hart_aus_expected_a_vol.f32",
+      "offset": 0,
+      "sha256": "9e504c05d5c0da9e17f53535dd25045c6b2ed03f54a9b32ecd2ddb6bef1b1acf",
+      "shape": [
+        1000
+      ]
+    }
+  },
+  "format_version": 1,
+  "function": "uebergang._huellen",
+  "inputs": {
+    "e": {
+      "art": "eigen",
+      "ausstieg": "outro",
+      "bass_takt": -1,
+      "effekt": "delay100_ende_ab",
+      "effekt_ein": "keiner",
+      "einstieg": "intro",
+      "eq": "bass_mitte",
+      "experimente": "klassisch",
+      "filter": "keiner",
+      "gesang_takt": -1,
+      "harmonie": "locker",
+      "keylock": true,
+      "lautheit": true,
+      "lautstaerke": "nahtlos",
+      "loop": "keiner",
+      "loop_ein": 0,
+      "loop_ein_mal": 0,
+      "loop_start": -1,
+      "max_bpm": 5.0,
+      "modus": "ausgewogen",
+      "spielanteil": "lang",
+      "stems": true,
+      "stems_vorrat": "alle",
+      "takte": 16,
+      "tempo_modus": "rampe",
+      "trick": "keiner",
+      "vor_ende_takte": 16,
+      "weiter_ab": "phrase",
+      "weiter_takte": 8
+    },
+    "kante": 0.001,
+    "n": 1000,
+    "takte": 16
+  },
+  "tolerance": "values"
+}

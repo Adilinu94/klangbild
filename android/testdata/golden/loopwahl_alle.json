@@ -1,0 +1,36 @@
+{
+  "expected": [
+    0,
+    4,
+    0.0
+  ],
+  "format_version": 1,
+  "function": "uebergang.loop_waehlen",
+  "inputs": {
+    "a": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "meiden": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "takt_n": [
+      0,
+      88200,
+      176400,
+      264600,
+      352800
+    ]
+  },
+  "tolerance": "values"
+}

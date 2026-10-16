@@ -1,0 +1,44 @@
+{
+  "expected": [
+    {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "band_2000_expected_0.f32",
+      "offset": 0,
+      "sha256": "0a9ae24c0ca17aa5ef62dbddc50afc05f72ce226bf998b59aa9cbada54f0f396",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "band_2000_expected_1.f32",
+      "offset": 0,
+      "sha256": "57d2a31e15dbdfc5a879141999dbe4c09901891651dd79e85e5bd778a170e5b1",
+      "shape": [
+        352800,
+        2
+      ]
+    }
+  ],
+  "format_version": 1,
+  "function": "mix.band_teilen",
+  "inputs": {
+    "rate": 44100,
+    "signal": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    },
+    "trenn_hz": 2000
+  },
+  "tolerance": "dsp"
+}

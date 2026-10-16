@@ -1,0 +1,41 @@
+{
+  "expected": {
+    "art": "auto",
+    "ausstieg": "outro",
+    "bass_takt": -1,
+    "effekt": "keiner",
+    "effekt_ein": "keiner",
+    "einstieg": "intro",
+    "eq": "bass_mitte",
+    "experimente": "klassisch",
+    "filter": "tp_ein_hp_aus",
+    "gesang_takt": -1,
+    "harmonie": "locker",
+    "keylock": true,
+    "lautheit": true,
+    "lautstaerke": "nahtlos",
+    "loop": "keiner",
+    "loop_ein": 0,
+    "loop_ein_mal": 0,
+    "loop_start": -1,
+    "max_bpm": 5.0,
+    "modus": "ausgewogen",
+    "spielanteil": "lang",
+    "stems": true,
+    "stems_vorrat": "alle",
+    "takte": 16,
+    "tempo_modus": "rampe",
+    "trick": "keiner",
+    "vor_ende_takte": 16,
+    "weiter_ab": "phrase",
+    "weiter_takte": 8
+  },
+  "format_version": 1,
+  "function": "einstellungen.aus_dict",
+  "inputs": {
+    "roh": {
+      "filter": "tp_ein_hp_aus"
+    }
+  },
+  "tolerance": "values"
+}

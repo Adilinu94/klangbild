@@ -1,0 +1,37 @@
+{
+  "expected": {
+    "novelty": [
+      [
+        0.0
+      ],
+      [
+        0.0
+      ]
+    ],
+    "rms": [
+      [
+        0.5
+      ],
+      [
+        -38.947478804145014
+      ]
+    ],
+    "sections": []
+  },
+  "format_version": 1,
+  "function": "energy",
+  "inputs": {
+    "rate": 22050,
+    "signal": {
+      "count": 221,
+      "dtype": "float32-le",
+      "file": "kurz_mono.f32",
+      "offset": 0,
+      "sha256": "674f83a17daac596443c9a4d6a56210fc0cef443e46364bba3abd48835044b6a",
+      "shape": [
+        221
+      ]
+    }
+  },
+  "tolerance": "values"
+}

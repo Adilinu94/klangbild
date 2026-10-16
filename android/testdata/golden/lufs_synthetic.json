@@ -1,0 +1,23 @@
+{
+  "expected": {
+    "integrated": -16.58421263259221,
+    "true_peak": -5.453798086455129
+  },
+  "format_version": 1,
+  "function": "lufs",
+  "inputs": {
+    "rate": 44100,
+    "signal": {
+      "count": 705600,
+      "dtype": "float32-le",
+      "file": "signal_a.f32",
+      "offset": 0,
+      "sha256": "061151e92702dd07612f6f8747d292bab4e26d1a53fa8a229f920e80c4084272",
+      "shape": [
+        352800,
+        2
+      ]
+    }
+  },
+  "tolerance": "values"
+}

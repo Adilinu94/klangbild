@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "bereich": {
+      "container": "mp3",
+      "ende": 262158,
+      "start": 14
+    },
+    "hash": "196a132352785c2eb7569fb199fda6860650767209bf3e914e619823db87d4a7"
+  },
+  "format_version": 1,
+  "function": "hashutil",
+  "inputs": {
+    "file": "hash_mp3_id3.mp3"
+  },
+  "tolerance": "values"
+}
