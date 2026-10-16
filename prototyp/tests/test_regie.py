@@ -125,7 +125,7 @@ def test_abrupt_nur_in_einen_drop():
 
 def test_ohne_tempo_echo_und_abwechslung():
     pa, pb = _profil(SONG), _profil(SONG)
-    einst = Einstellungen(modus="ausgewogen")
+    einst = Einstellungen(modus="ausgewogen", max_bpm=0.0)   # kein Tempo-Angleich, auch kein Vorlauf
     ohne = regie.planen(None, pa, None, pb, einst, 0.0, sync=False, harmonisch=True)[0]
     assert ohne.einst.art == "echo"
     erst = regie.planen(None, pa, None, pb, einst, 0.0, sync=True, harmonisch=True, stems_da=True)[0]
@@ -395,6 +395,20 @@ def test_experimente_drop_tricks_nur_mit_drop_danach_und_nicht_klassisch():
     assert name in regie.DROP_TRICKS and felder["lautstaerke"] == "drop" and felder["trick"] != "keiner"
     assert wahl(mit_drop, "klassisch")[0] not in regie.DROP_TRICKS
     assert wahl(_profil([("intro", 4), ("haupt", 6)]), "wild")[0] not in regie.DROP_TRICKS
+    # Runde 11: ein "Drop" ohne Sprung in Pegel/Bass/Drums (Drum-Aufbau, Bass kommt spaeter) ist kein Ziel
+    flach = _profil([("intro", 2), ("drop", 4), ("haupt", 4)])
+    for x in [flach.gesamt] + list(flach.stems.values()):
+        x[12:20] = x[20]
+    assert regie._einsatz(flach, 16) < regie.DROP_EINSATZ <= regie._einsatz(mit_drop, 16)
+    assert wahl(flach, "wild")[0] not in regie.DROP_TRICKS
+
+
+def test_drop_cuts_nur_bei_gleich_starken_drops():
+    """Runde 12: Drop-Cuts zwischen unterschiedlich starken Drops 3x Note 2."""
+    p = _profil([("intro", 2), ("drop", 4), ("haupt", 4)])
+    laut = _profil([("intro", 2), ("drop", 4), ("haupt", 4)])
+    laut.gesamt[16:24] += 3.0
+    assert regie._drop_gleich(p, p, 16, 16) and not regie._drop_gleich(p, laut, 16, 16)
 
 
 def test_double_drop_legt_die_drops_auf_denselben_takt():

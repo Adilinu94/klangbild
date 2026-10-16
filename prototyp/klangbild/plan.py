@@ -263,8 +263,8 @@ def rangliste(
         return []
     basis = aktuell.bpm or 0.0
 
-    def abstand(k: Track) -> float:
-        return abs((k.bpm or basis) - basis)
+    def abstand(k: Track) -> float:   # auch Doppel-/Halbtempo (85 <-> 170) mischt (BAUPLAN-UEBERGAENGE §5.3)
+        return min(abs((k.bpm or basis) * f - basis) for f in (1.0, 2.0, 0.5))
 
     pool = [k for k in kandidaten if abstand(k) <= max_bpm + 1e-9]
     if not pool:
@@ -293,13 +293,98 @@ def naechster(
     return beste[0] if beste else None
 
 
+# --- Set planen statt Paar (BAUPLAN-UEBERGAENGE §8) -----------------------------------------------------
+
+BOGEN_DB = 6.0        # Strafe je 6 dB Abstand zur Energie-Zielkurve
+REZEPT_STRAFE = 1.0   # zweimal hintereinander dasselbe Rezept
+
+
+def bogen_ziel(energien: list[float], n: int, bogen: str) -> list[float | None]:
+    """Energie-Ziel je Position: gleichmaessig (Median), aufbauen (10. -> 90. Perzentil), welle (auf und ab)."""
+    import numpy as np
+
+    if not energien:
+        return [None] * n
+    lo, mitte, hi = (float(x) for x in np.percentile(energien, [10, 50, 90]))
+    if bogen == "aufbauen":
+        return [lo + (hi - lo) * k / max(1, n - 1) for k in range(n)]
+    if bogen == "welle":   # eine Welle je ~8 Titel
+        return [mitte + 0.5 * (hi - lo) * float(np.sin(2 * np.pi * k / 8)) for k in range(n)]
+    return [mitte] * n
+
+
+def _set_schritt(index: dict, a: int, b: int, vor: int | None, pos: int, ziel, note, rezept) -> float:
+    """Kosten von a -> b an Position pos (b steht dort): -Note + Energiebogen + gleiches Rezept wie davor."""
+    k = -note(a, b)
+    e, z = index[b].energie_db, ziel[pos]
+    if e is not None and z is not None:
+        k += abs(e - z) / BOGEN_DB
+    if rezept is not None and vor is not None:
+        r = rezept(a, b)
+        if r is not None and r == rezept(vor, a):
+            k += REZEPT_STRAFE
+    return k
+
+
+def _set_kosten(folge: list[int], index: dict, ziel, note, rezept, von: int = 1, bis: int | None = None) -> float:
+    bis = len(folge) - 1 if bis is None else min(bis, len(folge) - 1)
+    return sum(_set_schritt(index, folge[k - 1], folge[k], folge[k - 2] if k >= 2 else None, k, ziel, note, rezept)
+               for k in range(max(1, von), bis + 1))
+
+
+def _zwei_opt(folge: list[int], index: dict, ziel, note, rezept, fenster: int = 8, zeit_s: float = 3.0) -> list[int]:
+    """2-opt auf kurzen Abschnitten (bis `fenster` Titel umdrehen; der Start bleibt): je Umkehr aendern sich nur
+    die Kosten im Abschnitt und an seinen Raendern. Stoppt ohne Verbesserung oder nach `zeit_s`."""
+    import time
+
+    folge, beginn, besser = list(folge), time.perf_counter(), True
+    while besser and time.perf_counter() - beginn < zeit_s:
+        besser = False
+        for i in range(1, len(folge) - 1):
+            for j in range(i + 1, min(len(folge), i + fenster)):
+                neu = folge[:i] + folge[i:j + 1][::-1] + folge[j + 1:]
+                if _set_kosten(neu, index, ziel, note, rezept, i, j + 2) < \
+                        _set_kosten(folge, index, ziel, note, rezept, i, j + 2) - 1e-9:
+                    folge, besser = neu, True
+    return folge
+
+
+def set_planen(tracks: list[Track], start_id: int, max_bpm: float, harmonie: str, paarnote, rezept=None,
+               bogen: str = "gleichmaessig") -> list[int]:
+    """Reihenfolge nach erwarteten Uebergangsnoten (`paarnote(a, b) -> 1..5 | None`, paarnoten.py): gierig den
+    naechsten mit den geringsten Kosten, dann 2-opt. Fehlt eine Paarnote, schaetzt sie Tempo/Tonart/Energie."""
+    index = {t.id: t for t in tracks}
+    ziel = bogen_ziel([t.energie_db for t in tracks if t.energie_db is not None], len(tracks), bogen)
+
+    def note(a: int, b: int) -> float:
+        x = paarnote(a, b)
+        if x is not None:
+            return float(x)
+        ta, tb = index[a], index[b]
+        if min(abs((tb.bpm or 0) * f - (ta.bpm or 0)) for f in (1.0, 2.0, 0.5)) > max_bpm + 1e-9:
+            return 0.5   # ausserhalb des Tempo-Rahmens: nur Echo/Schnitt
+        harm = harmonie_note(ta.camelot, tb.camelot)[0] if harmonie != "aus" else 0.5
+        energie = energie_note(ta.energie_db, tb.energie_db, config.PLANER_ENERGIE_MAX_SPRUNG_DB)[0]
+        return 1.0 + 4.0 * (0.6 * harm + 0.4 * energie) * 0.75   # Schaetzung bleibt unter echten Paarnoten
+
+    folge, uebrig = [start_id], set(index) - {start_id}
+    while uebrig:
+        vor = folge[-2] if len(folge) >= 2 else None
+        b = min(sorted(uebrig), key=lambda x: _set_schritt(index, folge[-1], x, vor, len(folge), ziel, note, rezept))
+        folge.append(b)
+        uebrig.remove(b)
+    return _zwei_opt(folge, index, ziel, note, rezept)
+
+
 def sortiere_alle(
     tracks: list[Track], max_bpm: float, harmonie: str = "locker", start_id: int | None = None,
-    bonus=None,
+    bonus=None, paarnote=None, rezept=None, bogen: str = "gleichmaessig",
 ) -> list[int]:
     """Alle Tracks in eine Reihenfolge bringen (gierig, jeder Song einmal).
 
     Start: `start_id` oder der groesste Tempo-Cluster (wie autodj.lade_tracks).
+    Mit `paarnote` (BAUPLAN-UEBERGAENGE §8) nach erwarteten Uebergangsnoten, Energiebogen und Abwechslung
+    der Rezepte (set_planen), sonst nach Tempo/Tonart/Energie (rangliste).
     shortcut: O(n^2) gierig; bei ~8.000 Titeln einige Minuten. Upgrade: Cluster
     nach Tempo vorsortieren und nur Nachbarn vergleichen.
     """
@@ -311,6 +396,8 @@ def sortiere_alle(
 
         modal = Counter(round(t.bpm or 0) for t in tracks).most_common(1)[0][0]
         start_id = next(t.id for t in tracks if round(t.bpm or 0) == modal)
+    if paarnote is not None:
+        return set_planen(tracks, start_id, max_bpm, harmonie, paarnote, rezept, bogen)
     aktuell = index[start_id]
     uebrig = [t for t in tracks if t.id != start_id]
     folge = [start_id]

@@ -399,7 +399,7 @@ def _baender(x: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def _echo(a: np.ndarray, schlag_n: int) -> np.ndarray:
-    """A spielt einen Schlag, dann Echo-Fahne (1 Schlag Delay, Feedback 0,55)."""
+    """A spielt einen Schlag, dann Echo-Fahne (1 Schlag Delay, Feedback 0,7: klingt ueber ~4 Takte aus)."""
     n = len(a)
     huelle = np.zeros((n, 1), np.float32)
     flanke = max(1, int(0.01 * RATE))
@@ -407,11 +407,11 @@ def _echo(a: np.ndarray, schlag_n: int) -> np.ndarray:
     huelle[schlag_n:schlag_n + flanke, 0] = np.linspace(1.0, 0.0, min(flanke, max(0, n - schlag_n)))
     trocken = a * huelle
     aus = trocken.copy()
-    for k in range(1, 9):
+    for k in range(1, 17):
         d = k * schlag_n
         if d >= n:
             break
-        aus[d:] += trocken[:n - d] * (0.55 ** k)
+        aus[d:] += trocken[:n - d] * (0.7 ** k)
     return aus
 
 
@@ -431,7 +431,7 @@ def mischen(art: str, a: np.ndarray, b: np.ndarray, takte: int) -> np.ndarray:
         return aus
     if art == "echo":
         takt_n = n // max(1, takte)
-        b_ein = _rampe(n, takt_n / n, (takt_n + 0.01 * RATE) / n) if takt_n < n else _rampe(n, 0, 1)
+        b_ein = _rampe(n, takt_n / n, min(1.0, 2 * takt_n / n)) if takt_n < n else _rampe(n, 0, 1)   # B ueber 1 Takt
         return _echo(a, max(1, takt_n // 4)) + b * b_ein
     if art == "schnitt":
         kurz = min(1.0, 0.01 * RATE / max(1, n))
@@ -495,7 +495,7 @@ def _huellen(e: Einstellungen, takte: int, n: int, kante: float) -> dict:
         g = e.gesang_takt
         b_an = np.zeros_like(x)
         for t0 in range(g, takte):
-            if (t0 - g) % 2 == 1 or t0 >= takte - 2:
+            if (t0 - g) // 2 % 2 == 1 or t0 >= takte - 2:
                 b_an = np.maximum(b_an, ein(t0 * takt, t0 * takt + k) * aus((t0 + 1) * takt - k, (t0 + 1) * takt)
                                   if t0 < takte - 1 else ein(t0 * takt, t0 * takt + k))
         h["a_vol"], h["b_vol"] = 1 - b_an, b_an
@@ -860,8 +860,8 @@ def _spinback(a: np.ndarray, n: int) -> np.ndarray:
     s, t = len(a) - n, np.arange(n) / n
     v = np.where(t < 0.08, 1 - 5 * t / 0.08, -4 * ((1 - t) / 0.92) ** 2)   # +1 -> -4 -> 0
     pos = np.clip(s + np.cumsum(v), 0, len(a) - 1)
-    aus = a.copy()
-    aus[s:] = _abspielen(a, pos) * np.sqrt(1 - t)[:, None].astype(np.float32)
+    aus = a.copy()   # Runde 11: "Backspin lauter" - haelt den Pegel laenger, statt gleich abzufallen
+    aus[s:] = _abspielen(a, pos) * (1.2 * (1 - t) ** 0.3)[:, None].astype(np.float32)
     return aus
 
 
@@ -910,14 +910,15 @@ def _gate(a: np.ndarray, takt_n: np.ndarray) -> np.ndarray:
 
 
 def _crush(a: np.ndarray, tiefe: np.ndarray) -> np.ndarray:
-    """Bitcrusher: Aufloesung 16 -> 4 Bit und Abtastung bis 1/16 (Sample-and-Hold), Anteil waechst mit `tiefe`."""
-    stufe = 1 + np.round(15 * tiefe).astype(int)              # Halten ueber 1..16 Samples
+    """Bitcrusher: Aufloesung 16 -> 7 Bit und Abtastung bis 1/8 (Sample-and-Hold), Anteil waechst mit `tiefe`
+    bis 70 % (Runde 12: "etwas zu stark")."""
+    stufe = 1 + np.round(7 * tiefe).astype(int)               # Halten ueber 1..8 Samples
     idx = np.arange(len(a))
     gehalten = a[idx - idx % np.maximum(1, stufe)]
-    bits = 16 - 12 * tiefe
+    bits = 16 - 9 * tiefe
     q = (2.0 ** (bits - 1))[:, None]
     roh = np.round(gehalten * q) / q
-    w = tiefe[:, None]
+    w = 0.7 * tiefe[:, None]
     return (a * (1 - w) + roh * w).astype(np.float32)
 
 
@@ -977,7 +978,7 @@ def mischen_eigen(a: np.ndarray, b: np.ndarray, e: Einstellungen, takt_n: np.nda
     elif e.trick == "bremse":
         a = _bremse(a, int(2 * schlag_n))
     elif e.trick == "spinback":
-        a = _spinback(a, int(2 * schlag_n))
+        a = _spinback(a, int(3 * schlag_n))
     elif e.trick == "phaser":
         a = _phaser(a, np.sqrt(np.arange(n) / n), schlag_n)
     elif e.trick == "gate":
@@ -1078,8 +1079,8 @@ def kurven(art: str, takte: int, e: Einstellungen | None = None) -> dict[str, di
     elif art == "echo":
         takt, schlag = 1 / max(1, takte), 1 / max(1, takte) / 4
         a["lautstaerke"] = (x < schlag).astype(float)
-        a["echo"] = np.where(x < schlag, 0.0, 0.55 ** ((x - schlag) / schlag))
-        b["lautstaerke"] = (x >= takt).astype(float)
+        a["echo"] = np.where(x < schlag, 0.0, 0.7 ** ((x - schlag) / schlag))
+        b["lautstaerke"] = np.clip((x - takt) / takt, 0.0, 1.0)
     elif art == "schnitt":
         a["lautstaerke"], b["lautstaerke"] = np.zeros(n), np.ones(n)
     else:   # crossfade
@@ -1131,6 +1132,14 @@ def mischen_stems(art: str, a: dict[str, np.ndarray], b: dict[str, np.ndarray], 
         nass = _nass("echo75", a["vocals"][:n] * send[:, None], n / takte / 4)
         aus += nass[:n]
         fahne = nass[n:]
+    elif art == "gesang_zuerst" and 0 < gesang_takt <= takte:
+        # Runde 13, Fall 23: "Man hoert Track B erst nach dem Uebergang" - ab der Haelfte der Gesangsphase
+        # laufen B's Drums hochpass-gefiltert (> 2 kHz: Hi-Hats, Shaker) bei -12 dB mit, ab der Uebergabe voll
+        fahne = np.zeros((0, 2), np.float32)
+        g, t = gesang_takt / takte, 1 / max(1, takte)
+        hats = mix.band_teilen(b["drums"][:n], RATE, 2000.0)[1]
+        ein = _rampe(n, g / 2, g / 2 + t) * np.sqrt(1 - _rampe(n, *plan["drums"][1]) ** 2)
+        aus += hats * ein * np.float32(10 ** (-12 / 20))
     elif art == "double_drop" and echo:
         t = 1 / max(1, takte)
         x = np.arange(n) / n
@@ -1179,6 +1188,11 @@ def _phrase_bei(werte: np.ndarray, t: float) -> int:
     """Phrasenanfang (Index) am naechsten an Zeit t."""
     kandidaten = np.arange(0, len(werte), PHRASE)
     return int(kandidaten[np.argmin(np.abs(werte[kandidaten] - t))])
+
+
+# Die Partnerwahl misst am Song-BPM; das lokale Tempo an der Stelle streut darum (Runde 12: 5,0 BPM Abstand im
+# Song, lokal knapp darueber -> Echo-Out/Schnitt statt Blende). So viel BPM darf es lokal mehr sein.
+TEMPO_SPIEL = 0.5
 
 
 def _periode(t: np.ndarray, i: int, halb: int = 8) -> float:
@@ -1280,7 +1294,14 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
 
     p_a, p_b = _periode(abar, i0), _periode(bbar, j0)
     bpm_a, bpm_b = 240.0 / p_a, 240.0 / p_b
-    sync = abs(bpm_a - bpm_b) <= max(e.max_bpm, 0.05)
+    sync = abs(bpm_a - bpm_b) <= max(e.max_bpm, 0.05) + TEMPO_SPIEL
+    vor = 0   # §5.2 Vorlauf: A gleitet vor der Blende in vor Takten auf B's Tempo, die Blende laeuft dann synchron
+    if not sync and e.tempo_modus == "vorlauf" and not weiter and e.keylock:
+        from .regie import VORLAUF_MAX, VORLAUF_TAKTE
+
+        if abs(p_a / p_b - 1.0) <= VORLAUF_MAX:
+            vor = next((v for v in (VORLAUF_TAKTE, VORLAUF_TAKTE // 2) if i0 >= v and abar[i0 - v] >= ab_s - 1e-3), 0)
+            sync = vor > 0
     rueck = None   # Intro-Loop von B: virtuelle -> Originalzeit
     b_loop = sync and e.art == "eigen" and e.loop_ein > 0 and e.loop_ein_mal > 0 and j0 + e.loop_ein < len(bbar)
     if b_loop:
@@ -1322,7 +1343,7 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
         takte = min(takte, 16)   # lange Gesangsuebergaben gehen nur mit Stems
     if sync and e.tempo_modus == "b_an_a":
         perioden = np.full(takte, p_a)
-    elif sync and e.tempo_modus == "a_an_b":
+    elif sync and e.tempo_modus in ("a_an_b", "vorlauf"):
         perioden = np.full(takte, p_b)
     elif sync:
         perioden = p_a + (p_b - p_a) * (np.arange(takte) + 0.5) / takte
@@ -1335,9 +1356,15 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
     j1 = j0 + takte
     rest_orig = np.concatenate([bbar[j1:][bbar[j1:] < b_ende], [b_ende]])
     b_an_a = sync and e.tempo_modus == "b_an_a"
+    # Vorlauf: Periode gleitet linear von A nach B; A in EINEM Zug mit der Blende gedehnt (keine Naht)
+    t_vor = abar[i0 - vor]
+    ziel_vor = t_vor + np.concatenate([[0.0], np.cumsum(p_a + (p_b - p_a) * (np.arange(vor) + 0.5) / max(1, vor))])
+    n_vor = int(round((ziel_vor[-1] - t_vor) * RATE)) if vor else 0
+
     # A geht am Blendenbeginn nahtlos aus dem Original in die gedehnte Fassung ueber.
     def a_dehnen():
-        return warp(a.puffer, abar[i0:i0 + takte + 1], ziel, e.keylock, rand_vorn=True)
+        return warp(a.puffer, abar[i0 - vor:i0 + takte + 1],
+                    np.concatenate([ziel_vor[:-1], ziel_vor[-1] + ziel - t0]), e.keylock, rand_vorn=True)
 
     if b_an_a:
         # B bleibt im Takt von A: Blende + Rest in EINEM Zug gedehnt, ohne Naht dazwischen.
@@ -1353,6 +1380,7 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
         a_seg = a_dehnen()
         start = int(round(bbar[j0] * RATE))
         b_seg = b_audio[start:start + len(a_seg)]
+    a_vor, a_seg = a_seg[:n_vor], a_seg[n_vor:]
     b_seg = mix._auffuellen(b_seg, len(a_seg))
     nachlauf = np.zeros((0, 2), np.float32)
     if nutze_stems:
@@ -1392,6 +1420,8 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
     else:
         blende = mischen(art, a_seg, b_seg, takte)
 
+    if vor:   # der Vorlauf von A steht vor der Blende im Puffer von B (Umschalten schon am Vorlauf-Beginn)
+        blende = np.concatenate([a_vor, blende])
     if not sync:
         # B lief in der Blende ungedehnt ab bbar[j0]: einfach nahtlos weiterspielen.
         start = int(round(bbar[j0] * RATE))
@@ -1401,7 +1431,7 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
     else:
         puffer = np.concatenate([blende, rest]).astype(np.float32)
         orig = np.concatenate([bbar[j0:j1], rest_orig])
-        buf = np.concatenate([ziel[:-1] - t0, rest_ziel])
+        buf = np.concatenate([ziel[:-1] - t0, rest_ziel]) + n_vor / RATE
     n_fahne = min(len(nachlauf), len(puffer) - len(blende))
     puffer[len(blende):len(blende) + n_fahne] += nachlauf[:n_fahne]
     # Gedehnte Reste (b_an_a) koennen ueber 0 dBFS gehen, das Original nicht (True Peak <= -1 dBTP).
@@ -1412,15 +1442,21 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
     orig, buf = orig[sortiert], buf[sortiert]
     _, eindeutig = np.unique(orig, return_index=True)
     spur = Spur(b, puffer, orig[eindeutig], buf[eindeutig])
-    a_start = a.zu_original(t0)
+    a_start = a.zu_original(t_vor)
+    gesamt = laenge + n_vor / RATE
     info = {"art": art, "takte": takte, "sync": sync, "bpm_a": round(bpm_a, 2),
             "bpm_b": round(bpm_b, 2), "modus": e.tempo_modus if sync else "frei",
             "stems": nutze_stems, **({"hinweis": stem_grund} if stem_grund else {}),
             # fuer die Deck-Ansicht: A bleibt bis zum Blendenende sichtbar
-            "blende_s": round(float(laenge), 3), "a_orig_start": round(a_start, 3),
-            "a_orig_pro_s": round((a.zu_original(ziel[-1]) - a_start) / laenge, 5) if laenge > 0 else 1.0,
+            "blende_s": round(float(gesamt), 3), "a_orig_start": round(a_start, 3),
+            "b_orig_start": round(float(rueck(bbar[j0:j0 + 1])[0] if rueck is not None else bbar[j0]), 3),
+            "a_orig_pro_s": round((a.zu_original(ziel[-1]) - a_start) / gesamt, 5) if gesamt > 0 else 1.0,
+            **({"vorlauf_s": round(n_vor / RATE, 3), "vorlauf_takte": vor} if vor else {}),
+            # Taktanfaenge im Puffer von B (s), 4 Takte ueber die Blende hinaus (Kick-Kontrolle, regie.pruefen_drop)
+            "raster_s": [round(float(x), 4) for x in np.concatenate(
+                [ziel - t0, ziel[-1] - t0 + p_b * np.arange(1, 5)]) + n_vor / RATE],
             "kurven": kurven(art, takte, e),
             "a_loop": loop_info(e, ziel - t0) if art == "eigen" else [],
             **({"loop_wahl": loop_wahl} if loop_wahl else {}),
             **({"b_intro_loop": {"takte": e.loop_ein, "mal": e.loop_ein_mal}} if b_loop else {})}
-    return Gebacken(int(round(t0 * RATE)), spur, info)
+    return Gebacken(int(round(t_vor * RATE)), spur, info)

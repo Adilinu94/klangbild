@@ -20,6 +20,8 @@
   .karte { background: var(--fl); border: 1px solid var(--linie); border-radius: 8px; padding: 20px; }
   .paar { font-size: 14px; color: var(--grau); margin: 6px 0 16px; word-break: break-word; }
   .paar b { color: var(--text2); font-weight: 500; }
+  .einst { font: 12px/1.6 ui-monospace, Consolas, monospace; color: var(--grau); margin: -8px 0 16px; }
+  .einst b { color: var(--text2); font-weight: 500; } .einst .grund { color: var(--text2); margin-bottom: 4px; }
   .leiste { position: relative; height: 44px; background: var(--fl2); border-radius: 4px; cursor: pointer; overflow: hidden; }
   .leiste .blende { position: absolute; top: 0; bottom: 0; background: rgba(215, 25, 33, .28); border-left: 1px solid var(--rot); border-right: 1px solid var(--rot); }
   .leiste .kopfpos { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
@@ -63,6 +65,7 @@
   <div class="karte" id="karte">
     <p class="label" id="fallname">–</p>
     <p class="paar" id="paar"></p>
+    <div class="einst" id="einst"></div>
     <div class="leiste" id="leiste" role="slider" aria-label="Position im Ausschnitt" tabindex="0">
       <div class="blende" id="blende"></div><div class="kopfpos" id="kopfpos"></div>
     </div>
@@ -103,6 +106,24 @@ const NOTEN = [[1, "Unfall"], [2, "schlecht"], [3, "okay"], [4, "gut"], [5, "wie
 const audio = new Audio();
 let zustand = null, fall = null, nr = null, verlauf = [], note = null, stichworte = new Set(), gehoert = 0, letzteZeit = 0;
 const zeit = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+// Was die Regie fuer diesen Fall eingestellt hat (Standardwerte "keiner"/-1/0 weggelassen)
+const FELDER = { takte: "Takte", art: "Art", lautstaerke: "Lautstärke", eq: "EQ", bass_takt: "Bass-Tausch Takt",
+  filter: "Filter", effekt: "Effekt A", effekt_ein: "Effekt B", loop: "Loop A", loop_start: "Loop ab Takt",
+  loop_ein: "Intro-Loop B (Takte)", loop_ein_mal: "… Wiederholungen", trick: "Trick", gesang_takt: "Gesang/Drop-Takt",
+  tempo_modus: "Tempo", keylock: "Keylock" };
+function einstText(e, esc) {
+  const w = (v) => esc(String(v).replace(/_/g, " "));
+  const kopf = [["Gewählt von", e.wahl], ["Rezept", e.rezept], ["Plan", e.plan], ["Stil", e.stil], ["Spielanteil", e.spielanteil],
+    ["Experimente", e.experimente], ["WEITER", e.weiter ? "ja" : null], ["Stems", e.stems ? "ja" : "nein"],
+    ["Tempo angeglichen", e.sync ? "ja" : "nein"], ["A ab Takt", e.aus_takt], ["B ab Takt", e.ein_takt],
+    ["Blende", e.blende_s != null ? `${e.blende_s.toFixed(1)} s` : null], ["Selbstkontrolle", e.pruefung]];
+  const teile = kopf.filter(([, v]) => v != null && v !== "")
+    .concat(Object.entries(e.einst || {}).filter(([k, v]) => !["keiner", -1, 0, "rampe", true].includes(v) || k === "takte")
+      .map(([k, v]) => [FELDER[k] || k, v]));
+  return (e.grund ? `<div class="grund">${esc(e.grund)}</div>` : "")
+    + (e.gemma ? `<div class="grund">Gemma: ${esc(e.gemma)}</div>` : "")
+    + teile.map(([k, v]) => `${esc(k)}: <b>${w(v)}</b>`).join(" · ");
+}
 const post = (url, daten) => fetch(url, { method: "POST", body: JSON.stringify(daten) }).then((r) => r.json());
 
 $("noten").innerHTML = NOTEN.map(([n, t]) =>
@@ -142,7 +163,9 @@ async function laden(ziel, merken = true) {
   if (!f.bereit) { $("paar").textContent = ""; $("status").textContent = `[WIRD GEBACKEN …] ${zustand.backt || ""}`; return; }
   fall = await (await fetch(`/api/fall/${ziel}`)).json();
   const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  $("paar").innerHTML = `<b>${esc(fall.a.titel)}</b> → <b>${esc(fall.b.titel)}</b>`;
+  $("paar").innerHTML = `<b>${esc(fall.a.titel)}</b> (${fall.a.bpm} BPM, ${fall.a.camelot}) → `
+    + `<b>${esc(fall.b.titel)}</b> (${fall.b.bpm} BPM, ${fall.b.camelot})`;
+  $("einst").innerHTML = einstText(fall.einst || {}, esc);
   $("blende").style.left = `${100 * fall.blende_von_s / fall.dauer_s}%`;
   $("blende").style.width = `${100 * (fall.blende_bis_s - fall.blende_von_s) / fall.dauer_s}%`;
   $("dauer").textContent = zeit(fall.dauer_s);

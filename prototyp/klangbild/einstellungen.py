@@ -46,10 +46,11 @@ AUSWAHL = {
     "experimente": EXPERIMENTE,
     "ausstieg": ("outro", "phrase", "vor_ende"),
     "einstieg": ("intro", "drop"),
-    "tempo_modus": ("b_an_a", "a_an_b", "rampe"),
+    "tempo_modus": ("b_an_a", "a_an_b", "rampe", "vorlauf"),   # vorlauf: A gleitet vor der Blende auf B
     "harmonie": ("streng", "locker", "aus"),
     "weiter_ab": ("takt", "phrase"),
     "stems_vorrat": ("aus", "upload", "alle"),
+    "set_bogen": ("gleichmaessig", "aufbauen", "welle"),   # Energiebogen der sortierten Reihenfolge (§8)
 }
 TAKTE = (1, 2, 4, 8, 16, 24, 32)
 GRENZEN = {"max_bpm": (0.0, 10.0), "vor_ende_takte": (1, 64), "bass_takt": (-1, 32),
@@ -89,6 +90,8 @@ class Einstellungen:
     loop_ein: int = 0            # Intro-Loop von B: Laenge in Takten (0 = aus; setzt die Regie)
     loop_ein_mal: int = 0        # ... so oft zusaetzlich wiederholt
     gesang_takt: int = -1        # Stem-Gesangsuebergabe: Takt der Uebergabe (-1 = fest; setzt die Regie)
+    kritiker: bool = False       # Regie sortiert ihre Plaene mit dem gelernten Kritiker (nur wenn er sein Tor schafft)
+    set_bogen: str = "gleichmaessig"   # Perfekte Reihenfolge: Energie gleichmaessig / aufbauen / Welle
 
 
 def regie_einst(e: Einstellungen) -> Einstellungen | None:

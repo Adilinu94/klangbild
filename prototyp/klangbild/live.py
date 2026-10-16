@@ -24,6 +24,9 @@ from .uebergang import DECKE, Eintrag, Spur, _begrenzen, backen
 
 RATE = config.ABTASTRATE_HOERTEST
 VORLAUF_S = 2.0          # fruehester Blendenbeginn ab „jetzt" (Mindestwert; waechst mit der Backzeit)
+# Einstellungen des gewaehlten Plans, die im Info mitgehen (Uebergangstest zeigt sie zum Nachpruefen)
+EINST_ANZEIGE = ("takte", "art", "lautstaerke", "eq", "bass_takt", "filter", "effekt", "effekt_ein", "loop",
+                 "loop_start", "loop_ein", "loop_ein_mal", "trick", "gesang_takt", "tempo_modus", "keylock")
 
 __all__ = ["Eintrag", "Spur", "Wiedergabe", "gain_db", "RATE"]
 
@@ -88,12 +91,27 @@ class Wiedergabe:
         self._dekodiert: OrderedDict[int, np.ndarray] = OrderedDict()
         self._dekodiert_lock = threading.Lock()
         self._rang = 0                       # "anderer Uebergang": n-ter Plan der Regie
+        # Gemma-Versuch: (plaene, a, pa, b, pb, einst) -> (Index, Grund); waehlt statt der Regie-Reihenfolge
+        self.plan_waehler: Callable | None = None
         self._letztes_rezept: str | None = None   # Abwechslung: nicht zweimal dasselbe
         # Lernen (lokal): durchgehoerte Uebergaenge +, WEITER in der Blende / "anderer" -
         self.lern_pfad = None                # JSON-Datei; None = nur im Speicher (Tests)
         self.vorlieben: dict[str, float] = {}
         self._lern_offen: str | None = None  # Rezept des laufenden Uebergangs, noch ohne Urteil
         self._energie_schritte: list[float] = []   # Energiebogen: dB-Spruenge der letzten Wechsel
+        self.kritiker = None                  # kritiker.Kritiker (starten(); nur aktiv, wenn er sein Tor schafft)
+        self.blenden: list[dict] = []         # Meta jeder gespielten Blende (fuer den Daumen, §7.1)
+        self.bewertung_ordner = None          # ergebnisse/live-bewertungen/<datum>; None = nicht speichern
+        self.paarnoten = None                 # paarnoten.Paarnoten: erwartete Note je Paar (Reihenfolge, §8)
+
+    def _profil(self, e: Eintrag):
+        """Takt-Profil von e; laeuft e im Doppel-/Halbtempo-Raster (§5.3), auf dieses Raster umgerechnet."""
+        from . import profil
+
+        orig = self.bibliothek.get(e.id, e)
+        p = profil.laden(orig, lambda: self.roh(orig))
+        faktor = e.bpm / orig.bpm if orig.bpm else 1.0
+        return profil.tempo_mal(p, faktor) if abs(faktor - 1.0) > 0.4 else p
 
     def roh(self, e: Eintrag) -> np.ndarray:
         """Dekodierter Song ohne Lautheitsangleich (zuletzt genutzte bleiben im Speicher)."""
@@ -143,6 +161,11 @@ class Wiedergabe:
         self.verlauf.append({"von": self.spur.eintrag.id, "nach": spur.eintrag.id,
                              **{k: v for k, v in info.items() if k != "kurven"}})
         self.vorher = (self.spur.eintrag, info) if info.get("blende_s") else None
+        if info.get("rezept"):   # nur die Meta merken (kein Datei-Zugriff im Audio-Callback)
+            t = lambda e: {"id": e.id, "titel": e.titel, "bpm": round(e.bpm, 2), "camelot": e.camelot}  # noqa: E731
+            self.blenden = (self.blenden + [{"a": t(self.spur.eintrag), "b": t(spur.eintrag), "info": {
+                k: v for k, v in info.items() if k != "kurven"}, **{k: info.get(k) for k in (
+                    "stil", "spielanteil", "weiter", "experimente")}}])[-20:]
         self.spur, self.pos, self._naechste = spur, 0, None
         # Erst beim echten Wechsel aus der Warteschlange: ein verworfener Uebergang verliert nichts.
         if self.warteschlange and self.warteschlange[0] == spur.eintrag.id:
@@ -198,6 +221,40 @@ class Wiedergabe:
                 self.lern_pfad.write_text(json.dumps(self.vorlieben, indent=1), encoding="utf-8")
             except OSError:
                 pass
+
+    def daumen(self, gut: bool, stichwort: str | None = None) -> None:
+        """Daumen fuer die laufende (oder eben gespielte) Blende: 4 bzw. 2 als Note, im Format des Hoertests
+        (datensatz.live_faelle); zaehlt fuer die Rezept-Vorlieben wie ein durchgehoerter/abgebrochener Uebergang."""
+        import json
+        from datetime import date
+
+        with self.lock:
+            if not self.blenden or self.blenden[-1].get("bewertet") is not None:
+                raise ValueError("keine Blende zu bewerten")
+            meta = self.blenden[-1]
+            meta["bewertet"] = bool(gut)
+        self._lernen(meta["info"]["rezept"], bool(gut))
+        if self.bewertung_ordner is None:
+            return
+        ordner = self.bewertung_ordner / date.today().isoformat()
+        (ordner / "clips").mkdir(parents=True, exist_ok=True)
+        datei = ordner / "bewertungen.json"
+        noten = json.loads(datei.read_text(encoding="utf-8")) if datei.exists() else {}
+        nr = len(noten)
+        (ordner / "clips" / f"{nr:03d}.json").write_text(json.dumps(
+            {"nr": nr, **{k: v for k, v in meta.items() if k != "bewertet"}}, ensure_ascii=False), encoding="utf-8")
+        noten[str(nr)] = {"note": 4 if gut else 2, "stichworte": [stichwort] if stichwort else [], "daumen": True}
+        datei.write_text(json.dumps(noten, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    def vorhoeren(self) -> np.ndarray | None:
+        """Die schon gebackene naechste Blende ab 4 s davor bis 4 s danach (nichts wird neu gerechnet)."""
+        with self.lock:
+            if self._naechste is None or self.spur is None:
+                return None
+            wechsel_n, spur, info = self._naechste
+            a = self.spur.puffer[max(0, wechsel_n - 4 * RATE):wechsel_n]
+            b = spur.puffer[:int((info.get("blende_s", 0.0) + 4.0) * RATE)]
+        return np.concatenate([a, b])
 
     def weiter(self) -> None:
         with self.lock:
@@ -262,7 +319,10 @@ class Wiedergabe:
                 sauber[e.id] = (1.0 - float(np.mean(g[:16])), 1.0 - float(np.mean(g[-16:])))
         bonus = lambda a, b: sauber.get(a.id, (0.5, 0.5))[1] * sauber.get(b.id, (0.5, 0.5))[0]  # noqa: E731
         tracks = [_plan_track(e) for e in bib.values()]
-        folge = plan.sortiere_alle(tracks, einst.max_bpm, einst.harmonie, aktuell, bonus)
+        pn = self.paarnoten = self.paarnoten.neu_laden() if self.paarnoten is not None else None
+        folge = plan.sortiere_alle(tracks, einst.max_bpm, einst.harmonie, aktuell, bonus,
+                                   paarnote=pn.note if pn is not None else None,
+                                   rezept=pn.rezept if pn is not None else None, bogen=einst.set_bogen)
         with self.lock:
             self.warteschlange = [i for i in folge if i != aktuell]
             self._verwerfen()
@@ -310,7 +370,7 @@ class Wiedergabe:
             if pb is None:
                 continue
             plaene = regie.planen(aktuell.eintrag, pa, b, pb, einst, aktuell.zu_original(ab_s),
-                                  abs(bpm - b.bpm) <= max(einst.max_bpm, 0.05),
+                                  min(abs(bpm - f * b.bpm) for f in (1.0, 2.0, 0.5)) <= max(einst.max_bpm, 0.05),
                                   uebergang._harmonisch(aktuell.eintrag.camelot, b.camelot), anzahl=1,
                                   # Gesangsuebergaben zaehlen schon bei der Partnerwahl (wie spaeter beim Backen)
                                   stems_da=(self.stem_quelle is not None and einst.stems
@@ -396,18 +456,35 @@ class Wiedergabe:
         from . import profil, regie, stems, uebergang
 
         t0 = time.perf_counter()
-        pa = profil.laden(a.eintrag, lambda: self.roh(a.eintrag))
-        pb = profil.laden(b, lambda: self.roh(b))
+        pa, pb = self._profil(a.eintrag), self._profil(b)
         t_profil = time.perf_counter() - t0
-        sync = abs(a.bpm_bei(ab_s) - b.bpm) <= max(einst.max_bpm, 0.05)
+        grenze = max(einst.max_bpm, 0.05)
+        sync = abs(a.bpm_bei(ab_s) - b.bpm) <= grenze
+        if not sync:   # §5.3 Doppel-/Halbtempo (z. B. 85 <-> 170): B laeuft im doppelten/halben Taktraster
+            f = next((f for f in (2.0, 0.5) if abs(a.bpm_bei(ab_s) - f * b.bpm) <= grenze), None)
+            if f is not None:
+                b = replace(b, bpm=f * b.bpm, downbeats=list(b.downbeats) if f > 1 else list(b.downbeats)[::2])
+                pb, sync = profil.tempo_mal(pb, f), True
         # Auch nach WEITER: aus dem Vorrat sind die Stems sofort da (Runde 4: bei WEITER brach A's Gesang
         # jedes Mal ab); die Regie haelt WEITER-Gesangsuebergaben kurz (WEITER_GESANG_MAX)
         stems_da = (self.stem_quelle is not None and einst.stems
                     and stems.vorrat_fertig(a.eintrag.id) and stems.vorrat_fertig(b.id))
-        plaene = regie.planen(a.eintrag, pa, b, pb, einst, a.zu_original(ab_s), sync,
-                              uebergang._harmonisch(a.eintrag.camelot, b.camelot), sofort=frueh,
-                              stems_da=stems_da, vorher=self._letztes_rezept, vorlieben=self.vorlieben,
-                              a_audio=self.roh(a.eintrag), rate=RATE)
+        def plane(e, anzahl=3):
+            return regie.planen(a.eintrag, pa, b, pb, e, a.zu_original(ab_s), sync,
+                                uebergang._harmonisch(a.eintrag.camelot, b.camelot), sofort=frueh,
+                                stems_da=stems_da, vorher=self._letztes_rezept, vorlieben=self.vorlieben,
+                                anzahl=anzahl, a_audio=self.roh(a.eintrag), rate=RATE, b_audio=self.roh(b),
+                                kritiker=self.kritiker if einst.kritiker else None)
+
+        plaene = plane(einst)
+        gemma_grund = None
+        if self.plan_waehler is not None and plaene:
+            # Kandidaten aller Experimente-Stufen; die gewaehlte zuerst, die uebrigen bleiben Ersatz
+            alle = plaene + [p for x in einstellungen.EXPERIMENTE if x != einst.experimente
+                             for p in plane(replace(einst, experimente=x), 2)]
+            plaene = list({(p.rezept, round(p.aus_s, 1), round(p.ein_s, 1)): p for p in alle}.values())
+            k, gemma_grund = self.plan_waehler(plaene, a.eintrag, pa, b, pb, einst)
+            plaene = plaene[k:k + 1] + plaene[:k] + plaene[k + 1:]
         t_plan = time.perf_counter() - t0 - t_profil
         if not plaene:   # z. B. B kuerzer als jede Blende
             return backen(a, b, b_audio, replace(einst, art="echo"), ab_s, weiter=frueh)
@@ -427,15 +504,30 @@ class Wiedergabe:
             maske = regie._fenster(ga, pa.takt_bei(plan.aus_s), plan.takte) > 0 if ga is not None else None
             g = backen(a, b, b_audio, plan.einst, ab_s, weiter=frueh, stem_quelle=self.stem_quelle,
                        jetzt_s=self.pos / RATE, aus_s=plan.aus_s, ein_s=plan.ein_s, a_gesang=maske)
-            g.info.update(rezept=plan.rezept, grund=plan.grund, plan=start + k + 1,
+            g.info.update(rezept=plan.rezept, grund=plan.grund, plan=start + k + 1, stil=einst.modus,
+                          spielanteil=einst.spielanteil, weiter=frueh, experimente=einst.experimente,
+                          einst={f: getattr(plan.einst, f) for f in EINST_ANZEIGE + ("experimente",)},
+                          **({"gemma": gemma_grund} if gemma_grund is not None else {}),
+                          aus_takt=pa.takt_bei(plan.aus_s), ein_takt=pb.takt_bei(plan.ein_s),
                           energie_schritt=round(e_b - e_a, 1),
                           zeiten={"profil": round(t_profil, 1), "plan": round(t_plan, 1),
                                   "backen": round(time.perf_counter() - t0 - t_profil - t_plan, 1)})
-            n = int(g.info["blende_s"] * RATE)
+            n, v = int(g.info["blende_s"] * RATE), int(g.info.get("vorlauf_s", 0.0) * RATE)
             lw = g.info.get("loop_wahl")
             fehler = (f"Loop nicht sauber (Güte {lw['guete']})" if lw and lw["guete"] < regie.LOOP_GUETE_MIN else
-                      regie.pruefen(g.spur.puffer[:n], RATE, g.info["takte"], pa, pb, plan.aus_s,
+                      regie.pruefen(g.spur.puffer[v:n], RATE, g.info["takte"], pa, pb, plan.aus_s,
                                     plan.ein_s, gain(a.eintrag), gain(b), plan.rezept))
+            if fehler is None and plan.rezept in ("double_drop", "drop_cuts"):   # §3.2: zwei versetzte Kick-Zuege?
+                raster = np.round(np.asarray(g.info["raster_s"]) * RATE)
+                fehler = regie.pruefen_drop(g.spur.puffer, RATE, raster, regie.PHRASE)
+            if fehler is None and self.kritiker is not None and einst.kritiker:   # §2.3: Selbstkontrolle "nachher"
+                from . import datensatz, kritiker
+
+                m = regie.plan_merkmale(plan, pa, pb, einst, g.info["sync"], frueh, stems_da, a.eintrag, b)
+                m.update(datensatz.ergebnis(g.spur.puffer[v:n], a.puffer[max(0, g.start_n - 4 * RATE):g.start_n],
+                                            g.spur.puffer[n:n + 4 * RATE], g.info["takte"]))
+                note = self.kritiker.nachher(m)
+                fehler = f"Kritiker: {note:.1f}" if note < kritiker.NACHHER_MIN else None
             return g, fehler
 
         for k, plan in enumerate(plaene[start:start + (2 if frueh else 3)]):
@@ -483,8 +575,11 @@ class Wiedergabe:
         with self.lock:
             z: dict = {"spielt": self.spielt, "autodj": self.autodj, "underflows": self.underflows,
                        "aktuell": None, "naechster": None,
-                       "warteschlange": [{"id": i, "titel": self.bibliothek[i].titel}
-                                         for i in self.warteschlange if i in self.bibliothek],
+                       "warteschlange": [{"id": i, "titel": self.bibliothek[i].titel,
+                                          "note": self._paarnote(vor, i)}
+                                         for vor, i in zip([self.spur.eintrag.id if self.spur else None]
+                                                           + self.warteschlange, self.warteschlange)
+                                         if i in self.bibliothek],
                        "verlauf": self.verlauf[-10:]}
             if self.spur is not None:
                 s, e = self.spur, self.spur.eintrag
@@ -505,6 +600,10 @@ class Wiedergabe:
                                    "blende_s": info["blende_s"], "art": info["art"],
                                    "kurven": info.get("kurven"), "a_loop": info.get("a_loop", []),
                                    "a_orig_start": info["a_orig_start"]}
+            if self.blenden and self.spur is not None and self.blenden[-1]["b"]["id"] == self.spur.eintrag.id \
+                    and self.pos / RATE < self.blenden[-1]["info"].get("blende_s", 0.0) + 30.0:
+                z["bewertbar"] = {"rezept": self.blenden[-1]["info"]["rezept"],
+                                  "bewertet": self.blenden[-1].get("bewertet")}
             if self._naechste is None and self._vorschau is not None:
                 z["vorschau"] = dict(self._vorschau)
             if self._naechste is not None:
@@ -517,6 +616,9 @@ class Wiedergabe:
                                   "orig_pro_s": round(spur.zu_original(1.0) - spur.zu_original(0.0), 5)}
             return z
 
+    def _paarnote(self, a: int | None, b: int) -> float | None:
+        return self.paarnoten.note(a, b) if self.paarnoten is not None and a is not None else None
+
     # --- Laufzeit ---------------------------------------------------------
     def starten(self) -> None:
         """Audio-Stream und Back-Thread starten (nicht in Tests)."""
@@ -525,6 +627,9 @@ class Wiedergabe:
         from . import stems, uebergang
 
         uebergang.dehn_pool_starten()   # Keylock-Dehnen in eigenen Prozessen (GIL)
+        from . import kritiker
+
+        self.kritiker = kritiker.Kritiker.laden()   # None, solange er sein Tor nicht schafft (BAUPLAN-UEBERGAENGE §2)
         if stems.verfuegbar():
             self.stem_quelle = stems.trennen
             self.vorrechner = self._stems_vorrechnen

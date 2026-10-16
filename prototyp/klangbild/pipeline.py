@@ -438,13 +438,25 @@ def _parser() -> argparse.ArgumentParser:
     p_ut.add_argument("--neu", action="store_true", help="alten Test archivieren, neuen beginnen")
     p_ut.add_argument("--auswertung", action="store_true", help="nur auswerten (auswertung.md)")
     p_ut.add_argument("--nur-ordner", default=None, help="nur Titel aus diesem Ordner (A und B)")
-    p_ut.add_argument("--stil", choices=("kurz", "ausgewogen", "lang"), default=None,
-                      help="alle Faelle in diesem Stil (sonst reihum)")
+    p_ut.add_argument("--stil", default=None,
+                      help="Stil(e) mit Komma, z. B. kurz,lang: reihum (sonst alle drei)")
     p_ut.add_argument("--experimente", default="klassisch",
                       help="Stufe(n) reihum, z. B. kreativ,wild (klassisch/kreativ/wild)")
+    p_ut.add_argument("--gemma", default=None, help="Gemma-Versuch: jedes Paar auch mit Gemma's Wahl "
+                      "(Modell, z. B. google/gemma-4-E4B-it)")
+    p_ut.add_argument("--kritiker", action="store_true",
+                      help="A/B-Runde: jedes Paar einmal mit, einmal ohne Kritiker (BAUPLAN-UEBERGAENGE §2.3)")
     p_ut.add_argument("--host", default="127.0.0.1")
     p_ut.add_argument("--port", type=int, default=8767)
     p_ut.set_defaults(funktion=None)
+
+    p_ds = unter.add_parser("datensatz", parents=[pfade], help="Datensatz der benoteten Uebergaenge (Kritiker)")
+    p_ds.set_defaults(funktion=lambda a: __import__("klangbild.datensatz", fromlist=["x"]).kommando(a))
+    p_kr = unter.add_parser("kritiker", parents=[pfade], help="Kritiker trainieren und ehrlich messen")
+    p_kr.add_argument("--trainieren", action="store_true", help="Datensatz neu bauen und trainieren")
+    p_kr.set_defaults(funktion=lambda a: __import__("klangbild.kritiker", fromlist=["x"]).kommando(a))
+    p_pn = unter.add_parser("paarnoten", parents=[pfade], help="Erwartete Uebergangsnoten aller Paare vorrechnen")
+    p_pn.set_defaults(funktion=lambda a: __import__("klangbild.paarnoten", fromlist=["x"]).kommando(a))
 
     return parser
 

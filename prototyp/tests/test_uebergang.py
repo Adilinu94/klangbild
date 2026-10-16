@@ -385,8 +385,8 @@ def test_gate_rueckhall_pingpong():
     assert nass[1000:1100, 0].max() > 0.1 and nass[1000:1100, 1].max() == 0  # 2. links
 
 
-def test_drop_cuts_wechseln_taktweise_und_enden_auf_b():
-    h = u._huellen(Einstellungen(art="eigen", trick="wechsel", gesang_takt=2), 8, 800, 0.001)
+def test_drop_cuts_wechseln_in_2_takt_stuecken_und_enden_auf_b():
+    h = u._huellen(Einstellungen(art="eigen", trick="wechsel", gesang_takt=2), 12, 1200, 0.001)
     mitte = lambda t: int((t + 0.5) * 100)   # noqa: E731 - Mitte von Takt t
-    assert [round(float(h["b_vol"][mitte(t)])) for t in range(8)] == [0, 0, 0, 1, 0, 1, 1, 1]
+    assert [round(float(h["b_vol"][mitte(t)])) for t in range(12)] == [0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1]
     assert np.allclose(h["a_vol"] + h["b_vol"], 1.0)        # immer genau ein Song

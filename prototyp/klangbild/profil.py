@@ -170,6 +170,21 @@ class Profil:
                    np.asarray(d["chroma"]) if d.get("chroma") is not None else None)
 
 
+def tempo_mal(p: Profil, faktor: float) -> Profil:
+    """Profil im doppelten (faktor 2: jeder Takt wird zwei) oder halben Taktraster (0,5: jeder zweite Takt),
+    fuer Doppel-/Halbtempo-Uebergaenge (BAUPLAN-UEBERGAENGE §5.3).
+    shortcut: Werte je Takt werden verdoppelt bzw. ausgeduennt, nicht neu gemessen; Upgrade: aus dem Audio."""
+    if faktor > 1:
+        t = np.repeat(p.takte, 2)
+        t[1::2] += np.diff(np.append(p.takte, 2 * p.takte[-1] - p.takte[-2])) / 2
+        zu = lambda x: np.repeat(x, 2, axis=0)   # noqa: E731
+    else:
+        t = p.takte[::2]
+        zu = lambda x: x[::2]   # noqa: E731
+    return Profil(t, zu(p.baender), zu(p.gesamt), {k: zu(v) for k, v in p.stems.items()} if p.stems else None,
+                  zu(p.raster_ok), p.dauer, zu(p.chroma) if p.chroma is not None else None)
+
+
 def _db_je_takt(x: np.ndarray, grenzen: np.ndarray) -> np.ndarray:
     """RMS in dB je [grenzen[i], grenzen[i+1]) Samples (mono)."""
     q = np.concatenate([[0.0], np.cumsum(np.asarray(x, np.float64) ** 2)])

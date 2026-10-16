@@ -67,3 +67,12 @@ EmbeddingGemma 2 legt Text und Audio in **denselben** Vektorraum.
    Text bekommt einen symmetrischen Präfix (SentenceSimilarity bzw.
    Classification). Welche Kombination bewertet wird, steht **vor** dem Test fest.
 4. Abfrage und eingebettete Songs müssen **dieselbe** Dimension haben.
+
+**Nachtrag 16.10.2026 (BAUPLAN-UEBERGAENGE §4.1):** Als Maß für „passen zwei Songs
+zusammen“ taugen die Audio-Vektoren nicht. Gemessen an 585 Titeln mit Ordnern als
+grobem Genre (Chill, Hard UKG, TOBI, DnB):
+- Kosinus innerhalb eines Ordners 0,918, zwischen den Ordnern 0,909
+- AUC „gleicher Ordner?“ 0,57; nur DnB gegen Hard UKG 0,55
+
+Damit liegt das Ergebnis unter dem Abbruchkriterium (0,75). Die Passung der
+Regie (`regie._passung`) rechnet deshalb nur mit der Energie der Drops.

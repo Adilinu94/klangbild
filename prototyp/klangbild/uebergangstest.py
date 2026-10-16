@@ -41,8 +41,11 @@ STICHWORTE = ("Gesang prallt aufeinander", "Takt daneben / galoppiert", "Loch / 
 
 
 def faelle_planen(ids: list[int], paare: int, seed: int, stile: tuple[str, ...] = STILE,
-                  experimente: tuple[str, ...] = ("klassisch",)) -> list[dict]:
-    """Feste Fallliste (reproduzierbar ueber `seed`), blind gemischt (`reihe`)."""
+                  experimente: tuple[str, ...] = ("klassisch",), gemma: bool = False,
+                  waehler: str = "Gemma") -> list[dict]:
+    """Feste Fallliste (reproduzierbar ueber `seed`), blind gemischt (`reihe`). `gemma`: jedes Paar
+    zweimal - Plan der Regie und die Wahl des zweiten Waehlers (`waehler`: "Gemma" oder "Kritiker",
+    BAUPLAN-UEBERGAENGE §2.3) statt der Varianten Plan 2/3."""
     rng = random.Random(seed)
     faelle: list[dict] = []
     for k, a in enumerate(rng.sample(sorted(ids), min(paare, len(ids)))):
@@ -50,7 +53,9 @@ def faelle_planen(ids: list[int], paare: int, seed: int, stile: tuple[str, ...] 
                  "weiter": k % 5 == 4}
         paar = len(faelle)
         faelle.append({**basis, "nr": paar, "rang": 0, "paar": paar})
-        if k % 3 == 1 and not basis["weiter"]:
+        if gemma:
+            faelle.append({**basis, "nr": len(faelle), "rang": 0, "paar": paar, "gemma": True, "waehler": waehler})
+        elif k % 3 == 1 and not basis["weiter"]:
             for rang in (1, 2):
                 faelle.append({**basis, "nr": len(faelle), "rang": rang, "paar": paar})
     reihe = list(range(len(faelle)))
@@ -106,6 +111,8 @@ class Test:
         self.lock = threading.Lock()
         self.gestoppt = threading.Event()
         self.backt: str | None = None
+        self.waehler = None   # Gemma-Versuch (gemma_probe.waehler), nur fuer Faelle mit "gemma"
+        self.kritiker = None  # kritiker.Kritiker fuer die A/B-Faelle mit waehler "Kritiker"
 
     # --- Faelle backen -----------------------------------------------------
     def meta(self, nr: int) -> dict | None:
@@ -118,12 +125,13 @@ class Test:
         import soundfile as sf
 
         w, nr = self.w, f["nr"]
+        mit_kritiker = bool(f.get("gemma")) and f.get("waehler") == "Kritiker"
         e = einstellungen.Einstellungen(modus=f["stil"], spielanteil=f["spielanteil"],
-                                        experimente=f.get("experimente", "klassisch"))
+                                        experimente=f.get("experimente", "klassisch"), kritiker=mit_kritiker)
         a = w.bibliothek[f["a"]]
         a_spur = Spur.roh(a, w.laden(a))
         ab_s = 0.45 * len(a_spur.puffer) / RATE if f["weiter"] else 20.0   # WEITER: mitten im Song
-        if f["rang"] == 0:   # Partner: moeglichst ein Lied, das in den Runden davor nicht vorkam
+        if f["rang"] == 0 and not f.get("gemma"):   # Partner: moeglichst ein Lied, das in den Runden davor nicht vorkam
             bekannt = self.bekannt if len(self.bekannt) < len(w.bibliothek) // 2 else set()
             b_id = w._autodj_wahl(a_spur, a_spur.bpm_bei(ab_s), ab_s, {a.id} | bekannt, e)
         else:
@@ -135,9 +143,17 @@ class Test:
         b = w.bibliothek[b_id]
         self.backt = f"{a.titel} → {b.titel}"
         w._rang, w._letztes_rezept, w.vorlieben, w.pos = f["rang"], None, {}, 0
+        w.plan_waehler = self.waehler if f.get("gemma") and not mit_kritiker else None
+        w.kritiker = self.kritiker if mit_kritiker else None
         g = w._auto_backen(a_spur, b, w.laden(b), einstellungen.regie_einst(e), ab_s, f["weiter"])
         info = {k: v for k, v in g.info.items() if k != "kurven"}
-        if f["rang"] > 0:   # die Regie hatte weniger Plaene: derselbe Plan noch einmal waere kein Vergleich
+        if f.get("gemma"):   # Gemma waehlt dasselbe wie die Regie: nichts Neues zu hoeren
+            r = (self.meta(f["paar"]) or {}).get("info", {})
+            if (r.get("rezept"), r.get("a_orig_start"), r.get("takte")) == \
+                    (info["rezept"], info["a_orig_start"], info["takte"]):
+                self._meta_schreiben(nr, {"nr": nr, "doppelt": True, "gemma_gleich": True, "gemma": info.get("gemma")})
+                return
+        elif f["rang"] > 0:   # die Regie hatte weniger Plaene: derselbe Plan noch einmal waere kein Vergleich
             schon = {(self.meta(x["nr"]) or {}).get("info", {}).get("plan")
                      for x in self.faelle if x["paar"] == f["paar"] and x["nr"] != nr}
             if info.get("plan") in schon:
@@ -148,7 +164,8 @@ class Test:
         eintrag = lambda t: {"id": t.id, "titel": t.titel, "bpm": round(t.bpm, 2), "camelot": t.camelot}  # noqa: E731
         self._meta_schreiben(nr, {
             "nr": nr, "a": eintrag(a), "b": eintrag(b), **{k: f[k] for k in ("stil", "spielanteil", "weiter", "rang")},
-            "experimente": f.get("experimente", "klassisch"),
+            "experimente": f.get("experimente", "klassisch"), "gemma": bool(f.get("gemma")),
+            **({"waehler": f.get("waehler", "Gemma")} if f.get("gemma") else {}),
             "info": info, "blende_von_s": round(blende_von, 2),
             "blende_bis_s": round(blende_von + info["blende_s"], 2), "dauer_s": round(len(x) / RATE, 2)})
 
@@ -156,7 +173,7 @@ class Test:
         """Faelle in Hoerreihenfolge backen (Basis-Paar vor seinen Varianten); fertige ueberspringen."""
         nach_nr = {f["nr"]: f for f in self.faelle}
         for f in sorted(self.faelle, key=lambda x: x["reihe"]):
-            for fall in ([nach_nr[f["paar"]]] if f["rang"] else []) + [f]:
+            for fall in ([nach_nr[f["paar"]]] if f["rang"] or f.get("gemma") else []) + [f]:
                 while self.gestoppt.is_set():
                     time.sleep(0.5)
                 if self.meta(fall["nr"]) is not None:
@@ -183,7 +200,15 @@ class Test:
     def fall(self, nr: int) -> dict:
         m = self.meta(nr) or {}
         blind = {k: m[k] for k in ("nr", "a", "b", "blende_von_s", "blende_bis_s", "dauer_s") if k in m}
-        return {**blind, "bewertung": self.bewertungen.get(str(nr))}
+        # seit Runde 12 nicht mehr blind: der Nutzer will je Fall sehen, was eingestellt war
+        einst = {k: m[k] for k in ("stil", "spielanteil", "experimente", "weiter") if k in m}
+        bewertung = self.bewertungen.get(str(nr))
+        info = dict(m.get("info", {}))
+        if bewertung and bewertung.get("note"):   # Gemma-Versuch: wer gewaehlt hat, erst nach der Note zeigen
+            einst["wahl"] = m.get("waehler", "Gemma") if m.get("gemma") else "Regie"
+        else:
+            info.pop("gemma", None)
+        return {**blind, "einst": {**einst, **info}, "bewertung": bewertung}
 
     def bewerten(self, nr: int, roh: dict) -> None:
         if not any(f["nr"] == nr for f in self.faelle):
@@ -267,7 +292,17 @@ def auswerten(ordner: Path) -> str:
     rang_von = {f["nr"]: (f["paar"], f["rang"]) for f in t.faelle}
     for m, b in zeilen:
         paar, rang = rang_von[m["nr"]]
-        paare[paar][rang] = b["note"]
+        paare[paar]["g" if m.get("gemma") else rang] = b["note"]
+    mit_gemma = [p for p in paare.values() if 0 in p and "g" in p]
+    if mit_gemma or any(f.get("gemma") for f in t.faelle):
+        gleich = sum(1 for f in t.faelle if (t.meta(f["nr"]) or {}).get("gemma_gleich"))
+        name = next((m.get("waehler", "Gemma") for m, _ in zeilen if m.get("gemma")), "Gemma")
+        tabelle("Wer hat gewählt", lambda m: m.get("waehler", "Gemma") if m.get("gemma") else "Regie")
+        aus.extend([f"## {name} gegen Regie (gleiches Paar)", "",
+                    f"Paare: {len(mit_gemma)} · {name} besser: {sum(p['g'] > p[0] for p in mit_gemma)} · "
+                    f"gleich gut: {sum(p['g'] == p[0] for p in mit_gemma)} · Regie besser: "
+                    f"{sum(p['g'] < p[0] for p in mit_gemma)} · {name} wählte denselben Plan: {gleich}", ""])
+    paare = {k: {r: n for r, n in p.items() if r != "g"} for k, p in paare.items()}
     voll = [p for p in paare.values() if 0 in p and len(p) > 1]
     if voll:
         bester = sum(p[0] >= max(p.values()) for p in voll)
@@ -378,8 +413,10 @@ def laufen(args) -> int:
         grenze = einstellungen.Einstellungen().max_bpm
         ids = [i for i in ids if any(abs(bib[i].bpm - x.bpm) <= grenze for k, x in bib.items() if k != i)] or ids
         _schreiben(ordner / "faelle.json", faelle_planen(ids, args.paare, args.seed,
-                                                         (args.stil,) if args.stil else STILE,
-                                                         tuple(args.experimente.split(","))))
+                                                         tuple(args.stil.split(",")) if args.stil else STILE,
+                                                         tuple(args.experimente.split(",")),
+                                                         gemma=bool(args.gemma or args.kritiker),
+                                                         waehler="Kritiker" if args.kritiker else "Gemma"))
     url = f"http://{args.host}:{args.port}"
     try:   # Port zuerst: ein zweiter Test darf nicht neben dem alten laufen (alter Stand im Speicher)
         srv = mixer.EinzelServer((args.host, args.port), _Handler)
@@ -394,6 +431,17 @@ def laufen(args) -> int:
 
     global _T
     _T = Test(ordner, w)
+    if args.gemma:   # Gemma-Versuch: das Modell bleibt im Speicher und waehlt bei den Gemma-Faellen
+        from . import gemma_probe
+        print(f"Lade {args.gemma} …", flush=True)
+        _T.waehler = gemma_probe.waehler(gemma_probe.Gemma(args.gemma))
+    if args.kritiker:   # A/B-Runde: das gespeicherte Modell, auch wenn es sein Tor (noch) nicht geschafft hat
+        from . import kritiker
+
+        _T.kritiker = kritiker.Kritiker.laden(nur_aktiv=False)
+        if _T.kritiker is None:
+            print("Kein Kritiker-Modell: erst `python -m klangbild kritiker --trainieren`", flush=True)
+            return 1
     fertig = sum(1 for f in _T.faelle if _T.meta(f["nr"]) is not None)
     print(f"Übergangstest: {len(_T.faelle)} Fälle, {fertig} gebacken, {len(_T.bewertungen)} bewertet", flush=True)
     threading.Thread(target=_T.backen_alle, daemon=True).start()

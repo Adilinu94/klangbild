@@ -270,8 +270,22 @@ class _Handler(BaseHTTPRequestHandler):
             self._sende(SEITE.read_bytes(), "text/html; charset=utf-8")
         elif pfad == "/api/zustand":
             self._json(_M.zustand())
+        elif pfad == "/api/vorhoeren":   # gebackene naechste Blende als FLAC (zweites Ausgabegeraet, §7.2)
+            import io
+
+            import soundfile as sf
+
+            x = w.vorhoeren()
+            if x is None:
+                self._json({"fehler": "noch keine Blende gebacken"}, 404)
+            else:
+                puffer = io.BytesIO()
+                sf.write(puffer, x, live.RATE, format="FLAC", subtype="PCM_16")
+                self._sende(puffer.getvalue(), "audio/flac")
         elif pfad == "/api/einstellungen":
-            self._json({"werte": asdict(w.einst), "auswahl": einstellungen.AUSWAHL,
+            from .uebergangstest import STICHWORTE
+
+            self._json({"werte": asdict(w.einst), "auswahl": einstellungen.AUSWAHL, "stichworte": STICHWORTE,
                         "takte": einstellungen.TAKTE, "grenzen": einstellungen.GRENZEN})
         elif pfad == "/api/bibliothek":
             from . import stems
@@ -339,6 +353,15 @@ class _Handler(BaseHTTPRequestHandler):
             if befehl == "einstellungen":
                 self._json(_M.einstellungen_setzen(daten))
                 return
+            if befehl == "daumen":   # {gut: bool, stichwort?: aus uebergangstest.STICHWORTE}
+                from .uebergangstest import STICHWORTE
+
+                stichwort = daten.get("stichwort") or None
+                if not isinstance(daten.get("gut"), bool) or (stichwort is not None and stichwort not in STICHWORTE):
+                    raise ValueError("gut (true/false) und optional ein bekanntes Stichwort")
+                w.daumen(daten["gut"], stichwort)
+                self._json(_M.zustand())
+                return
             aktionen = {
                 "play": lambda: w.play(int(daten["id"])),
                 "pause": w.pause,
@@ -388,6 +411,10 @@ def laufen(args) -> int:
     einst_pfad = e.ergebnisse / "mixer-einstellungen.json"
     wiedergabe = live.Wiedergabe(bib, einst=einstellungen.laden(einst_pfad))
     wiedergabe.lern_pfad = e.ergebnisse / "regie-lernen.json"   # Vorlieben je Rezept (lokal)
+    wiedergabe.bewertung_ordner = e.ergebnisse / "live-bewertungen"   # Daumen (BAUPLAN-UEBERGAENGE §7.1)
+    from . import paarnoten
+
+    wiedergabe.paarnoten = paarnoten.Paarnoten(e.analyse_version)   # `python -m klangbild paarnoten` fuellt ihn
     try:
         wiedergabe.vorlieben = {k: float(v) for k, v in json.loads(
             wiedergabe.lern_pfad.read_text(encoding="utf-8")).items()}

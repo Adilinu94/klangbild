@@ -163,6 +163,16 @@
       <button class="autodj" id="autodj" aria-pressed="false"><span>AUTO-DJ</span><span class="schalter"></span></button>
     </div>
     <div class="naechster" id="naechster"></div>
+    <div class="knopfreihe" id="daumen" hidden>
+      <span id="daumen-text">WIE WAR DIE BLENDE?</span>
+      <button class="knopf klein" data-gut="1" aria-label="Gute Blende">👍</button>
+      <button class="knopf klein" data-gut="0" aria-label="Schlechte Blende">👎</button>
+      <select id="daumen-wort" aria-label="Stichwort (optional)"><option value="">Stichwort …</option></select>
+    </div>
+    <div class="knopfreihe" id="vorhoer" hidden>
+      <button class="knopf klein" id="vorhoeren">VORHÖREN</button>
+      <select id="vorhoer-geraet" aria-label="Ausgabegerät fürs Vorhören"></select>
+    </div>
   </section>
 
   <section class="rechts">
@@ -457,7 +467,8 @@ function zeige(z) {
     $("queue").innerHTML = z.warteschlange.length ? z.warteschlange.map((q, i) => { const t = infoVon[q.id] || {};
       return `<div class="qzeile">${disc(q.id, false)}
         <div class="qinfo"><span class="titel">${i + 1}. ${esc(q.titel)}</span>
-          <div class="qmeta">${keyPill(t.camelot)}${t.bpm ? bpmText(t.bpm) : ""}</div></div>
+          <div class="qmeta">${keyPill(t.camelot)}${t.bpm ? bpmText(t.bpm) : ""}${q.note != null ?
+            ` <span title="Erwartete Note des Übergangs (Paarnoten)">≈ ${q.note.toFixed(1)}</span>` : ""}</div></div>
         <button class="plus" data-hoch="${i}" aria-label="Nach oben">▲</button>
         <button class="plus" data-runter="${i}" aria-label="Nach unten">▼</button>
         <button class="plus" data-entfernen="${i}" aria-label="Entfernen">×</button></div>`; }).join("")
@@ -473,6 +484,12 @@ function zeige(z) {
   if (!an.aktuell && sv.aktuell) $("analyse").textContent = `STEMS: ${sv.aktuell}`;
   if (z.bibliothek_anzahl !== bibliothek.length || (letzterStem && letzterStem !== sv.aktuell)) ladeBibliothek();
   letzterStem = sv.aktuell;
+  const bw = z.bewertbar;
+  $("daumen").hidden = !bw;
+  if (bw) $("daumen-text").textContent = bw.bewertet == null ? `WIE WAR DIE BLENDE? (${bw.rezept.replace(/_/g, " ")})`
+    : (bw.bewertet ? "👍 GESPEICHERT" : "👎 GESPEICHERT");
+  $("daumen").querySelectorAll("button").forEach((b) => b.disabled = !!bw && bw.bewertet != null);
+  $("vorhoer").hidden = !(vorhoerGeht && z.naechster);
   if (!$("status").classList.contains("warn") || z.underflows) {
     $("status").textContent = z.underflows ? `AUSSETZER: ${z.underflows}` : "AUDIO OK";
     $("status").classList.toggle("warn", z.underflows > 0);
@@ -498,6 +515,32 @@ $("play").onclick = () => senden("pause");
 $("weiter").onclick = () => senden("weiter");
 $("naechster").addEventListener("click", (e) => { if (e.target.id === "anders") senden("anders"); });
 $("autodj").onclick = () => senden("autodj", { an: !(zustand && zustand.autodj) });
+// Daumen (BAUPLAN-UEBERGAENGE §7.1): Note 4/2 fuer den Kritiker und die Rezept-Vorlieben
+$("daumen").addEventListener("click", (e) => {
+  const g = e.target.dataset.gut;
+  if (g != null) senden("daumen", { gut: g === "1", stichwort: $("daumen-wort").value || null });
+});
+fetch("/api/einstellungen").then((r) => r.json()).then((d) => (d.stichworte || []).forEach((w) =>
+  $("daumen-wort").insertAdjacentHTML("beforeend", `<option>${esc(w)}</option>`)));
+// Vorhoeren auf einem zweiten Ausgabegeraet (Chrome/Edge: setSinkId), ohne den laufenden Mix zu stoeren (§7.2)
+const vorhoerGeht = "setSinkId" in HTMLMediaElement.prototype;
+let vorhoerAudio = null;
+async function geraeteLaden() {
+  const liste = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
+  $("vorhoer-geraet").innerHTML = liste.map((d, i) => `<option value="${d.deviceId}">${esc(d.label || `Ausgang ${i + 1}`)}</option>`).join("");
+}
+if (vorhoerGeht) geraeteLaden();
+$("vorhoeren").onclick = async () => {
+  if (vorhoerAudio) { vorhoerAudio.pause(); vorhoerAudio = null; $("vorhoeren").textContent = "VORHÖREN"; return; }
+  if (navigator.mediaDevices.selectAudioOutput && !$("vorhoer-geraet").value) {
+    try { const d = await navigator.mediaDevices.selectAudioOutput(); await geraeteLaden(); $("vorhoer-geraet").value = d.deviceId; } catch (_) {}
+  }
+  vorhoerAudio = new Audio(`/api/vorhoeren?t=${Date.now()}`);
+  try { await vorhoerAudio.setSinkId($("vorhoer-geraet").value || ""); } catch (_) {}
+  vorhoerAudio.onended = () => { vorhoerAudio = null; $("vorhoeren").textContent = "VORHÖREN"; };
+  vorhoerAudio.play();
+  $("vorhoeren").textContent = "STOPP";
+};
 $("suche").oninput = zeichneBibliothek;
 $("welle").onclick = (e) => {
   if (!zustand || !zustand.aktuell) return;
@@ -531,7 +574,8 @@ const ARTEN = { auto: "Automatisch (Auto-DJ wählt je Paar, Stil „Ausgewogen�
   echo: "Echo-Out", schnitt: "Harter Schnitt", drums_zuerst: "Stems: Drums zuerst", acapella: "Stems: Acapella-Übergabe",
   gesangsschutz: "Stems: Gesangsschutz", gesang_zuerst: "Stems: Gesang von B zuerst",
   double_drop: "Stems: Double Drop (Bass und Stimme tauschen auf dem Drop)" };
-const MODUS = { b_an_a: "Nächster an aktuellen", a_an_b: "Aktueller an nächsten", rampe: "Gleitend (Rampe)", frei: "frei" };
+const MODUS = { b_an_a: "Nächster an aktuellen", a_an_b: "Aktueller an nächsten", rampe: "Gleitend (Rampe)",
+  vorlauf: "Vorlauf (Aktueller gleitet vorher auf den nächsten)", frei: "frei" };
 const NAMEN = {
   modus: ["Mix-Stil", { manuell: "Manuell (alles selbst einstellen)", kurz: "Kurz & sauber",
     ausgewogen: "Ausgewogen", lang: "Lang & komplex" }],
@@ -558,6 +602,9 @@ const NAMEN = {
   keylock: ["Tonhöhe halten (Keylock)"],
   harmonie: ["Tonart beim Sortieren", { streng: "Streng (nur passende)", locker: "Locker (bevorzugen)", aus: "Ignorieren" }],
   lautheit: ["Lautheit angleichen (−14 LUFS)"],
+  kritiker: ["Kritiker nutzen (lernt aus deinen Noten; wirkt erst, wenn er seinen Test besteht)"],
+  set_bogen: ["Energiebogen der Reihenfolge", { gleichmaessig: "Gleichmäßig", aufbauen: "Aufbauen (leise → laut)",
+    welle: "Welle (auf und ab)" }],
   lautstaerke: ["Lautstärke", { nahtlos: "Nahtloser Übergang", linear: "Einblenden und ausblenden (linear)",
     ueberlappung: "Überlappung", hart_ein: "Hart einblenden, weich ausblenden", hart_aus: "Weich einblenden, hart ausblenden", letzter_takt: "A bis zum letzten Takt, dann ausklingen",
     hart_beide: "Hart einblenden und hart ausblenden", mitte: "Zentraler Schnitt", frueh: "Kurz am Anfang (erstes Viertel)",
@@ -597,13 +644,13 @@ function effektOptionen(v) {
     typen.flatMap((t) => Object.keys(FX_MODUS).map((m) => opt(`${t}_${m}`, `${FX_TYP[t]} ${FX_MODUS[m]}`))).join("")}</optgroup>`).join("");
 }
 const GRUPPEN = [
-  ["AUTO-DJ", "Der Auto-DJ wählt für jedes Titelpaar selbst Ausstieg, Einsatz, Länge, Loops und Effekte. Im Stil „Manuell“ nur, wenn die Übergangsart „Automatisch“ ist.", ["modus", "spielanteil", "experimente"]],
+  ["AUTO-DJ", "Der Auto-DJ wählt für jedes Titelpaar selbst Ausstieg, Einsatz, Länge, Loops und Effekte. Im Stil „Manuell“ nur, wenn die Übergangsart „Automatisch“ ist.", ["modus", "spielanteil", "experimente", "kritiker"]],
   ["STEMS", "Gesang, Drums, Bass und Rest getrennt (Grafikkarte).", ["stems", "stems_vorrat"]],
   ["ÜBERGANG (MANUELL)", "Nur im Mix-Stil „Manuell“.", ["art", "takte", "ausstieg", "vor_ende_takte", "einstieg"]],
   ["ÜBERGANG IM DETAIL", "Gilt für die Übergangsart „Eigene Kombination“ (Auto-Mix und WEITER). Jede Auswahl hier stellt die Art darauf um.", DETAIL],
   ["WEITER (MANUELL)", "Was passiert, wenn du WEITER drückst. Im Auto-Modus wählt die Regie.", ["weiter_takte", "weiter_ab"]],
   ["TEMPO", "Gilt für Auto-Mix und WEITER.", ["tempo_modus", "max_bpm", "keylock"]],
-  ["REIHENFOLGE & KLANG", "Sortierung der Bibliothek und Pegel.", ["harmonie", "lautheit"]],
+  ["REIHENFOLGE & KLANG", "Sortierung der Bibliothek und Pegel.", ["harmonie", "set_bogen", "lautheit"]],
 ];
 const TAKT_FELDER = ["takte", "weiter_takte"];
 // Im Auto-Modus entscheidet die Regie diese Felder selbst: gesperrt.
