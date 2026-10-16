@@ -539,6 +539,7 @@ in Einstellungen übersetzen.**
 | 8 | §7.1 Daumen | ½ Tag | 6 (Format) |
 | 9 | §5 Tempo-Brücken | 2 Tage | – |
 | 10 | §8 Set-Planung | 2 Tage | 7 (Note) |
+| §8 Genre und Energie (16.10., Nutzerkritik) | `profil.energielevel` 0 (ruhig) … 1 (hart): viel Höhen und wenig Flächen/Melodie (Rest-Stem), kalibriert an den Ordnern (Chill/TOBI gegen Hard UKG/DnB, CV-AUC 0,86). Genre = Ordner des Titels. `plan._set_schritt`: Energiesprung × 4, Genrewechsel 1,5; `set_bogen` zielt auf das Level; `rangliste` und Auto-DJ-Wahl strafen Sprünge | An der echten Bibliothek (417 Titel): Genrewechsel 153 → 26, Energiesprünge > 0,4 von 124 → 9, erwartete Note 3,86 → 3,81. |
 | 11 | §7.2 Vorhören | ½ Tag | – |
 | 12 | §10.1 Gemma-Einstellungen (PC-Prüfung) | ½ Tag | – |
 
@@ -586,7 +587,7 @@ noch aus. Die Android-Teile folgen mit den Meilensteinen (§10).
 | §5.3 Halb-/Doppeltempo | `profil.tempo_mal`, `live._profil`, `plan.rangliste` | Eintrag und Profil von B laufen im doppelten bzw. halben Raster. |
 | §6.1 | B's Hi-Hats (> 2 kHz, −12 dB) ab der Hälfte der Gesangsphase | – |
 | §6.2 | `LANG32_BONUS = 0,3` | nach 2 Runden prüfen |
-| §7.1 Daumen | 👍/👎 plus Stichwort im Mixer, `POST /api/daumen`; Ziel `ergebnisse/live-bewertungen/<datum>/`; `datensatz.live_faelle` mit Gewicht 0,5 | Meta wird beim Umschalten nur im Speicher gemerkt (kein Datei-Zugriff im Audio-Callback) und erst mit dem Daumen geschrieben. |
+| §7.1 Bewertung | Seit 16.10. statt Daumen ein Popup nach jeder Blende (bis 60 s danach): Schulnote 1–6 plus Stichwort, `POST /api/bewerten`; gespeichert als Note 5,0 … 1,0 (linear) plus `schulnote`; Ziel `ergebnisse/live-bewertungen/<datum>/`; Gewicht 1,0 (alte Daumen 0,5) | Meta wird beim Umschalten nur im Speicher gemerkt (kein Datei-Zugriff im Audio-Callback) und erst mit der Note geschrieben. 1–3 zählt für die Rezept-Vorlieben als gut. |
 | §7.2 Vorhören | `GET /api/vorhoeren` (FLAC), Knopf und Ausgabegerät (`setSinkId`) | „Diesen nehmen“ entfällt: Die gebackene Blende bleibt ohnehin, bis jemand bedient. |
 | §8 Set-Planung | `klangbild/paarnoten.py` (`python -m klangbild paarnoten`, Cache `cache/paarnoten.json`), `plan.set_planen` (gierig + 2-opt auf Abschnitten bis 8 Titel), Einstellung `set_bogen`, erwartete Note in der Warteschlange | Ohne Kritiker sind die Paarnoten die Regie-Punkte, über die Perzentile auf 1..5 gestreckt. |
 | §10.1 Gemma-Einstellungen | `gemma_probe einstellungen`, 60 Sätze in `klangbild/gemma_saetze.json`, Ergebnis in `ergebnisse/gemma-probe/einstellungen-gemma-4-E2B-it.json` | **Tor verfehlt: 41 von 60 exakt (68 %, gefordert 85 %), aber alle 60 gültig.** Typische Fehler: ändert nicht genannte Felder mit („Alles so lassen“ setzt alles), verwechselt die Stufen („mehr Double Drops“ → kreativ statt wild) und überhört „streng“. Nach Plan entfällt die Sprachsteuerung auf dem Handy. Etwa 7 s je Satz auf der RTX 2070. |

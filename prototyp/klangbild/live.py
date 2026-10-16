@@ -15,6 +15,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import replace
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -45,9 +46,25 @@ def _datei_laden(eintrag: Eintrag) -> np.ndarray:
     return audioio.decodieren_stereo(eintrag.pfad, RATE).daten
 
 
+_ENERGIELEVEL: dict[int, float] = {}   # profil.energielevel je Titel (Profile aendern sich nicht)
+
+
+def _energielevel(i: int) -> float | None:
+    from . import profil
+
+    if i not in _ENERGIELEVEL:
+        p = profil.gespeichert(i)
+        if p is None or p.n < 16:
+            return None
+        _ENERGIELEVEL[i] = p.energielevel()
+    return _ENERGIELEVEL[i]
+
+
 def _plan_track(e: Eintrag, bpm: float | None = None) -> plan.Track:
+    ordner = Path(e.pfad).parent.name
     return plan.Track(id=e.id, pfad=e.pfad, bpm=bpm or e.bpm, camelot=e.camelot,
-                      energie_db=e.energie_db, vektor=None)
+                      energie_db=e.energie_db, vektor=None, energie=_energielevel(e.id),
+                      genre=None if ordner.lower() == "upload" else ordner or None)
 
 
 def _gleicher_titel(a: str, b: str) -> bool:
@@ -100,7 +117,7 @@ class Wiedergabe:
         self._lern_offen: str | None = None  # Rezept des laufenden Uebergangs, noch ohne Urteil
         self._energie_schritte: list[float] = []   # Energiebogen: dB-Spruenge der letzten Wechsel
         self.kritiker = None                  # kritiker.Kritiker (starten(); nur aktiv, wenn er sein Tor schafft)
-        self.blenden: list[dict] = []         # Meta jeder gespielten Blende (fuer den Daumen, §7.1)
+        self.blenden: list[dict] = []         # Meta jeder gespielten Blende (fuer die Bewertung, §7.1)
         self.bewertung_ordner = None          # ergebnisse/live-bewertungen/<datum>; None = nicht speichern
         self.paarnoten = None                 # paarnoten.Paarnoten: erwartete Note je Paar (Reihenfolge, §8)
 
@@ -222,9 +239,10 @@ class Wiedergabe:
             except OSError:
                 pass
 
-    def daumen(self, gut: bool, stichwort: str | None = None) -> None:
-        """Daumen fuer die laufende (oder eben gespielte) Blende: 4 bzw. 2 als Note, im Format des Hoertests
-        (datensatz.live_faelle); zaehlt fuer die Rezept-Vorlieben wie ein durchgehoerter/abgebrochener Uebergang."""
+    def bewerten(self, schulnote: int, stichwort: str | None = None) -> None:
+        """Schulnote 1 (sehr gut) .. 6 (ungenuegend) fuer die eben gespielte Blende, im Format des Hoertests
+        (datensatz.live_faelle, Note 5 = beste: 1 -> 5,0 ... 6 -> 1,0); 1-3 zaehlt fuer die Rezept-Vorlieben
+        wie ein durchgehoerter, 4-6 wie ein abgebrochener Uebergang."""
         import json
         from datetime import date
 
@@ -232,8 +250,8 @@ class Wiedergabe:
             if not self.blenden or self.blenden[-1].get("bewertet") is not None:
                 raise ValueError("keine Blende zu bewerten")
             meta = self.blenden[-1]
-            meta["bewertet"] = bool(gut)
-        self._lernen(meta["info"]["rezept"], bool(gut))
+            meta["bewertet"] = int(schulnote)
+        self._lernen(meta["info"]["rezept"], schulnote <= 3)
         if self.bewertung_ordner is None:
             return
         ordner = self.bewertung_ordner / date.today().isoformat()
@@ -243,7 +261,8 @@ class Wiedergabe:
         nr = len(noten)
         (ordner / "clips" / f"{nr:03d}.json").write_text(json.dumps(
             {"nr": nr, **{k: v for k, v in meta.items() if k != "bewertet"}}, ensure_ascii=False), encoding="utf-8")
-        noten[str(nr)] = {"note": 4 if gut else 2, "stichworte": [stichwort] if stichwort else [], "daumen": True}
+        noten[str(nr)] = {"note": round(1.0 + (6 - schulnote) * 0.8, 1), "schulnote": int(schulnote),
+                          "stichworte": [stichwort] if stichwort else []}
         datei.write_text(json.dumps(noten, ensure_ascii=False, indent=1), encoding="utf-8")
 
     def vorhoeren(self) -> np.ndarray | None:
@@ -335,6 +354,7 @@ class Wiedergabe:
     def einstellungen_setzen(self, neu: einstellungen.Einstellungen) -> None:
         with self.lock:
             self.einst = neu
+            self.autodj = neu.modus != "manuell"   # jeder Mix-Stil ausser "Manuell" ist Auto-DJ
             self._verwerfen()
 
     def bibliothek_setzen(self, bib: dict[int, Eintrag]) -> None:
@@ -346,13 +366,15 @@ class Wiedergabe:
     def _autodj_wahl(self, aktuell: Spur, bpm: float, ab_s: float, gespielt: set[int], einst) -> int | None:
         """Naechster Titel: die besten 6 nach Tempo/Tonart/Energie, dann entscheidet, wie gut
         sich jeder wirklich mischen laesst (bester Regie-Plan aus den Profilen) und der
-        Energiebogen (nach drei Anstiegen eine Erholung, nach zwei Abstiegen wieder hoch)."""
+        Energiebogen (nach drei Anstiegen eine Erholung, nach zwei Abstiegen wieder hoch); ein Sprung im
+        Energielevel (ruhig <-> hart) kostet bis zu 8 Regie-Punkte."""
         from . import profil, regie, stems, uebergang
 
         kandidaten = [_plan_track(e) for e in self.bibliothek.values()
                       if e.id not in gespielt and e.id != aktuell.eintrag.id
                       and not _gleicher_titel(e.titel, aktuell.eintrag.titel)]
-        top = plan.rangliste(_plan_track(aktuell.eintrag, bpm), kandidaten, einst.max_bpm, einst.harmonie)
+        ta = _plan_track(aktuell.eintrag, bpm)
+        top = plan.rangliste(ta, kandidaten, einst.max_bpm, einst.harmonie)
         if not top:
             return None
         einst = einstellungen.regie_einst(einst)
@@ -380,7 +402,8 @@ class Wiedergabe:
             e_b = float(np.mean(pb.gesamt[:48])) + (b.gain_db if einst.lautheit else 0.0)
             schritt = e_b - e_a
             bogen = 1.5 if ziel[0] <= schritt <= ziel[1] else -0.3 * min(abs(schritt - ziel[0]), abs(schritt - ziel[1]))
-            werte[k.id] = plaene[0].punkte + bogen - 0.6 * rang
+            stimmung = 0.0 if k.energie is None or ta.energie is None else -8.0 * abs(k.energie - ta.energie)
+            werte[k.id] = plaene[0].punkte + bogen + stimmung - 0.6 * rang
         return max(werte, key=werte.get) if werte else top[0].id
 
     def vorbereiten(self) -> bool:
@@ -601,9 +624,11 @@ class Wiedergabe:
                                    "kurven": info.get("kurven"), "a_loop": info.get("a_loop", []),
                                    "a_orig_start": info["a_orig_start"]}
             if self.blenden and self.spur is not None and self.blenden[-1]["b"]["id"] == self.spur.eintrag.id \
-                    and self.pos / RATE < self.blenden[-1]["info"].get("blende_s", 0.0) + 30.0:
-                z["bewertbar"] = {"rezept": self.blenden[-1]["info"]["rezept"],
-                                  "bewertet": self.blenden[-1].get("bewertet")}
+                    and self.pos / RATE < self.blenden[-1]["info"].get("blende_s", 0.0) + 60.0:
+                bl = self.blenden[-1]
+                z["bewertbar"] = {"nr": len(self.blenden), "rezept": bl["info"]["rezept"], "a": bl["a"]["titel"],
+                                  "b": bl["b"]["titel"], "bewertet": bl.get("bewertet"),
+                                  "fertig": self.pos / RATE >= bl["info"].get("blende_s", 0.0)}
             if self._naechste is None and self._vorschau is not None:
                 z["vorschau"] = dict(self._vorschau)
             if self._naechste is not None:

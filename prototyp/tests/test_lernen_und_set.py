@@ -90,24 +90,25 @@ def _wiedergabe(tmp_path):
     return w, a, b
 
 
-def test_daumen_speichert_im_hoertest_format(tmp_path, monkeypatch):
+def test_bewertung_speichert_im_hoertest_format(tmp_path, monkeypatch):
     w, a, b = _wiedergabe(tmp_path)
     with pytest.raises(ValueError):
-        w.daumen(True)                                                 # noch keine Blende
+        w.bewerten(1)                                                  # noch keine Blende
     w.play(1)
     info = {"rezept": "profi_eq", "takte": 8, "blende_s": 4.0, "sync": True, "stems": False, "stil": "lang",
             "spielanteil": "lang", "weiter": False, "experimente": "klassisch",
             "art": "eigen", "a_orig_start": 0.0, "a_orig_pro_s": 1.0}
     w._naechste = (w.pos + 10, live.Spur.roh(b, np.zeros((RATE * 10, 2), np.float32)), info)
     w.fuellen(20)                                                      # Umschalten -> Blende laeuft
-    assert w.zustand()["bewertbar"]["bewertet"] is None
-    w.daumen(False, "Zu früh")
-    assert w.vorlieben["profi_eq"] < 0 and w.zustand()["bewertbar"]["bewertet"] is False
+    bw = w.zustand()["bewertbar"]
+    assert bw["bewertet"] is None and not bw["fertig"] and bw["b"] == b.titel   # Popup erst nach der Blende
+    w.bewerten(5, "Zu früh")
+    assert w.vorlieben["profi_eq"] < 0 and w.zustand()["bewertbar"]["bewertet"] == 5
     with pytest.raises(ValueError):
-        w.daumen(True)                                                 # schon bewertet
+        w.bewerten(1)                                                  # schon bewertet
     monkeypatch.setattr(datensatz, "LIVE", w.bewertung_ordner)
     [(ordner, m, note)] = datensatz.live_faelle()
-    assert ordner.startswith("live-") and note == {"note": 2, "stichworte": ["Zu früh"], "daumen": True}
+    assert ordner.startswith("live-") and note == {"note": 1.8, "schulnote": 5, "stichworte": ["Zu früh"]}
     assert m["info"]["rezept"] == "profi_eq" and m["a"]["id"] == 1 and m["b"]["id"] == 2
 
 
@@ -122,10 +123,10 @@ def server(tmp_path):
     srv.server_close()
 
 
-def test_api_daumen_prueft_den_body_und_vorhoeren(server):
+def test_api_bewerten_prueft_den_body_und_vorhoeren(server):
     url, w, b = server
-    for body in ({"gut": "ja"}, {"gut": True, "stichwort": "Quatsch"}):
-        req = urllib.request.Request(url + "/api/daumen", data=json.dumps(body).encode(), method="POST")
+    for body in ({"note": "1"}, {"note": 7}, {"note": True}, {"note": 2, "stichwort": "Quatsch"}):
+        req = urllib.request.Request(url + "/api/bewerten", data=json.dumps(body).encode(), method="POST")
         with pytest.raises(urllib.error.HTTPError) as fehler:
             urllib.request.urlopen(req, timeout=5)
         assert fehler.value.code == 400
@@ -153,6 +154,17 @@ def test_set_planen_folgt_den_paarnoten_und_2opt_verbessert():
     schlecht = [0, 1, 2, 6, 5, 4, 3, 7]
     besser = plan._zwei_opt(schlecht, index, ziel, note, None)
     assert plan._set_kosten(besser, index, ziel, note, None) < plan._set_kosten(schlecht, index, ziel, note, None)
+
+
+def test_reihenfolge_haelt_genre_und_energie_zusammen():
+    # gleiches Tempo, gleiche Tonart, gleiche Paarnote: nur Energielevel und Ordner unterscheiden die Titel
+    t = [plan.Track(id=i, pfad=f"/m/{'DnB' if i % 2 else 'Chill'}/{i}.mp3", bpm=174.0, camelot="8A",
+                    energie=0.85 if i % 2 else 0.15, genre="DnB" if i % 2 else "Chill") for i in range(8)]
+    folge = plan.sortiere_alle(t, 5.0, start_id=1, paarnote=lambda a, b: 4.0)
+    wechsel = sum(t[x].genre != t[y].genre for x, y in zip(folge, folge[1:]))
+    assert wechsel == 1, folge                                         # erst alle harten, dann alle ruhigen
+    nah = plan.rangliste(t[1], [t[2], t[3]], 5.0)
+    assert nah[0].id == 3                                              # Live-Wahl: hart bleibt hart
 
 
 def test_paarnoten_cache_verfaellt_mit_neuer_version(tmp_path):

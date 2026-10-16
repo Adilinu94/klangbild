@@ -47,7 +47,9 @@ def test_api_bibliothek_play_und_zustand(basis, monkeypatch):
         {"id": 7, "titel": "Song - Kuenstler", "bpm": 128.0, "camelot": "8A", "stems": False}]
     z = _post(url + "/api/play", {"id": 7})
     assert z["spielt"] and z["aktuell"]["id"] == 7 and z["analyse"]["offen"] == 0
-    assert _post(url + "/api/autodj", {"an": True})["autodj"] is True
+    assert _post(url + "/api/einstellungen", {"modus": "lang"}) and _get(url + "/api/zustand")["autodj"] is True
+    _post(url + "/api/einstellungen", {"modus": "manuell"})
+    assert _get(url + "/api/zustand")["autodj"] is False                 # Auto-DJ folgt dem Mix-Stil
     track = _get(url + "/api/track/7")
     assert abs(track["phrasen"][0]) < 1e-6 and abs(track["takte"][1] - 1.875) < 1e-6
     with urllib.request.urlopen(url + "/", timeout=5) as r:

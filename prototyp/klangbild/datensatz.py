@@ -51,7 +51,7 @@ def bewertete_faelle() -> list[tuple[str, dict, dict]]:
 
 
 def live_faelle() -> list[tuple[str, dict, dict]]:
-    """Daumen-Bewertungen aus dem Mixer (§7.1): gleiches Format, nur ohne Audio."""
+    """Live-Bewertungen aus dem Mixer (§7.1, Schulnote im Popup): gleiches Format, nur ohne Audio."""
     aus = []
     for ordner in sorted(LIVE.glob("*")):
         datei = ordner / "bewertungen.json"
@@ -188,7 +188,7 @@ def zeile(ordner: str, m: dict, b: dict, pa: Profil | None, pb: Profil | None, j
                   camelot_a=m["a"].get("camelot"), camelot_b=m["b"].get("camelot"),
                   k_ein=loop.get("takte", 0), mal=loop.get("mal", 0))
     mm.update(erg or {})
-    return {"runde": ordner, "nr": m["nr"], "note": b["note"], "gewicht": 0.5 if ordner.startswith("live-") else 1.0,
+    return {"runde": ordner, "nr": m["nr"], "note": b["note"], "gewicht": 0.5 if b.get("daumen") else 1.0,   # alte Daumen: nur 4/2
             "stichworte": b.get("stichworte", []), "kommentar": b.get("kommentar", ""),
             "ein_takt": j, "ein_takt_rekonstruiert": "ein_takt" not in i and j is not None, "merkmale": mm}
 

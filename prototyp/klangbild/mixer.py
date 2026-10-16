@@ -353,13 +353,14 @@ class _Handler(BaseHTTPRequestHandler):
             if befehl == "einstellungen":
                 self._json(_M.einstellungen_setzen(daten))
                 return
-            if befehl == "daumen":   # {gut: bool, stichwort?: aus uebergangstest.STICHWORTE}
+            if befehl == "bewerten":   # {note: 1..6 (Schulnote), stichwort?: aus uebergangstest.STICHWORTE}
                 from .uebergangstest import STICHWORTE
 
                 stichwort = daten.get("stichwort") or None
-                if not isinstance(daten.get("gut"), bool) or (stichwort is not None and stichwort not in STICHWORTE):
-                    raise ValueError("gut (true/false) und optional ein bekanntes Stichwort")
-                w.daumen(daten["gut"], stichwort)
+                note = daten.get("note")
+                if type(note) is not int or not 1 <= note <= 6 or (stichwort is not None and stichwort not in STICHWORTE):
+                    raise ValueError("note (1-6) und optional ein bekanntes Stichwort")
+                w.bewerten(note, stichwort)
                 self._json(_M.zustand())
                 return
             aktionen = {
@@ -373,7 +374,6 @@ class _Handler(BaseHTTPRequestHandler):
                 "verschieben": lambda: w.verschieben(int(daten["index"]), int(daten["richtung"])),
                 "sortieren": w.sortieren,
                 "leeren": w.leeren,
-                "autodj": lambda: w.autodj_setzen(bool(daten["an"])),
             }
             if befehl not in aktionen:
                 self._json({"fehler": "unbekannter Befehl"}, 404)
@@ -410,8 +410,9 @@ def laufen(args) -> int:
         conn.close()
     einst_pfad = e.ergebnisse / "mixer-einstellungen.json"
     wiedergabe = live.Wiedergabe(bib, einst=einstellungen.laden(einst_pfad))
+    wiedergabe.autodj_setzen(wiedergabe.einst.modus != "manuell")
     wiedergabe.lern_pfad = e.ergebnisse / "regie-lernen.json"   # Vorlieben je Rezept (lokal)
-    wiedergabe.bewertung_ordner = e.ergebnisse / "live-bewertungen"   # Daumen (BAUPLAN-UEBERGAENGE §7.1)
+    wiedergabe.bewertung_ordner = e.ergebnisse / "live-bewertungen"   # Bewertungs-Popup (BAUPLAN-UEBERGAENGE §7.1)
     from . import paarnoten
 
     wiedergabe.paarnoten = paarnoten.Paarnoten(e.analyse_version)   # `python -m klangbild paarnoten` fuellt ihn

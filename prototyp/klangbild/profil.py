@@ -153,6 +153,19 @@ class Profil:
     def takt_bei(self, t: float) -> int:
         return int(np.clip(np.argmin(np.abs(self.takte - t)), 0, self.n - 1))
 
+    @_einmal
+    def energielevel(self) -> float:
+        """0 (ruhig) .. 1 (hart) in den Takten mit Drums: viel Hoehen und wenig Flaechen/Melodie (Rest-Stem) =
+        hart. Logistisch kalibriert am 16.10.2026 an 417 Titeln mit den Ordnern als grobem Etikett (Chill/TOBI
+        gegen Hard UKG/DnB), 10-fach-CV-AUC 0,86; ohne Stems nur die Hoehen (AUC 0,75)."""
+        haupt = self.drums() > 0.5
+        if haupt.sum() < 4:
+            haupt = np.ones(self.n, bool)
+        z = 1.32 * (np.median(self.baender[haupt, 2] - self.gesamt[haupt]) + 16.05) / 4.18
+        if self.stems is not None:
+            z -= 1.39 * (np.median(self.stems["other"][haupt] - self.gesamt[haupt]) + 13.0) / 5.88
+        return float(1.0 / (1.0 + np.exp(-z)))
+
     # --- Speicher --------------------------------------------------------------------------
     def als_dict(self) -> dict:
         r = lambda a: np.round(np.asarray(a, float), 2).tolist()   # noqa: E731

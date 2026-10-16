@@ -40,6 +40,8 @@ class Track:
     oder None - dann faellt der Klang-Anteil heraus und die uebrigen Gewichte
     werden neu normiert (keine scheinbare Strafe fuer fehlende Vektoren).
     `energie_db` ist die mittlere Energie (dBFS) fuer die Energie-Reise.
+    `energie` ist das Energielevel 0 (ruhig) .. 1 (hart) aus dem Profil (profil.energielevel), `genre` der
+    Ordner des Titels (die Sammlung ist nach Genre sortiert); beide None = unbekannt.
     """
 
     id: int
@@ -48,6 +50,8 @@ class Track:
     camelot: str | None
     energie_db: float | None = None
     vektor: object | None = None  # np.ndarray (1D, normiert) oder None
+    energie: float | None = None
+    genre: str | None = None
 
 
 @dataclass(frozen=True)
@@ -275,9 +279,14 @@ def rangliste(
 
     def note(k: Track) -> tuple[float, int]:
         harm = harmonie_note(aktuell.camelot, k.camelot)[0] if harmonie != "aus" else 0.5
-        energie = energie_note(aktuell.energie_db, k.energie_db, config.PLANER_ENERGIE_MAX_SPRUNG_DB)[0]
+        if aktuell.energie is not None and k.energie is not None:   # ruhig nach hart (gleiches Tempo) vermeiden
+            energie = 1.0 - min(1.0, 2.0 * abs(aktuell.energie - k.energie))
+        else:
+            energie = energie_note(aktuell.energie_db, k.energie_db, config.PLANER_ENERGIE_MAX_SPRUNG_DB)[0]
         tempo = 1.0 - abstand(k) / max(max_bpm, 1.0)
-        wert = 0.5 * harm + 0.25 * energie + 0.25 * tempo
+        wert = 0.35 * harm + 0.4 * energie + 0.25 * tempo
+        if aktuell.genre and k.genre and aktuell.genre != k.genre:
+            wert -= 0.2
         if bonus is not None:
             wert = 0.8 * wert + 0.2 * bonus(aktuell, k)
         return (wert, -k.id)
@@ -295,15 +304,18 @@ def naechster(
 
 # --- Set planen statt Paar (BAUPLAN-UEBERGAENGE §8) -----------------------------------------------------
 
-BOGEN_DB = 6.0        # Strafe je 6 dB Abstand zur Energie-Zielkurve
+BOGEN = 0.25          # Strafe 1 je 0,25 Energielevel Abstand zur Zielkurve (aufbauen/welle)
+ENERGIE_SPRUNG = 4.0  # Strafe je Energielevel-Sprung (0..1): hart -> ruhig kostet ~2 Notenpunkte
+GENRE_STRAFE = 1.5    # Wechsel des Genres (Ordner)
 REZEPT_STRAFE = 1.0   # zweimal hintereinander dasselbe Rezept
 
 
 def bogen_ziel(energien: list[float], n: int, bogen: str) -> list[float | None]:
-    """Energie-Ziel je Position: gleichmaessig (Median), aufbauen (10. -> 90. Perzentil), welle (auf und ab)."""
+    """Energie-Ziel je Position: gleichmaessig (keins, nur kleine Spruenge zaehlen), aufbauen (10. -> 90.
+    Perzentil), welle (auf und ab)."""
     import numpy as np
 
-    if not energien:
+    if not energien or bogen == "gleichmaessig":
         return [None] * n
     lo, mitte, hi = (float(x) for x in np.percentile(energien, [10, 50, 90]))
     if bogen == "aufbauen":
@@ -314,11 +326,16 @@ def bogen_ziel(energien: list[float], n: int, bogen: str) -> list[float | None]:
 
 
 def _set_schritt(index: dict, a: int, b: int, vor: int | None, pos: int, ziel, note, rezept) -> float:
-    """Kosten von a -> b an Position pos (b steht dort): -Note + Energiebogen + gleiches Rezept wie davor."""
+    """Kosten von a -> b an Position pos (b steht dort): -Note + Energiesprung + Genrewechsel + Energiebogen +
+    gleiches Rezept wie davor."""
     k = -note(a, b)
-    e, z = index[b].energie_db, ziel[pos]
-    if e is not None and z is not None:
-        k += abs(e - z) / BOGEN_DB
+    ta, tb = index[a], index[b]
+    if ta.energie is not None and tb.energie is not None:
+        k += ENERGIE_SPRUNG * abs(ta.energie - tb.energie)
+    if ta.genre and tb.genre and ta.genre != tb.genre:
+        k += GENRE_STRAFE
+    if tb.energie is not None and ziel[pos] is not None:
+        k += abs(tb.energie - ziel[pos]) / BOGEN
     if rezept is not None and vor is not None:
         r = rezept(a, b)
         if r is not None and r == rezept(vor, a):
@@ -352,9 +369,10 @@ def _zwei_opt(folge: list[int], index: dict, ziel, note, rezept, fenster: int = 
 def set_planen(tracks: list[Track], start_id: int, max_bpm: float, harmonie: str, paarnote, rezept=None,
                bogen: str = "gleichmaessig") -> list[int]:
     """Reihenfolge nach erwarteten Uebergangsnoten (`paarnote(a, b) -> 1..5 | None`, paarnoten.py): gierig den
-    naechsten mit den geringsten Kosten, dann 2-opt. Fehlt eine Paarnote, schaetzt sie Tempo/Tonart/Energie."""
+    naechsten mit den geringsten Kosten (Note, Energiesprung, Genre, Bogen), dann 2-opt. Fehlt eine Paarnote,
+    schaetzt sie Tempo/Tonart/Energie."""
     index = {t.id: t for t in tracks}
-    ziel = bogen_ziel([t.energie_db for t in tracks if t.energie_db is not None], len(tracks), bogen)
+    ziel = bogen_ziel([t.energie for t in tracks if t.energie is not None], len(tracks), bogen)
 
     def note(a: int, b: int) -> float:
         x = paarnote(a, b)

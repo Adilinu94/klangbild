@@ -16,6 +16,7 @@
     --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 var(--sans); }
   .app { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(460px, 1.8fr) minmax(280px, 1fr);
          height: 100vh; gap: 1px; background: var(--line); }
@@ -51,38 +52,44 @@
   .disc img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .disc::after { content: ""; position: absolute; inset: 42%; border-radius: 50%; background: var(--bg);
                  box-shadow: 0 0 0 1px rgba(255,255,255,.15); }
-  .disc.gross { width: 112px; height: 112px; animation: drehen 8s linear infinite; animation-play-state: paused; }
+  .disc.gross { width: 88px; height: 88px; animation: drehen 8s linear infinite; animation-play-state: paused; }
   .disc.gross.laeuft { animation-play-state: running; }
   .disc.klein { width: 34px; height: 34px; }
   .disc.klein::after { inset: 40%; }
   @keyframes drehen { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .disc.gross { animation: none; } }
 
-  .player { gap: 16px; overflow-y: auto; }
+  .player { gap: 14px; overflow-y: auto; }
   .kopf { display: flex; gap: 18px; align-items: center; }
+  .kopf #weiter { margin-left: auto; align-self: flex-start; flex: none; }
   .jetzt-titel { font: 500 22px/1.15 var(--sans); text-transform: uppercase; margin: 0 0 8px; }
   .instrument { font: 13px var(--mono); color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .decks { width: 100%; height: 190px; display: block; background: #0A0A0A; border-radius: 6px; }
+  .wellen { position: relative; flex: 0 1 auto; min-height: 200px; display: flex; flex-direction: column; }
+  .decks { width: 100%; flex: 1 1 380px; min-height: 110px; display: block; background: #0A0A0A; border-radius: 6px; }
   .uebersicht { width: 100%; height: 54px; display: block; cursor: pointer; }
   .legende { display: flex; gap: 14px; flex-wrap: wrap; min-height: 18px; margin-top: 6px; font: 11px var(--mono); color: var(--muted); }
   .legende i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
   .zeiten { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); margin-top: 4px; }
-  .bedienung { display: flex; align-items: center; gap: 14px; }
-  .rund { width: 60px; height: 60px; border-radius: 50%; border: none; background: var(--text); color: var(--bg);
-          font: 20px var(--mono); cursor: pointer; transition: opacity 100ms var(--ease); }
+  .ueber { position: relative; }
+  /* Play mittig auf der Naht zwischen Deck-Ansicht und Uebersicht */
+  .rund { position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%); z-index: 2;
+          width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--text); color: var(--bg);
+          font: 18px var(--mono); cursor: pointer; box-shadow: 0 0 0 6px rgba(0,0,0,.75); transition: opacity 100ms var(--ease); }
   .rund:active { opacity: .7; }
   .knopf { background: none; border: 1px solid var(--line); color: var(--text2); border-radius: 999px;
            padding: 9px 16px; font: 700 11px var(--mono); letter-spacing: .1em; cursor: pointer; }
   .knopf:hover { border-color: var(--dim); }
-  .autodj { margin-left: auto; display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none;
-            font: 700 12px var(--mono); letter-spacing: .12em; color: var(--muted); background: none; border: none; }
-  .schalter { width: 52px; height: 28px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line);
-              position: relative; transition: background 250ms var(--ease); }
-  .schalter::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
-                     background: var(--dim); transition: transform 250ms var(--ease), background 250ms var(--ease); }
-  .autodj.an { color: var(--rot); }
-  .autodj.an .schalter { background: var(--rot); border-color: var(--rot); }
-  .autodj.an .schalter::after { transform: translateX(24px); background: var(--text); }
+  /* Bewertung nach jedem Uebergang (Schulnote 1-6) */
+  .popup { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; width: min(440px, calc(100vw - 32px));
+           background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+           box-shadow: 0 12px 40px rgba(0,0,0,.6); font: 12px var(--mono); color: var(--muted); }
+  .popup .zu { position: absolute; top: 8px; right: 10px; background: none; border: none; color: var(--muted); font: 16px var(--mono); cursor: pointer; }
+  .popup .paar { color: var(--text2); font: 13px var(--sans); margin: 4px 24px 10px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .noten { display: flex; gap: 6px; margin-bottom: 8px; }
+  .noten button { flex: 1; height: 38px; border-radius: 6px; border: 1px solid var(--line); background: var(--raised);
+                  color: var(--text); font: 700 15px var(--mono); cursor: pointer; }
+  .noten button:hover, .noten button:focus-visible { border-color: var(--rot); outline: none; }
+  .popup select { width: 100%; background: var(--raised); color: var(--text2); border: 1px solid var(--line); border-radius: 6px; padding: 6px; font: 12px var(--sans); }
   .naechster { border-top: 1px solid var(--line); padding-top: 14px; font: 12px var(--mono); color: var(--muted); min-height: 70px; }
   .naechster .wer { display: flex; gap: 10px; align-items: center; margin-top: 8px; color: var(--text2);
                     font: 15px var(--sans); }
@@ -99,6 +106,7 @@
   .tabs button.an { color: var(--text); border-bottom-color: var(--rot); }
   .knopfreihe { display: flex; gap: 8px; margin-bottom: 10px; }
   .knopfreihe .knopf { flex: 1; padding: 8px 6px; }
+  .knopfreihe select { background: var(--surface); color: var(--text2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font: 11px var(--mono); }
   .qzeile { display: grid; grid-template-columns: 34px 1fr 22px 22px 22px; gap: 8px; align-items: center;
             padding: 7px 2px; border-bottom: 1px solid var(--surface); }
   .qzeile .plus { width: 22px; height: 22px; font-size: 10px; }
@@ -148,27 +156,18 @@
         <h2 class="jetzt-titel" id="titel">Nichts ausgewählt</h2>
         <div class="instrument" id="instrument">Titel links anklicken</div>
       </div>
+      <button class="knopf" id="weiter">WEITER</button>
     </div>
-    <div>
+    <div class="wellen">
       <canvas class="decks" id="decks" aria-label="Deck-Ansicht: beide Songs während der Blende, mit Effekt-Kurven"></canvas>
       <div class="legende" id="legende"></div>
-    </div>
-    <div>
-      <canvas class="uebersicht" id="welle" aria-label="Wellenform des ganzen Songs, klicken zum Springen"></canvas>
+      <div class="ueber">
+        <button class="rund" id="play" aria-label="Wiedergabe/Pause">▶</button>
+        <canvas class="uebersicht" id="welle" aria-label="Wellenform des ganzen Songs, klicken zum Springen"></canvas>
+      </div>
       <div class="zeiten"><span id="pos">0:00</span><span id="dauer">0:00</span></div>
     </div>
-    <div class="bedienung">
-      <button class="rund" id="play" aria-label="Wiedergabe/Pause">▶</button>
-      <button class="knopf" id="weiter">WEITER</button>
-      <button class="autodj" id="autodj" aria-pressed="false"><span>AUTO-DJ</span><span class="schalter"></span></button>
-    </div>
     <div class="naechster" id="naechster"></div>
-    <div class="knopfreihe" id="daumen" hidden>
-      <span id="daumen-text">WIE WAR DIE BLENDE?</span>
-      <button class="knopf klein" data-gut="1" aria-label="Gute Blende">👍</button>
-      <button class="knopf klein" data-gut="0" aria-label="Schlechte Blende">👎</button>
-      <select id="daumen-wort" aria-label="Stichwort (optional)"><option value="">Stichwort …</option></select>
-    </div>
     <div class="knopfreihe" id="vorhoer" hidden>
       <button class="knopf klein" id="vorhoeren">VORHÖREN</button>
       <select id="vorhoer-geraet" aria-label="Ausgabegerät fürs Vorhören"></select>
@@ -189,6 +188,14 @@
     <div id="tab-einst" class="einst" style="display: none"></div>
     <div class="status" id="status"></div>
   </section>
+</div>
+
+<div class="popup" id="bewertung" role="dialog" aria-labelledby="bewertung-titel" hidden>
+  <button class="zu" id="bewertung-zu" aria-label="Ohne Bewertung schließen">×</button>
+  <div id="bewertung-titel">WIE WAR DER ÜBERGANG? (1 = SEHR GUT, 6 = UNGENÜGEND)</div>
+  <div class="paar" id="bewertung-paar"></div>
+  <div class="noten" id="noten"><button data-note="1" aria-label="Note 1">1</button><button data-note="2" aria-label="Note 2">2</button><button data-note="3" aria-label="Note 3">3</button><button data-note="4" aria-label="Note 4">4</button><button data-note="5" aria-label="Note 5">5</button><button data-note="6" aria-label="Note 6">6</button></div>
+  <select id="bewertung-wort" aria-label="Stichwort (optional)"><option value="">Stichwort (optional) …</option></select>
 </div>
 
 <script>
@@ -418,8 +425,6 @@ function zeige(z) {
   zustand = z; tPoll = performance.now();
   const a = z.aktuell;
   $("play").textContent = z.spielt ? "❚❚" : "▶";
-  $("autodj").classList.toggle("an", z.autodj);
-  $("autodj").setAttribute("aria-pressed", z.autodj);
   $("disc").classList.toggle("laeuft", z.spielt);
   if (a) {
     holen(a.id);
@@ -458,7 +463,7 @@ function zeige(z) {
           `${v.in_s != null ? ` · IN ${zeit(Math.max(0, v.in_s))}` : ""} · ` : ""}WIRD GEBACKEN …` +
         `<div class="wer">${disc(v.id, false)}<span>${esc(v.titel)}</span>${keyPill(v.camelot)}</div>` +
         (v.grund ? `<div class="grund">${esc(v.grund)}</div>` : "")
-      : z.autodj ? "NÄCHSTER · WIRD GEWÄHLT …" : (z.warteschlange.length ? "NÄCHSTER · WIRD GELADEN …" : "WARTESCHLANGE LEER");
+      : z.autodj ? "NÄCHSTER · AUTO-DJ WÄHLT …" : (z.warteschlange.length ? "NÄCHSTER · WIRD GELADEN …" : "WARTESCHLANGE LEER");
     if (v) holen(v.id);
   }
   const qSchluessel = JSON.stringify(z.warteschlange.map((q) => q.id));
@@ -484,11 +489,10 @@ function zeige(z) {
   if (!an.aktuell && sv.aktuell) $("analyse").textContent = `STEMS: ${sv.aktuell}`;
   if (z.bibliothek_anzahl !== bibliothek.length || (letzterStem && letzterStem !== sv.aktuell)) ladeBibliothek();
   letzterStem = sv.aktuell;
-  const bw = z.bewertbar;
-  $("daumen").hidden = !bw;
-  if (bw) $("daumen-text").textContent = bw.bewertet == null ? `WIE WAR DIE BLENDE? (${bw.rezept.replace(/_/g, " ")})`
-    : (bw.bewertet ? "👍 GESPEICHERT" : "👎 GESPEICHERT");
-  $("daumen").querySelectorAll("button").forEach((b) => b.disabled = !!bw && bw.bewertet != null);
+  // Bewertungs-Popup: sobald die Blende vorbei ist, bis zur Note, zum Schliessen oder 60 s danach
+  const bw = z.bewertbar, zeigen = !!bw && bw.fertig && bw.bewertet == null && bw.nr !== bewertungZu;
+  if (zeigen && $("bewertung").hidden) $("bewertung-paar").textContent = `${bw.a} → ${bw.b}`;
+  $("bewertung").hidden = !zeigen;
   $("vorhoer").hidden = !(vorhoerGeht && z.naechster);
   if (!$("status").classList.contains("warn") || z.underflows) {
     $("status").textContent = z.underflows ? `AUSSETZER: ${z.underflows}` : "AUDIO OK";
@@ -514,14 +518,17 @@ $("leeren").onclick = () => { if (!zustand || !zustand.warteschlange.length || c
 $("play").onclick = () => senden("pause");
 $("weiter").onclick = () => senden("weiter");
 $("naechster").addEventListener("click", (e) => { if (e.target.id === "anders") senden("anders"); });
-$("autodj").onclick = () => senden("autodj", { an: !(zustand && zustand.autodj) });
-// Daumen (BAUPLAN-UEBERGAENGE §7.1): Note 4/2 fuer den Kritiker und die Rezept-Vorlieben
-$("daumen").addEventListener("click", (e) => {
-  const g = e.target.dataset.gut;
-  if (g != null) senden("daumen", { gut: g === "1", stichwort: $("daumen-wort").value || null });
+// Bewertung (BAUPLAN-UEBERGAENGE §7.1): Schulnote fuer den Kritiker und die Rezept-Vorlieben
+let bewertungZu = null;   // nr der Blende, deren Popup geschlossen wurde
+const bewertungSchliessen = () => { bewertungZu = zustand && zustand.bewertbar ? zustand.bewertbar.nr : null; $("bewertung").hidden = true; };
+$("noten").addEventListener("click", (e) => {
+  const n = e.target.dataset.note;
+  if (n) { senden("bewerten", { note: +n, stichwort: $("bewertung-wort").value || null }); $("bewertung-wort").value = ""; }
 });
+$("bewertung-zu").onclick = bewertungSchliessen;
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("bewertung").hidden) bewertungSchliessen(); });
 fetch("/api/einstellungen").then((r) => r.json()).then((d) => (d.stichworte || []).forEach((w) =>
-  $("daumen-wort").insertAdjacentHTML("beforeend", `<option>${esc(w)}</option>`)));
+  $("bewertung-wort").insertAdjacentHTML("beforeend", `<option>${esc(w)}</option>`)));
 // Vorhoeren auf einem zweiten Ausgabegeraet (Chrome/Edge: setSinkId), ohne den laufenden Mix zu stoeren (§7.2)
 const vorhoerGeht = "setSinkId" in HTMLMediaElement.prototype;
 let vorhoerAudio = null;
@@ -602,8 +609,8 @@ const NAMEN = {
   keylock: ["Tonhöhe halten (Keylock)"],
   harmonie: ["Tonart beim Sortieren", { streng: "Streng (nur passende)", locker: "Locker (bevorzugen)", aus: "Ignorieren" }],
   lautheit: ["Lautheit angleichen (−14 LUFS)"],
-  kritiker: ["Kritiker nutzen (lernt aus deinen Noten; wirkt erst, wenn er seinen Test besteht)"],
-  set_bogen: ["Energiebogen der Reihenfolge", { gleichmaessig: "Gleichmäßig", aufbauen: "Aufbauen (leise → laut)",
+  kritiker: ["Kritiker nutzen (lernt aus deinen Noten im Popup nach jedem Übergang; wirkt erst, wenn er seinen Test besteht)"],
+  set_bogen: ["Energiebogen der Reihenfolge", { gleichmaessig: "Gleichmäßig (kleine Sprünge)", aufbauen: "Aufbauen (ruhig → hart)",
     welle: "Welle (auf und ab)" }],
   lautstaerke: ["Lautstärke", { nahtlos: "Nahtloser Übergang", linear: "Einblenden und ausblenden (linear)",
     ueberlappung: "Überlappung", hart_ein: "Hart einblenden, weich ausblenden", hart_aus: "Weich einblenden, hart ausblenden", letzter_takt: "A bis zum letzten Takt, dann ausklingen",
@@ -644,7 +651,7 @@ function effektOptionen(v) {
     typen.flatMap((t) => Object.keys(FX_MODUS).map((m) => opt(`${t}_${m}`, `${FX_TYP[t]} ${FX_MODUS[m]}`))).join("")}</optgroup>`).join("");
 }
 const GRUPPEN = [
-  ["AUTO-DJ", "Der Auto-DJ wählt für jedes Titelpaar selbst Ausstieg, Einsatz, Länge, Loops und Effekte. Im Stil „Manuell“ nur, wenn die Übergangsart „Automatisch“ ist.", ["modus", "spielanteil", "experimente", "kritiker"]],
+  ["AUTO-DJ", "Jeder Mix-Stil außer „Manuell“ schaltet den Auto-DJ ein: er wählt den nächsten Titel und für jedes Paar Ausstieg, Einsatz, Länge, Loops und Effekte. Im Stil „Manuell“ spielt nur die Warteschlange.", ["modus", "spielanteil", "experimente", "kritiker"]],
   ["STEMS", "Gesang, Drums, Bass und Rest getrennt (Grafikkarte).", ["stems", "stems_vorrat"]],
   ["ÜBERGANG (MANUELL)", "Nur im Mix-Stil „Manuell“.", ["art", "takte", "ausstieg", "vor_ende_takte", "einstieg"]],
   ["ÜBERGANG IM DETAIL", "Gilt für die Übergangsart „Eigene Kombination“ (Auto-Mix und WEITER). Jede Auswahl hier stellt die Art darauf um.", DETAIL],
