@@ -80,26 +80,46 @@ def raster(takte: list[float] | np.ndarray, bis_s: float) -> np.ndarray:
     return t
 
 
-def regulaer(downbeats: list[float], bpm: float, bis_s: float, um_s: float) -> np.ndarray:
-    """Gleichmaessiges Taktraster aus dem Song-Tempo; Downbeats liefern nur die Phase.
+DRIFT_S = 16.0   # Fenster (+-s) fuer die lokale Schlag-Lage: folgt langsamer Tempo-Drift
 
-    Beat This! liefert in Breakdowns/Intros stellenweise falsche Downbeats (in ~5 %
-    der Bibliothek grob). Taktweise darauf zu dehnen wuerde genau dort das Audio
-    verzerren. Das Tempo kommt deshalb aus der BPM-Regression (±0,1 %), die Phase
-    aus dem Kreismittel der Downbeats im Umkreis von ±30 s um `um_s`.
-    shortcut: setzt konstantes Tempo im Song voraus; Upgrade: Raster abschnittsweise.
+
+def regulaer(downbeats: list[float], bpm: float, bis_s: float) -> np.ndarray:
+    """EIN Taktraster je Song (Profil, Regie, Backen, Anzeige): Tempo aus der BPM-Regression, die Eins aus
+    der Mehrheit der Downbeats, die Lage im Schlag lokal (folgt langsamer Drift).
+
+    Beat This! liefert in Breakdowns/Intros stellenweise falsche Downbeats und setzt die Eins in UKG/Breakbeat
+    abschnittsweise ganze oder halbe Schlaege daneben. Taktweise darauf zu dehnen wuerde dort das Audio
+    verzerren; ein Kreismittel um einen Ankerpunkt (bis Runde 17: Profil Songmitte, Backen Ausstieg/Einsatz)
+    hing vom Punkt ab - bei 109 von 417 Titeln > 50 ms, Planung und Backen lagen bis zu 2 Schlaege
+    auseinander ("Loop nicht sauber", "nicht genau im gleichen Takt"). Deshalb: Schlag-Lage = haeufigste Lage
+    (Modus, nicht Mittel: Off-Beat-Abschnitte zoegen das Mittel dazwischen), Eins = der Schlag mit den meisten
+    Downbeats, dann je Takt der Median der Abweichung in +-DRIFT_S (nur Downbeats auf dem Schlag).
+    Haengt nur von den Downbeats ab, nicht von `bis_s` (verlaengert nur).
+    shortcut: Tempo-Spruenge im Song folgt es nur bis +-1/4 Schlag; Upgrade: Raster abschnittsweise.
     """
     periode = 240.0 / bpm if bpm and bpm > 0 else 2.0
     d = np.asarray(downbeats, dtype=float)
-    nah = d[np.abs(d - um_s) <= 30.0]
-    if nah.size < 4:
-        nah = d
-    phase = (float(np.angle(np.mean(np.exp(2j * np.pi * nah / periode)))) / (2 * np.pi) * periode
-             if nah.size else 0.0)
+    if not d.size:
+        return periode * np.arange(0, int(max(bis_s, periode) / periode) + 2)
+    schlag = periode / 4
+    w = np.angle(np.exp(2j * np.pi * d / schlag))   # Lage im Schlag als Winkel
+    h, _ = np.histogram(w, bins=16, range=(-np.pi, np.pi))
+    c = -np.pi + (np.argmax(h + np.roll(h, 1) + np.roll(h, -1)) + 0.5) * np.pi / 8
+    nah = np.abs(np.angle(np.exp(1j * (w - c)))) <= np.pi / 4
+    lage = float(np.angle(np.exp(1j * w[nah]).mean())) / (2 * np.pi) * schlag
+    eins = int(np.bincount(np.round((d - lage) / schlag).astype(int) % 4, minlength=4).argmax())
+    phase = lage + eins * schlag
     # Index 0 = Rasterpunkt am ersten erkannten Downbeat (Phrasenanker wie bisher).
-    erster = float(d[0]) if d.size else 0.0
-    start = phase + periode * np.round((erster - phase) / periode)   # darf minimal < 0 sein
-    return start + periode * np.arange(0, int(max(bis_s - start, periode) / periode) + 2)
+    start = phase + periode * np.round((float(d[0]) - phase) / periode)   # darf minimal < 0 sein
+    t = start + periode * np.arange(0, int(max(bis_s - start, periode) / periode) + 2)
+    rest = (d - lage + schlag / 2) % schlag - schlag / 2   # Abweichung zum naechsten Schlag
+    auf = np.abs(rest) < schlag / 4                        # Downbeats auf dem Schlag (nicht Off-Beat)
+    knoten = [(x, float(np.median(rest[auf & (np.abs(d - x) <= DRIFT_S)]))) for x in d[auf]
+              if np.sum(auf & (np.abs(d - x) <= DRIFT_S)) >= 3]
+    if knoten:
+        kx, ky = np.array(knoten).T
+        t = t + np.interp(t, kx, ky)
+    return t
 
 
 @dataclass
@@ -114,7 +134,7 @@ class Spur:
     @classmethod
     def roh(cls, eintrag: Eintrag, puffer: np.ndarray) -> "Spur":
         dauer = len(puffer) / RATE
-        t = regulaer(eintrag.downbeats, eintrag.bpm, dauer, um_s=0.75 * dauer)   # Ausstieg liegt hinten
+        t = regulaer(eintrag.downbeats, eintrag.bpm, dauer)
         return cls(eintrag, puffer, t, t.copy())
 
     def zu_puffer(self, t_orig: float) -> float:
@@ -449,7 +469,7 @@ FILTER_PLAN = {"keiner": (), "tp_aus": ("a_tp",), "tp_ein": ("b_tp",), "tp_beide
                "hp_aus_reso": ("a_hp",), "tp_aus_reso": ("a_tp",)}
 KANTE_S = 0.01      # "hart" = 10 ms Rampe: hoerbar hart, aber ohne Knacken
 HALL_S = 2.4        # Nachhallzeit (RT60)
-NASS = {"hall": 0.8, "echo": 1.3, "delay": 1.1, "pingpong": 1.4}   # Runde 9: Fahnen unter B kaum hoerbar   # Echo-/Delay-Out muss ueber B hoerbar bleiben
+NASS = {"hall": 0.55, "echo": 1.3, "delay": 1.1, "pingpong": 1.4}   # Runde 16, Fall 36: Hall am Ende "zu laut"   # Runde 9: Fahnen unter B kaum hoerbar   # Echo-/Delay-Out muss ueber B hoerbar bleiben
 
 
 def _huellen(e: Einstellungen, takte: int, n: int, kante: float) -> dict:
@@ -543,9 +563,16 @@ def _huellen(e: Einstellungen, takte: int, n: int, kante: float) -> dict:
         h["a_tief"], h["b_tief"] = aus(0, 1), ein(0, 1)
     elif e.eq == "bass_takt":   # Double Drop: nur ein Bass, Tausch genau auf `bass_takt` (dem Drop)
         h["a_tief"], h["b_tief"] = tausch(e.bass_takt / takte if 0 < e.bass_takt < takte else 0.5)
+        if e.lautstaerke == "doppel":
+            # Wie DJs den Double Drop fahren (nach Runde 15): A traegt den Drop voll, B ohne Bass, Mitten -3 dB,
+            # Hoehen -8 dB (doppelte Hi-Hats/Snares klingen sonst scharf, der Limiter druckte A weg); mit dem
+            # Bass-Switch uebernimmt B ganz.
+            h["b_mitte"] = (0.7 + 0.3 * h["b_tief"]).astype(np.float32)
+            h["b_hoch"] = (0.4 + 0.6 * h["b_tief"]).astype(np.float32)
 
-    for schluessel in FILTER_PLAN[e.filter]:   # A schliesst ueber die Blende, B oeffnet
-        h[schluessel] = x.copy() if schluessel[0] == "a" else 1 - x
+    for schluessel in FILTER_PLAN[e.filter]:   # A schliesst ueber die Blende, B oeffnet (hoechstens ueber 16 Takte:
+        # Runde 17, 32-Takt-Blenden "B muss frueher reinkommen")
+        h[schluessel] = x.copy() if schluessel[0] == "a" else 1 - np.clip(x / min(1.0, 16 * takt), 0, 1)
         if schluessel[0] == "a" and e.effekt != "keiner":
             # Abstimmung: der Effekt bekommt A nach dem Filter. Ganz zu (2 kHz Hochpass bzw.
             # 200 Hz Tiefpass) bliebe fuer Echo/Hall nichts uebrig - wie DJs: Filter auf ~60 %,
@@ -780,6 +807,21 @@ def loop_waehlen(a: np.ndarray, takt_n: np.ndarray, meiden: np.ndarray | None = 
             if p > best_p:
                 best_p, best = p, (s0, L, guete)
     return best
+
+
+def loop_im_original(puffer: np.ndarray, raster_s: np.ndarray, i: int, takte: int,
+                     meiden: np.ndarray | None, rate: int = RATE) -> tuple[int, int, float]:
+    """(Start-Takt, Laenge, Guete) des A-Loops fuer eine Blende ab Takt i - Planung (regie._loop_guete) und
+    Backen rufen genau das auf (bis Runde 17 zwei Varianten: die Planung hielt Stellen fuer sauber, die das
+    Backen verwarf). Aus dem ungedehnten Audio, verglichen auch mit den 8 Takten hinter der Blende, so weit A
+    reicht (Takte, die vor dem Song-Ende -0,5 s beginnen, wie im Profil)."""
+    letzter = int(np.searchsorted(raster_s, len(puffer) / rate - 0.5)) - 1
+    n = max(0, min(takte + 8, letzter - i))
+    if n < 1:
+        return 0, max(1, min(4, takte)), 0.0
+    tn = np.round((raster_s[i:i + n + 1] - raster_s[i]) * rate).astype(int)
+    a0 = int(round(raster_s[i] * rate))
+    return loop_waehlen(puffer[a0:a0 + tn[-1]], tn, meiden, fenster=min(takte, n))
 
 
 def _intro_loop(b_audio: np.ndarray, bbar: np.ndarray, j0: int, k: int, mal: int):
@@ -1118,8 +1160,11 @@ def mischen_stems(art: str, a: dict[str, np.ndarray], b: dict[str, np.ndarray], 
     for k, ((va, ba), (vb, bb)) in plan.items():
         bk = b[k][:n]
         if schalter is not None and k != "bass":
+            # bis zum Switch: B ohne Tiefen, Mitten -3 dB, Hoehen -8 dB (A's Drop bleibt vorn, siehe _huellen)
             tief, rest = mix.band_teilen(bk, RATE, 150.0)
-            bk = rest + tief * schalter
+            mitte, hoch = mix.band_teilen(rest, RATE, 4000.0)
+            s = schalter[:, None] if schalter.ndim == 1 and bk.ndim > 1 else schalter
+            bk = tief * s + mitte * (0.7 + 0.3 * s) + hoch * (0.4 + 0.6 * s)
         aus += a[k][:n] * np.sqrt(1 - _rampe(n, va, ba) ** 2) + bk * _rampe(n, vb, bb)
     if art == "acapella" and gesang_takt > 0:
         # A's letzte Worte gehen ins Echo, statt nur auszublenden (klingt ueber B aus)
@@ -1241,11 +1286,10 @@ def ausstieg(a: Spur, e: Einstellungen, takte: int, ab_s: float, weiter: bool = 
 def einstieg(b: Eintrag, b_samples: int, e: Einstellungen, ein_s: float | None = None):
     """(Taktraster von B in Originalzeit, Index des Takts, an dem B einsetzt)."""
     if ein_s is not None:   # von der Regie: genau dort
-        bbar = regulaer(b.downbeats, b.bpm, b_samples / RATE + 64 * 2.5, um_s=ein_s + 15.0)
+        bbar = regulaer(b.downbeats, b.bpm, b_samples / RATE + 64 * 2.5)
         return bbar, int(np.argmin(np.abs(bbar - ein_s)))
     drop_s = b.abschnitte[0] if e.einstieg == "drop" and b.abschnitte else None
-    bbar = regulaer(b.downbeats, b.bpm, b_samples / RATE + 64 * 2.5,
-                    um_s=drop_s if drop_s is not None else 20.0)
+    bbar = regulaer(b.downbeats, b.bpm, b_samples / RATE + 64 * 2.5)
     return bbar, (_phrase_bei(bbar, drop_s) if drop_s is not None else 0)
 
 
@@ -1403,14 +1447,7 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
     elif art == "eigen":
         takt_n = np.round((ziel - t0) * RATE).astype(int)
         if e.loop == "auto":   # Stelle und Laenge des Loops nach Wiederholbarkeit
-            # Vergleich auch gegen die 8 Takte hinter der Blende (im Original): Loop faellt dort nicht auf
-            n_ext = max(0, min(takte + 8, len(abar) - 1 - i0))
-            x_ext = a.puffer[int(round(abar[i0] * RATE)):int(round(abar[i0 + n_ext] * RATE))]
-            tn_ext = np.round((abar[i0:i0 + n_ext + 1] - abar[i0]) * RATE).astype(int)
-            if n_ext >= takte and len(x_ext) > 0:
-                s0, loop_takte, guete = loop_waehlen(x_ext, tn_ext, a_gesang, fenster=takte)
-            else:
-                s0, loop_takte, guete = loop_waehlen(a_seg, takt_n, a_gesang)
+            s0, loop_takte, guete = loop_im_original(a.puffer, abar, i0, takte, a_gesang)
             e = replace(e, loop=str(4 * loop_takte), loop_start=s0)
             loop_wahl = {"start_takt": s0, "schlaege": 4 * loop_takte, "guete": round(guete, 2)}
         blende, nachlauf = mischen_eigen(a_seg, b_seg, e, takt_n)

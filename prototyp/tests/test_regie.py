@@ -48,6 +48,7 @@ def test_profil_aus_audio_speichern_laden(tmp_path):
     profil.speichern(5, p, tmp_path)
     q = profil.gespeichert(5, tmp_path)
     assert np.allclose(q.gesamt, p.gesamt, atol=0.01) and q.stems is None
+    assert profil.passt(q, e)   # gerundet gespeichert: sonst bei jedem Laden neu gerechnet
 
 
 def _planen(pa, pb, **e):
@@ -83,7 +84,7 @@ def test_kein_gesang_gegen_gesang():
     assert beide == 0
 
 
-@pytest.mark.parametrize("modus,laengen", [("kurz", (8, 16)), ("ausgewogen", (16, 24, 32)), ("lang", (24, 32))])
+@pytest.mark.parametrize("modus,laengen", [("kurz", (16,)), ("ausgewogen", (16, 24, 32)), ("lang", (24, 32))])
 def test_stil_bestimmt_die_laenge(modus, laengen):
     assert regie.laengen(modus, TAKT) == laengen          # 120 BPM: 1 Takt = 2 s
     plan = _planen(_profil(SONG), _profil(SONG), modus=modus)[0]
@@ -235,8 +236,8 @@ def test_loops_gehoeren_in_jeden_stil(modus, spielanteil):
     A loopt eine saubere Stelle, oder B's Intro laeuft im Loop - nicht erst bei Sonderfaellen."""
     p = _profil(SONG)
     einst = Einstellungen(modus=modus, spielanteil=spielanteil)
-    plaene = [regie.planen(None, p, None, p, einst, 0.0, True, True, vorher=v)[0]
-              for v in (None, "profi_eq", "outro_loop", "breakdown")]
+    plaene = [x for v in (None, "profi_eq", "outro_loop", "breakdown")
+              for x in regie.planen(None, p, None, p, einst, 0.0, True, True, vorher=v)[:3]]
     assert any(x.einst.loop != "keiner" or x.einst.loop_ein for x in plaene), [x.rezept for x in plaene]
 
 
@@ -332,7 +333,8 @@ def test_b_loopt_sein_intro_damit_der_drop_nach_der_blende_kommt():
     assert (4, 1) in regie._intro_loops(pb, 0, 16)
     lage = regie._Lage(96, 0, 16, 0.0, [], 8, 1)
     name, felder, _ = regie._rezept(lage, _profil(SONG), pb, Einstellungen(modus="lang"), True, True, False, None)
-    assert name == "intro_loop_b" and felder["filter"] == "tp_ein"   # langer Loop: B oeffnet sich
+    assert name == "intro_loop_b" and felder["filter"] == "tp_ein"   # langer Loop: B oeffnet sich ...
+    assert felder["eq"] == "bass_mitte"   # ... nie mit dem EQ-Swap (B haette nur Hoehen, der Tiefpass nimmt sie weg)
     # Runde 5: A- und B-Loop zugleich "zu viel auf einmal" - die Alternative loopt A nicht
     _, felder, _ = regie._rezept(lage, _profil(SONG), pb, Einstellungen(modus="lang"), True, True, False,
                                  "intro_loop_b")
@@ -454,3 +456,47 @@ def test_pegel_reparieren_hebt_loch_statt_verwerfen():
     assert "Loch" in regie.pruefen(blende, *args)
     assert regie.pegel_reparieren(blende, *args) and regie.pruefen(blende, *args) is None
     assert blende[0, 0] == pytest.approx(10 ** (-22 / 20), rel=1e-3)   # Anfang unveraendert
+
+
+def test_drop_auf_den_ersten_vollen_takt():
+    p = _profil([("break", 2), ("drop", 4)])            # Drop auf Takt 16
+    k = 2 * PHRASE - 1                                  # Auftakt: Bass/Drums nur halb (Runde 15, Fall 17/37)
+    p.stems["bass"][k], p.stems["drums"][k], p.gesamt[k] = -22.0, -20.0, -14.0
+    assert p.drops()[0] == 2 * PHRASE
+
+
+def test_double_drop_b_leiser_in_mitten_und_hoehen_bis_zum_switch():
+    e = Einstellungen(art="eigen", lautstaerke="doppel", eq="bass_takt", bass_takt=15)
+    h = u._huellen(e, 16, 1600, 0.01)
+    assert h["b_tief"][800] == 0 and h["b_mitte"][800] == pytest.approx(0.7) and h["b_hoch"][800] == pytest.approx(0.4)
+    assert h["b_hoch"][1599] == pytest.approx(1.0) and h["a_tief"][800] == pytest.approx(1.0)
+
+
+def test_strukturregeln_drop_nicht_in_der_blende():
+    p = _profil(SONG)                                            # Drops auf Takt 16 und 64
+    bi = lambda j, L: regie._b_index(j, L)                       # noqa: E731
+    assert "A's Drop" in regie._strukturfehler(p, p, 56, bi(0, 16), 16, False)     # A droppt bei 64 in der Blende
+    assert "B's Drop" in regie._strukturfehler(p, p, 96, bi(8, 16), 16, False)     # B droppt bei 16 mittendrin
+    assert "16 Takte" in regie._strukturfehler(p, p, 72, bi(0, 16), 16, False)     # A's Drop erst 8 Takte alt
+    assert regie._strukturfehler(p, p, 96, bi(0, 16), 16, False) is None          # Outro -> B's Drop danach
+
+
+def test_schnell_laesst_platz_fuer_die_blende_wenn_der_drop_bis_ans_ende_geht():
+    p = _profil([("intro", 2), ("drop", 4), ("break", 2), ("drop", 6)])   # 2. Drop-Abschnitt bis zum Ende (112)
+    kandidaten = regie._a_kandidaten(p, 0, Einstellungen(spielanteil="schnell"), False)
+    assert any(p.n - t >= 16 for t, _, _ in kandidaten)   # ohne: nur Ausstiege, bei denen A in der Blende endet
+
+
+def test_b_filter_oeffnet_hoechstens_ueber_16_takte():
+    h = u._huellen(Einstellungen(art="eigen", filter="tp_ein"), 32, 3200, 0.01)
+    assert h["b_tp"][0] == pytest.approx(1.0) and h["b_tp"][1600] == 0.0   # Runde 17: B kam bei 32 Takten zu spaet
+    assert h["b_tp"][800] == pytest.approx(0.5, abs=0.01)
+
+
+def test_unsauberer_loop_nur_zur_not(monkeypatch):
+    monkeypatch.setattr(regie, "_loop_guete", lambda *a: 0.0)   # nirgends ein sauberer Loop
+    pa = _profil(SONG[:-1] + [("outro", 1)])                     # kurzes Outro: spaete Ausstiege enden in der Blende
+    plaene = regie.planen(None, pa, None, _profil(SONG), Einstellungen(modus="lang", spielanteil="lang"), 0.0,
+                          True, False, stems_da=True, anzahl=6, a_audio=np.zeros((10, 2), np.float32))
+    ohne = [p.einst.loop == "keiner" for p in plaene]
+    assert ohne[0] and ohne == sorted(ohne, reverse=True)       # Loop-Plaene (A endet) erst ganz hinten

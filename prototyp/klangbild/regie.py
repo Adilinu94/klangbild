@@ -24,7 +24,8 @@ from .profil import PHRASE, Profil
 # Blendenlaenge als Zeit, nicht als feste Taktzahl: 16 Takte sind bei 174 BPM (DnB) 22 s, bei
 # 120 BPM 32 s. Profis: House/Techno 16-32 Takte (30-60 s), DnB 8-16 (11-22 s), Hip-Hop kurz.
 # Uebergangstest 14.10.2026 (46 Noten): 4 Takte (8 s) 1,4 · 8 Takte 2,3 · 16 Takte 3,9.
-DAUER_S = {"kurz": (14.0, 32.0), "ausgewogen": (28.0, 64.0), "lang": (45.0, 66.0)}
+# kurz ab 20 s: 16 Runden, 8 Takte 2,85 / 4 Takte 1,45 gegen 16-32 Takte 3,2-3,4 ("zu abrupt" = haeufigste Kritik)
+DAUER_S = {"kurz": (20.0, 32.0), "ausgewogen": (28.0, 64.0), "lang": (45.0, 66.0)}
 WEITER_DAUER_S = {"kurz": (14.0, 24.0), "ausgewogen": (14.0, 34.0), "lang": (20.0, 34.0)}
 TAKT_STUFEN = (4, 8, 16, 24, 32)
 LOOP_REZEPTE = ("outro_loop", "loop_echo", "loop_filter", "loop_fx", "intro_loop_b", "rolle")
@@ -131,6 +132,11 @@ def _a_kandidaten(pa: Profil, ab_takt: int, e: Einstellungen, sofort: bool,
             aus.append((takt, 3.0 - 1.5 * k, "zweite Hälfte nach dem Drop"))
         if drops and start > pa.phrase_ab(drops[0] + 1):   # Ausweg, wenn A nach seinem Drop zu kurz ist
             aus.append((pa.phrase_ab(drops[0] + 1), -1.5, "zweite Hälfte nach dem Drop"))
+        if all(pa.n - t < 16 for t, _, _ in aus):   # Drop-Abschnitt bis kurz vors Ende: Platz fuer die Blende
+            # (Runde 14-17, Must Be Right: nur 10 Takte Rest, Loop ueber Gesang unmoeglich -> 4x Note 1-2)
+            platz = [g for g in pa.grenzen() if mitte <= g <= pa.n - 16]
+            if platz:
+                aus.append((platz[-1], -2.0, "zweite Hälfte, Platz für die Blende"))
     else:
         # So lange wie moeglich: Kandidaten im letzten Drittel, spaeter = besser.
         start = pa.phrase_start(pa.phrase_von(int(pa.n * 0.7)))
@@ -270,6 +276,27 @@ def _bewerten(pa: Profil, pb: Profil, i: int, j: int, L: int, e: Einstellungen, 
     return p, teile, harm
 
 
+DROP_AUSSPIELEN = 16    # so viele Takte laeuft ein Drop von A mindestens, bevor die Blende beginnt
+STRUKTUR_STRAFE = 20.0  # Strukturfehler: nur, wenn sonst nichts geht
+
+
+def _strukturfehler(pa: Profil, pb: Profil, i: int, bi: np.ndarray, L: int, sofort: bool,
+                    gesang: bool = False) -> str | None:
+    """Harte DJ-Regeln (nach Runde 16, 10 von 10 schlechtesten Faellen verletzten eine davon):
+    - A startet keinen Drop in der Blende (Faelle 6, 34: "Drop von A viel frueher" als der von B),
+    - B startet keinen Drop mitten in der Blende (er gehoert ans Ende: der Wechsel),
+    - A's Drop spielt mindestens 16 Takte aus, bevor die Blende beginnt (Fall 30: "mitten im Drop leiser").
+    Double Drops (beide Drops auf demselben Takt) baut _double_drops getrennt."""
+    if not gesang and any(i < d < i + L for d in pa.drops()):
+        return "A's Drop käme in der Blende"
+    b_drops = set(pb.drops())
+    if not gesang and any(int(t) in b_drops for t in bi[1:]):
+        return "B's Drop käme mitten in der Blende"
+    if not sofort and any(0 <= i - d < DROP_AUSSPIELEN for d in pa.drops()):
+        return "A's Drop wäre noch keine 16 Takte gelaufen"
+    return None
+
+
 def _verpasst(pa: Profil, ab_takt: int) -> int:
     """Hauptteile/Drops von A ab diesem Takt (entfallen, wenn A hier aufhoert)."""
     ea = pa.etiketten()
@@ -286,7 +313,7 @@ def _grundwert(pa: Profil, pb: Profil, i: int, j: int, L: int, e: Einstellungen,
     ga, gb = pa.gesang(), pb.gesang()
     if ga is not None and gb is not None:
         clash = float(np.sum(_fenster(ga, i, L) * _werte(gb, bi) * w)) / L
-        p -= 12.0 * clash
+        p -= 8.0 * clash   # Runde 16 (Faelle 4, 23): "lass die Vocals ruhig uebereinander laufen", lieber ruhiger
         if clash < 0.02:
             teile.append("kein Gesang gegeneinander")
     # B uebernimmt nach der Blende mit einem tragenden Teil
@@ -561,6 +588,12 @@ def _rangliste(pa: Profil, pb: Profil, e: Einstellungen, ab_takt: int, sofort: b
                 varianten = [(0, 0)] + (_intro_loops(pb, j, L) if not sofort else [])
                 for k_ein, mal in varianten:
                     p, teile, harm = _bewerten(pa, pb, i, j, L, e, k_ein, mal, stems_da, tonart_ok)
+                    # Gesangsuebergaben: die Musik des einen laeuft unter der Stimme des anderen, ihr Drop darf kommen
+                    gesang = bool(set(teile) & set(GESANG_TEILE))
+                    fehler = _strukturfehler(pa, pb, i, _b_index(j, L, k_ein, mal), L, sofort, gesang)
+                    if fehler:
+                        p -= STRUKTUR_STRAFE
+                        teile = teile + [fehler]
                     if (L in extra or g_a == FRUEH_GESANG) and not set(teile) & set(GESANG_TEILE):
                         continue   # Toene passen nicht: keine Ueberlaenge; frueher Ausstieg nur fuer A's Stimme
                     if k_ein and harm is not None and harm < 0.65:
@@ -669,8 +702,10 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
         hoerbar = loop_hoerbar if felder.get("loop", "keiner") != "keiner" else effekt_hoerbar
         if felder.get("effekt", "keiner") != "keiner" and not hoerbar:
             return
-        if not (loop_ok or a_endet) and felder.get("loop", "keiner") != "keiner":
-            return   # an dieser Stelle gibt es keinen sauberen Loop (Ausnahme: A endet in der Blende)
+        # an dieser Stelle gibt es keinen sauberen Loop (Ausnahme: A endet in der Blende - in der des Rezepts:
+        # loop_filter kuerzt auf 8 Takte, Runde 18 vorab: der unsaubere Loop rutschte sonst durch)
+        if not (loop_ok or pa.n - i < felder.get("takte", L)) and felder.get("loop", "keiner") != "keiner":
+            return
         kandidaten.append((name, {**basis, **felder}, text, wert))
 
     # Loops: A wiederholt eine saubere Stelle (die Auswahl trifft uebergang.loop_waehlen) oder
@@ -706,7 +741,11 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
                       ("bremse_drop", dict(drop, trick="bremse"), "Tape-Stop auf A"),
                       ("spinback_drop", dict(drop, trick="spinback"), "Backspin auf A"),
                       ("gate_drop", dict(drop, trick="gate"), "A wird zerhackt (Trans)"))
+            # Runde 16: Riser 1,33 (3 von 3 <= 2) - "nur bei starkem Drop von B": echter Drop, Pegel +6 dB
+            stark = drop_genau and nach_takt >= 2 and                 float(np.mean(pb.gesamt[nach_takt:nach_takt + 2]) - np.mean(pb.gesamt[nach_takt - 2:nach_takt])) >= 6.0
             for k, (name, felder, text) in enumerate(tricks):
+                if name == "riser_drop" and not stark:
+                    continue
                 if name != "teaser_drop" or L >= 4:
                     kann(name, felder, text + ", B's Drop schlägt ein", mut + 0.05 * ((dreh + k) % len(tricks)))
         if mut and not a_endet:   # A bekommt einen Modulations-Effekt und geht ins Echo/Ping-Pong
@@ -722,8 +761,10 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
                  f"Stems: B's Gesang {ueb[2]} Takte über A's Musik, B's Musik erst danach", 4.0)
         if lage.k_ein and harmonisch:   # beissende Toene nicht lange uebereinander loopen
             lang_loop = lage.k_ein * (lage.mal + 1) >= 8
+            # Tiefpass nur mit Bass-Tausch, nie mit dem EQ-Swap (Runde 17, Faelle 14/30: der Swap laesst B anfangs
+            # nur Hoehen, der Tiefpass nahm genau die weg - B 16 Takte stumm, A ohne Hoehen "allein mit Tiefpass")
             kann("intro_loop_b", dict(loop_ein=lage.k_ein, loop_ein_mal=lage.mal,
-                                      **({"filter": "tp_ein"} if lang_loop else {}),
+                                      **({"filter": "tp_ein", "eq": "bass_mitte"} if lang_loop else {}),
                                       **({"loop": "auto"} if a_endet else {})),
                  "B's Intro im Loop" + (", öffnet sich mit dem Tiefpass" if lang_loop else "")
                  + ", damit Gesang/Drop erst nach der Blende kommen", 3.0)
@@ -802,7 +843,8 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
         kann("profi_eq", {}, "Profi-Blend")
     # Abwechslung: nach einem Loop-Rezept kommt bevorzugt ein anderes (sonst loopt jeder Uebergang)
     nach_loop = vorher in LOOP_REZEPTE
-    kandidaten.sort(key=lambda k: -(k[3] - (1.5 if nach_loop and k[0] in LOOP_REZEPTE else 0.0)))   # stabil
+    kandidaten.sort(key=lambda k: -(k[3] - (1.5 if nach_loop and k[0] in LOOP_REZEPTE else 0.0)
+                                    + REZEPT_GEWICHT * (REZEPT_NOTE.get(k[0], 3.15) - 3.15)))   # stabil
     vorlieben = vorlieben or {}
     # Abwechslung: nicht zweimal dasselbe; Gelerntes: was du oft abbrichst, nur wenn nichts anderes geht
     for name, felder, text, _ in kandidaten:
@@ -812,6 +854,16 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
         if name != vorher:
             return name, felder, text
     return kandidaten[0][:3]
+
+
+# Mittlere Note je Rezept aus 16 Hoerrunden (530 Noten, zum Mittel 3,15 hin geschrumpft: +10 Pseudo-Noten).
+# shortcut: fester Stand 17.10.2026; neu ausrechnen, wenn weitere Runden bewertet sind
+REZEPT_NOTE = {"acapella": 3.42, "breakdown": 2.44, "bremse_drop": 3.16, "double_drop": 2.93, "drop_cuts": 2.83,
+               "drums_zuerst": 3.04, "echo_drop": 3.27, "echo_out": 3.05, "fx_echo": 3.25, "gate_drop": 3.12,
+               "gesang_zuerst": 3.58, "gesangsschutz": 3.38, "hochpass_hall": 2.82, "intro_loop_b": 3.23,
+               "kurz_eq": 3.06, "loop_filter": 3.12, "loop_fx": 3.15, "outro_loop": 3.2, "riser_drop": 2.84,
+               "rolle": 2.73, "schnitt": 2.89, "spinback_drop": 3.53, "teaser_drop": 3.04}
+REZEPT_GEWICHT = 2.0   # je Notenpunkt ueber/unter dem Mittel (profi_eq fehlt: seine Noten sind meist Sicherheits-Blends)
 
 
 def _bass_takt(pa: Profil, pb: Profil, i: int, bi: np.ndarray, L: int) -> int:
@@ -834,23 +886,13 @@ LOOP_GUETE_MIN = 0.7   # darunter faellt die Wiederholung auf: kein A-Loop an di
 
 
 def _loop_guete(pa: Profil, i: int, L: int, a_audio: np.ndarray, rate: int) -> float:
-    """Wie sauber laesst sich A im Fenster ab Takt i loopen (aus dem Original, wie backen es waehlt)?
+    """Wie sauber laesst sich A im Fenster ab Takt i loopen? Dieselbe Wahl wie beim Backen (meidet Gesang).
     Endet A vorher, zaehlt nur der Rest."""
-    from .uebergang import loop_waehlen
+    from .uebergang import loop_im_original
 
-    n = max(0, min(L + 8, pa.n - 1 - i))
-    if n < 1:
-        return 0.0
-    fenster = min(L, n)
-    t = pa.takte[i:i + n + 1] - pa.takte[i]
-    a0 = int(round(pa.takte[i] * rate))
-    tn = np.round(t * rate).astype(int)
-    x = a_audio[a0:a0 + tn[-1]]
-    if len(x) < tn[-1] // 2:
-        return 1.0   # Audio passt nicht zum Profil: nicht beurteilbar
     ga = pa.gesang()
-    meiden = _fenster(ga, i, fenster) > 0 if ga is not None else None
-    return float(loop_waehlen(x, tn, meiden, fenster=fenster)[2])
+    return float(loop_im_original(a_audio, pa.takte, i, L, _fenster(ga, i, L) > 0 if ga is not None else None,
+                                  rate)[2])
 
 
 def planen(a, pa: Profil, b, pb: Profil, e: Einstellungen, ab_s: float, sync: bool, harmonisch: bool,
@@ -895,10 +937,12 @@ def planen(a, pa: Profil, b, pb: Profil, e: Einstellungen, ab_s: float, sync: bo
         plan = plan_aus(lage)
         if (a_audio is not None and plan.einst.loop == "auto"
                 and _loop_guete(pa, lage.i, plan.takte, a_audio, rate) < LOOP_GUETE_MIN):
-            if pa.n - lage.i < plan.takte:   # A endet hier: nur mit diesem (schlechten) Loop moeglich
+            if pa.n - lage.i >= plan.takte:   # A endet nicht in der Blende: Rezept ohne A-Loop
+                plan = plan_aus(lage, loop_ok=False)
+            # A endet in der (neuen) Blende: nur mit diesem (schlechten) Loop moeglich, nur zur Not
+            if plan.einst.loop == "auto" and _loop_guete(pa, lage.i, plan.takte, a_audio, rate) < LOOP_GUETE_MIN:
                 zurueck.append(plan)
                 continue
-            plan = plan_aus(lage, loop_ok=False)
         plaene.append(plan)
         if len(plaene) >= (max(anzahl, ANZAHL_INTERN) if kritiker is not None else anzahl):
             break

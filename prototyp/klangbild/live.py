@@ -547,10 +547,19 @@ class Wiedergabe:
                 fehler = f"Kritiker: {note:.1f}" if note < kritiker.NACHHER_MIN else None
             return g, fehler
 
-        for k, plan in enumerate(plaene[start:start + (2 if frueh else 5)]):   # mehr Versuche statt Sicherheits-Blend
+        # mehr Versuche statt Sicherheits-Blend; ein durchgefallenes Rezept nicht noch einmal (Runde 15 vorab:
+        # dreimal loop_filter mit derselben unsauberen Loop-Stelle verbrauchte alle Versuche)
+        versuche, durchgefallen = 0, set()
+        for k, plan in enumerate(plaene[start:]):
+            if versuche == (2 if frueh else 5):
+                break
+            if plan.rezept in durchgefallen:
+                continue
+            versuche += 1
             g, fehler = backen_plan(plan, k)
             if fehler is None:
                 return g
+            durchgefallen.add(plan.rezept)
             print(f"Selbstkontrolle {b.titel}: Plan {start + k + 1} ({plan.rezept}) {fehler}", flush=True)
         if frueh:   # WEITER wartet: keine Zeit fuer weitere Versuche
             g.info["pruefung"] = fehler
@@ -558,7 +567,10 @@ class Wiedergabe:
         # Nichts bestanden: sicherer Profi-Blend am besten Ausstieg, ohne Loop und Effekt
         p0 = plaene[start]
         kurz = min(p0.takte, 16)   # Ueberlaengen gelten nur fuer Gesangsuebergaben (Runde 5, Fall 4: 48 Takte)
-        a_endet = pa.n - pa.takt_bei(p0.aus_s) < kurz   # A klingt in der Blende aus: nur mit Loop
+        i_aus = pa.takt_bei(p0.aus_s)
+        a_endet = pa.n - i_aus < kurz   # A klingt in der Blende aus: nur mit sauberem Loop, sonst kuerzer
+        if a_endet and regie._loop_guete(pa, i_aus, kurz, self.roh(a.eintrag), RATE) < regie.LOOP_GUETE_MIN:
+            kurz, a_endet = max(2, (pa.n - i_aus) // 2 * 2), False   # Runde 17, Fall 23: Loop mit Guete 0, "abrupt"
         sicher = replace(p0, rezept="profi_eq", grund="Sicherheits-Blend: die Rezepte davor fielen durch",
                          takte=kurz, einst=replace(p0.einst, takte=kurz, weiter_takte=kurz, art="eigen",
                                        lautstaerke="nahtlos", eq="profi", filter="keiner",

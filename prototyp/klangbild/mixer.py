@@ -298,8 +298,7 @@ class _Handler(BaseHTTPRequestHandler):
             elif pfad.startswith("/api/welle/"):
                 self._json(welle.laden(e.id, e.pfad))
             else:
-                takte = uebergang.regulaer(e.downbeats, e.bpm, (e.downbeats[-1] if e.downbeats else 0) + 30,
-                                           um_s=e.downbeats[len(e.downbeats) // 2] if e.downbeats else 0)
+                takte = uebergang.regulaer(e.downbeats, e.bpm, (e.downbeats[-1] if e.downbeats else 0) + 30)
                 from . import profil
 
                 p = profil.gespeichert(e.id)   # Abschnitte (Intro/Drop/...) fuer die Anzeige

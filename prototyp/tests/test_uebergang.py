@@ -390,3 +390,20 @@ def test_drop_cuts_wechseln_in_2_takt_stuecken_und_enden_auf_b():
     mitte = lambda t: int((t + 0.5) * 100)   # noqa: E731 - Mitte von Takt t
     assert [round(float(h["b_vol"][mitte(t)])) for t in range(12)] == [0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1]
     assert np.allclose(h["a_vol"] + h["b_vol"], 1.0)        # immer genau ein Song
+
+
+def test_regulaer_ein_raster_je_song_trotz_springender_eins():
+    """Runde 17: die Eins sprang abschnittsweise um 2 Schlaege, Planung (Songmitte) und Backen (Ausstieg) lagen
+    bis zu 2 Schlaege auseinander. Jetzt: Mehrheit der Downbeats, unabhaengig von bis_s."""
+    db = np.arange(0.0, 200.0, 2.0)                      # 120 BPM, Eins auf 0
+    falsch = (db > 60) & (db < 100)                      # dort setzt Beat This! die Eins einen halben Takt daneben
+    d = np.where(falsch, db + 1.0, db)
+    r = u.regulaer(list(d), 120.0, 210.0)
+    assert np.allclose(r[:100], db, atol=1e-6)
+    assert np.allclose(u.regulaer(list(d), 120.0, 400.0)[:len(r)], r)
+
+
+def test_regulaer_folgt_langsamer_drift():
+    db = np.arange(0.0, 200.0, 2.0) + np.linspace(0.0, 0.06, 100)   # 60 ms Drift ueber den Song
+    r = u.regulaer(list(db), 120.0, 200.0)
+    assert np.max(np.abs(r[:100] - db)) < 0.01

@@ -237,8 +237,8 @@ def _planning(w: Writer, a_audio: np.ndarray, b_audio: np.ndarray) -> None:
     spur = u.Spur.roh(a, a_audio)
     for name, beats, bpm in (("leer", [], 0), ("normal", a.downbeats, 120),
                              ("versatz", [0.3, 2.31, 4.28, 6.32], 120), ("ausreisser", [0, 2, 5, 6], 120)):
-        w.case(f"regulaer_{name}", "uebergang.regulaer", {"downbeats": beats, "bpm": bpm, "bis_s": 12, "um_s": 6},
-               u.regulaer(beats, bpm, 12, 6))
+        w.case(f"regulaer_{name}", "uebergang.regulaer", {"downbeats": beats, "bpm": bpm, "bis_s": 12},
+               u.regulaer(beats, bpm, 12))
     for choice in einstellungen.AUSWAHL["ausstieg"]:
         e = Einstellungen(ausstieg=choice, takte=1)
         w.case(f"ausstieg_{choice}", "uebergang.ausstieg",

@@ -8,6 +8,12 @@ Messung: Anschlagstaerke der Drum-Spur (Kick < 100 Hz plus Snare-Koerper 150-400
 (192 Stufen je Schlag); die Spitze der Faltung ist der Versatz. Liegt sie um einen halben Schlag daneben, ist
 offen, ob die Eins davor oder danach liegt: dort, wo die Kick stark und die Snare (1,5-5 kHz) schwach ist.
 
+Taktphase (nach Runde 16): Beat This! setzt bei manchen Songs die Eins einen oder zwei Schlaege daneben
+(Ride the Bass, Wouldn't Believe: staerkste Kick auf Schlag 4; VOLCA: auf Schlag 3). Der Versatz oben findet
+nur Fehler bis zu einem halben Schlag. Die Eins ist der Schlag mit dem staerksten Kick-Anschlag im Takt
+(Drops, Crashes und die Kick auf der Eins); deutlich staerker als die bisherige Eins -> das Raster um so
+viele Schlaege verschieben (im Versatz enthalten).
+
     python -m klangbild anker    # alle Titel mit Stem-Vorrat; Profile der verschobenen Titel neu
 
 Cache: cache/anker.json {id: Versatz in s}; angewendet in mixer.bibliothek_laden (Downbeats + Versatz).
@@ -23,10 +29,13 @@ import numpy as np
 from . import config
 
 CACHE = config.CACHE / "anker.json"
-VERSION = 1
+VERSION = 2           # 2: mit Taktphase
 STUFEN = 192          # je Schlag
 MIN_S = 0.012         # darunter: Messgenauigkeit von Beat This!, nichts verschieben
 KLAR_MIN = 1.25       # Spitze / Median der Faltung; darunter kein klares Muster
+# Kick auf einem anderen Schlag mindestens doppelt so stark wie auf der Eins und 1,5-mal staerker als auf allen
+# uebrigen Schlaegen: an 67 UKG/DnB-Titeln 7 so verschoben; Uebergaenge mit ihnen 2,86 (n = 49) gegen 3,26 (n = 211)
+PHASE_MIN, PHASE_VOR = 2.0, 1.5
 HOP = 64
 
 
@@ -83,6 +92,35 @@ def versatz(drums: np.ndarray, rate: int, beats: np.ndarray, downbeats: np.ndarr
     return float(v), klar
 
 
+def _kick_fluss(drums: np.ndarray, rate: int) -> tuple[np.ndarray, np.ndarray]:
+    """(Zeiten, Kick-Fluss): spektraler Anstieg 30-100 Hz (STFT, 6 ms Schritt)."""
+    from scipy.signal import stft
+
+    f, t, z = stft(drums, rate, nperseg=1024, noverlap=1024 - 256)
+    m = np.log1p(100 * np.abs(z[(f >= 30) & (f < 100)]))
+    return t, np.maximum(0, np.diff(m, axis=1, prepend=m[:, :1])).sum(axis=0)
+
+
+def taktphase(drums: np.ndarray, rate: int, downbeats: np.ndarray) -> tuple[int, np.ndarray]:
+    """(p, Kick je Schlag): die echte Eins liegt p Schlaege nach dem Raster (0 = passt). Kick-Fluss je
+    Schlagposition (Spitze +-30 ms, gemittelt ueber alle Takte); p nur, wenn dort klar staerker (PHASE_MIN/VOR)."""
+    if drums.ndim > 1:
+        drums = drums.mean(axis=1)
+    db = np.asarray(downbeats, float)
+    if len(db) < 8:
+        return 0, np.ones(4)
+    t, k = _kick_fluss(drums, rate)
+    w = int(0.03 / (t[1] - t[0])) + 1
+    stark = np.zeros(4)
+    for b in range(4):
+        i = np.searchsorted(t, db[:-1] + np.diff(db) * b / 4)
+        i = i[(i > w) & (i < len(t) - w)]
+        stark[b] = np.mean([k[j - w:j + w].max() for j in i]) if len(i) else 0.0
+    p = int(np.argmax(stark))
+    klar = p and stark[p] >= PHASE_MIN * max(stark[0], 1e-9) and stark[p] >= PHASE_VOR * np.delete(stark, p).max()
+    return (p if klar else 0), stark
+
+
 def laden(pfad: Path = CACHE) -> dict[int, float]:
     try:
         roh = json.loads(pfad.read_text(encoding="utf-8"))
@@ -92,7 +130,7 @@ def laden(pfad: Path = CACHE) -> dict[int, float]:
 
 
 def anwenden(downbeats: list[float], v: float) -> list[float]:
-    return [round(d + v, 4) for d in downbeats] if v else list(downbeats)
+    return [round(d + v, 4) for d in downbeats if d + v >= 0] if v else list(downbeats)
 
 
 def kommando(args) -> int:
@@ -114,7 +152,10 @@ def kommando(args) -> int:
     finally:
         conn.close()
     werte = laden()
-    alt = dict(werte)
+    try:   # Stand vor diesem Lauf (auch aus aelteren Versionen): nur geaenderte Profile neu rechnen
+        alt = {int(k): float(v) for k, v in json.loads(CACHE.read_text(encoding="utf-8"))["werte"].items()}
+    except (OSError, ValueError, KeyError):
+        alt = {}
     for n, (tid, x) in enumerate(sorted(bib.items())):
         datei = stems.VORRAT / f"{tid}_0.ogg"
         if not stems.vorrat_fertig(tid) or not datei.exists() or tid in werte:
@@ -122,9 +163,12 @@ def kommando(args) -> int:
         with sf.SoundFile(datei) as f:
             drums = f.read(dtype="float32", always_2d=True)[:, 0:2]   # stems.NAMEN: drums zuerst
         v, klar = versatz(drums, f.samplerate, np.asarray(beats.get(tid, [])), np.asarray(x.downbeats))
+        p, _ = taktphase(drums, f.samplerate, np.asarray(anwenden(x.downbeats, v)))
+        if p:   # 1-2 Schlaege spaeter, 3 = einen frueher
+            v += (p if p <= 2 else p - 4) * float(np.median(np.diff(x.downbeats))) / 4
         werte[tid] = round(v, 4)
         if v:
-            print(f"{tid:>5} {v * 1000:+6.0f} ms (Klarheit {klar:.1f})  {x.titel}", flush=True)
+            print(f"{tid:>5} {v * 1000:+6.0f} ms (Klarheit {klar:.1f}, Taktphase {p})  {x.titel}", flush=True)
         if n % 25 == 0:
             CACHE.write_text(json.dumps({"version": VERSION, "werte": werte}), encoding="utf-8")
     CACHE.write_text(json.dumps({"version": VERSION, "werte": werte}), encoding="utf-8")

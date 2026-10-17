@@ -141,7 +141,22 @@ class Profil:
                 auswahl.append(int(k[m]))
             if len(auswahl) == 3:
                 break
-        return sorted(auswahl)
+        return sorted(self._drop_genau(t) for t in auswahl)
+
+    def _drop_genau(self, k: int) -> int:
+        """Erster voller Drop-Takt ab k (bis k+2): Bass und Drums schon fast so laut wie im Drop danach
+        (Median der 4 Takte nach k, -4 dB). Runde 15: der 4-Takt-Sprung traf oft den halbvollen Takt mit
+        dem Auftakt davor, der Double Drop lag dann einen Takt daneben (Faelle 17, 19, 37)."""
+        bass = self.stems["bass"] if self.stems else self.baender[:, 0]
+        drums = self.stems["drums"] if self.stems else self.gesamt
+        ende = min(self.n, k + 5)
+        if ende - k < 3:
+            return k
+        rb, rd = np.median(bass[k + 1:ende]) - 4.0, np.median(drums[k + 1:ende]) - 4.0
+        for t in range(k, min(self.n, k + 3)):
+            if bass[t] >= rb and drums[t] >= rd:
+                return t
+        return k
 
     @_einmal
     def grenzen(self) -> list[int]:
@@ -290,13 +305,8 @@ def _chroma_je_takt(x: np.ndarray, grenzen: np.ndarray) -> np.ndarray:
 
 def berechnen(eintrag, audio: np.ndarray, stems: dict[str, np.ndarray] | None = None) -> Profil:
     """Profil aus dem dekodierten Song (n, 2) und optional seinen Stems (gleiche Laenge)."""
-    from .uebergang import regulaer
-
     dauer = len(audio) / RATE
-    t = regulaer(eintrag.downbeats, eintrag.bpm, dauer, um_s=dauer / 2)
-    t = t[(t >= -0.5) & (t < dauer - 0.5)]
-    if len(t) < 2:
-        t = np.array([0.0, dauer])
+    t = _raster(eintrag, dauer)
     grenzen = np.clip(np.round(np.concatenate([t, [min(dauer, 2 * t[-1] - t[-2])]]) * RATE), 0,
                       len(audio)).astype(int)
     mono = audio.mean(axis=1)
@@ -337,13 +347,20 @@ def gespeichert(track_id: int, cache: Path | None = None) -> Profil | None:
         return None
 
 
-def passt(p: Profil, downbeats) -> bool:
-    """Liegt das Taktraster des Profils auf den Downbeats des Eintrags (z. B. nach einem Raster-Anker)?"""
-    d = np.asarray(downbeats, float)
-    if len(d) < 4 or p.n < 4:
-        return True
-    mitte = d[len(d) // 2 - 2:len(d) // 2 + 2]
-    return float(np.median(np.min(np.abs(p.takte[:, None] - mitte[None, :]), axis=0))) < 0.01
+def _raster(eintrag, dauer: float) -> np.ndarray:
+    from .uebergang import regulaer
+
+    t = regulaer(eintrag.downbeats, eintrag.bpm, dauer)
+    t = t[(t >= -0.5) & (t < dauer - 0.5)]
+    return t if len(t) >= 2 else np.array([0.0, dauer])
+
+
+def passt(p: Profil, eintrag) -> bool:
+    """Ist das Taktraster des Profils das aktuelle des Eintrags (nach einem Raster-Anker oder neuer Raster-Regel)?
+    Bis Runde 17 gegen die Downbeats geprueft: bei unruhigen Downbeats fiel das immer durch, das Profil wurde
+    bei jedem Laden neu gerechnet (13 s je Uebergang)."""
+    t = _raster(eintrag, p.dauer)
+    return len(t) == p.n and float(np.max(np.abs(t - p.takte))) < 0.006   # gespeichert auf 10 ms gerundet
 
 
 def laden(eintrag, audio_quelle, cache: Path | None = None, neu: bool = False) -> Profil:
@@ -354,7 +371,7 @@ def laden(eintrag, audio_quelle, cache: Path | None = None, neu: bool = False) -
 
     p = None if neu else gespeichert(eintrag.id, cache)
     mit_stems = st.vorrat_fertig(eintrag.id)
-    if p is not None and (p.stems is not None or not mit_stems) and passt(p, eintrag.downbeats):
+    if p is not None and (p.stems is not None or not mit_stems) and passt(p, eintrag):
         return p
     audio = audio_quelle()
     stems = st.aus_vorrat(eintrag.id, 0.0, audio) if mit_stems else None
