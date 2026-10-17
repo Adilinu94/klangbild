@@ -1,8 +1,7 @@
-"""Tests fuer BAUPLAN-UEBERGAENGE §2 (Datensatz, Kritiker), §7 (Daumen, Vorhoeren) und §8 (Set-Planung)."""
+"""Tests fuer BAUPLAN-UEBERGAENGE §2 (Datensatz, Kritiker), §7 (Bewertung) und §8 (Set-Planung)."""
 
 from __future__ import annotations
 
-import io
 import json
 import threading
 import urllib.error
@@ -10,7 +9,6 @@ import urllib.request
 
 import numpy as np
 import pytest
-import soundfile as sf
 
 from klangbild import datensatz, kritiker, live, mixer, paarnoten, plan
 from klangbild.profil import Profil
@@ -93,19 +91,19 @@ def _wiedergabe(tmp_path):
 def test_bewertung_speichert_im_hoertest_format(tmp_path, monkeypatch):
     w, a, b = _wiedergabe(tmp_path)
     with pytest.raises(ValueError):
-        w.bewerten(1)                                                  # noch keine Blende
+        w.bewerten(1, 1)                                               # noch keine Blende
     w.play(1)
     info = {"rezept": "profi_eq", "takte": 8, "blende_s": 4.0, "sync": True, "stems": False, "stil": "lang",
             "spielanteil": "lang", "weiter": False, "experimente": "klassisch",
             "art": "eigen", "a_orig_start": 0.0, "a_orig_pro_s": 1.0}
     w._naechste = (w.pos + 10, live.Spur.roh(b, np.zeros((RATE * 10, 2), np.float32)), info)
     w.fuellen(20)                                                      # Umschalten -> Blende laeuft
-    bw = w.zustand()["bewertbar"]
-    assert bw["bewertet"] is None and not bw["fertig"] and bw["b"] == b.titel   # Popup erst nach der Blende
-    w.bewerten(5, "Zu früh")
-    assert w.vorlieben["profi_eq"] < 0 and w.zustand()["bewertbar"]["bewertet"] == 5
+    v = w.zustand()["verlauf"][-1]
+    assert v["blende_nr"] == 1 and v["bewertbar"] and v["note"] is None   # in der Uebergangsliste bewertbar
+    w.bewerten(1, 5, "Zu früh")
+    assert w.vorlieben["profi_eq"] < 0 and w.zustand()["verlauf"][-1]["note"] == 5
     with pytest.raises(ValueError):
-        w.bewerten(1)                                                  # schon bewertet
+        w.bewerten(1, 1)                                               # schon bewertet
     monkeypatch.setattr(datensatz, "LIVE", w.bewertung_ordner)
     [(ordner, m, note)] = datensatz.live_faelle()
     assert ordner.startswith("live-") and note == {"note": 1.8, "schulnote": 5, "stichworte": ["Zu früh"]}
@@ -123,21 +121,14 @@ def server(tmp_path):
     srv.server_close()
 
 
-def test_api_bewerten_prueft_den_body_und_vorhoeren(server):
+def test_api_bewerten_prueft_den_body(server):
     url, w, b = server
-    for body in ({"note": "1"}, {"note": 7}, {"note": True}, {"note": 2, "stichwort": "Quatsch"}):
+    for body in ({"nr": 1, "note": "1"}, {"nr": 1, "note": 7}, {"nr": 1, "note": True}, {"note": 2},
+                 {"nr": 1, "note": 2, "stichwort": "Quatsch"}, {"nr": 1, "note": 2}):   # zuletzt: keine Blende da
         req = urllib.request.Request(url + "/api/bewerten", data=json.dumps(body).encode(), method="POST")
         with pytest.raises(urllib.error.HTTPError) as fehler:
             urllib.request.urlopen(req, timeout=5)
         assert fehler.value.code == 400
-    with pytest.raises(urllib.error.HTTPError) as fehler:
-        urllib.request.urlopen(url + "/api/vorhoeren", timeout=5)
-    assert fehler.value.code == 404                                     # noch nichts gebacken
-    w.play(1)
-    w._naechste = (RATE * 10, live.Spur.roh(b, np.full((RATE * 10, 2), 0.2, np.float32)), {"blende_s": 2.0})
-    with urllib.request.urlopen(url + "/api/vorhoeren", timeout=5) as r:
-        x, rate = sf.read(io.BytesIO(r.read()))
-    assert rate == RATE and abs(len(x) - 10 * RATE) <= 1                # 4 s A + 2 s Blende + 4 s B
 
 
 def _tracks():
@@ -165,6 +156,17 @@ def test_reihenfolge_haelt_genre_und_energie_zusammen():
     assert wechsel == 1, folge                                         # erst alle harten, dann alle ruhigen
     nah = plan.rangliste(t[1], [t[2], t[3]], 5.0)
     assert nah[0].id == 3                                              # Live-Wahl: hart bleibt hart
+
+
+def test_neue_reihenfolge_ist_eine_andere_variante():
+    import random
+
+    t = _tracks()
+    note = lambda a, b: 3.0 + 0.1 * ((a * 7 + b * 3) % 5)              # noqa: E731
+    fest = plan.sortiere_alle(t, 5.0, start_id=0, paarnote=note)
+    varianten = {tuple(plan.sortiere_alle(t, 5.0, start_id=0, paarnote=note, zufall=random.Random(s)))
+                 for s in range(6)}
+    assert len(varianten) > 1 and all(v[0] == 0 and sorted(v) == sorted(fest) for v in varianten)
 
 
 def test_paarnoten_cache_verfaellt_mit_neuer_version(tmp_path):

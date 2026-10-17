@@ -45,7 +45,7 @@ def bewertete_faelle() -> list[tuple[str, dict, dict]]:
             meta = ordner / "clips" / f"{int(nr):03d}.json"
             if b.get("note") and meta.exists():
                 m = json.loads(meta.read_text(encoding="utf-8"))
-                if "info" in m:
+                if "info" in m and not m.get("set"):   # Set-Noten bewerten die Reihenfolge, keinen Uebergang
                     aus.append((ordner.name, m, b))
     return aus
 

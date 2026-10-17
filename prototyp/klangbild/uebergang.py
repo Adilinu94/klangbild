@@ -512,23 +512,20 @@ def _huellen(e: Einstellungen, takte: int, n: int, kante: float) -> dict:
         return aus(p - takt / 8, p + takt / 8), ein(p - takt / 8, p + takt / 8)
 
     if e.eq == "profi":
-        # Wie am Club-Mixer: B's Fader in einem Takt hoch, A's im letzten Takt runter; die EQs
-        # machen die Blende. B's Hoehen zuerst (Hi-Hats als neue Ebene, Anstieg in dB),
-        # Mitten tauschen in der Mitte (Gesang/Melodie nie doppelt), Bass-Tausch in einem Schlag
-        # auf `bass_takt` (wo B's Bassline einsetzt), A's Hoehen gehen zuletzt.
-        def db_ein(v: float, b: float, tiefe: float = 30.0) -> np.ndarray:
-            r = np.clip((x - v) / max(1e-9, b - v), 0, 1)
-            return np.where(x < v, 0.0, 10 ** (-tiefe * (1 - r) / 20)).astype(np.float32)
-
-        def db_aus(v: float, b: float, tiefe: float = 30.0) -> np.ndarray:
-            r = np.clip((x - v) / max(1e-9, b - v), 0, 1)
-            return np.where(r >= 1, 0.0, 10 ** (-tiefe * r / 20)).astype(np.float32)
-
+        # EQ-Swap wie am Club-Mixer (nach Runde 14): B's Fader in einem Takt hoch, A's im letzten Takt
+        # runter; dazwischen tauschen die Baender je in einem Schlag auf 4er-Grenzen: erst die Hoehen,
+        # dann die Mitten (Gesang/Melodie nie doppelt), zuletzt der Bass auf `bass_takt` (nie zwei Baesse).
+        # Vor dem Hoehen-Tausch kommen B's Hi-Hats leise dazu (-30 -> -12 dB), damit B schon zu hoeren ist.
+        s = max(1, takte // 4)
+        pb_ = e.bass_takt if 0 < e.bass_takt < takte else max(1, takte - s)
+        pm = max(1, min(2 * s, pb_ - s))
+        ph = max(1, min(s, pm - s))
         h["a_vol"], h["b_vol"] = aus(1 - takt, 1), ein(0, takt)
-        h["b_hoch"], h["a_hoch"] = db_ein(0, 3 / 8), db_aus(5 / 8, 1)
-        h["a_mitte"], h["b_mitte"] = aus(3 / 8, 5 / 8), ein(3 / 8, 5 / 8)
-        p = e.bass_takt / takte if 0 < e.bass_takt < takte else 0.5
-        h["a_tief"], h["b_tief"] = aus(p - takt / 8, p + takt / 8), ein(p - takt / 8, p + takt / 8)
+        vor = (10 ** ((-30 + 18 * np.clip(x / max(1e-9, ph * takt), 0, 1)) / 20)).astype(np.float32)
+        h["a_hoch"], b_hoch = tausch(ph * takt)
+        h["b_hoch"] = np.maximum(b_hoch, vor * (x < ph * takt))
+        h["a_mitte"], h["b_mitte"] = tausch(pm * takt)
+        h["a_tief"], h["b_tief"] = tausch(pb_ * takt)
     elif e.eq == "bass_mitte":
         h["a_tief"], h["b_tief"] = tausch(0.5)
     elif e.eq == "bass_anfang":

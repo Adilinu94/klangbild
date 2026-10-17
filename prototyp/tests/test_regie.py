@@ -104,7 +104,7 @@ def test_breakdown_blendet_a_ueber_die_ganze_blende_aus():
     lage = regie._Lage(6 * PHRASE, 0, 16, 0.0, [])
     name, felder, _ = regie._rezept(lage, pa, _profil(SONG, gesang=set()), Einstellungen(modus="ausgewogen"),
                                     True, True, False, None)
-    assert name == "breakdown"
+    assert name == "profi_eq"                       # 14 Runden: breakdown 1,93 -> nur noch Notnagel
     h = u._huellen(Einstellungen(**{k: v for k, v in felder.items() if k in Einstellungen.__dataclass_fields__}),
                    16, 800, 0.01)
     assert h["a_vol"][400] > 0.5                    # A ist in der Mitte der Blende noch deutlich da
@@ -428,9 +428,29 @@ def test_phrasenraster_mit_versatz_und_drop_auf_den_takt():
     for k in ("bass", "drums"):
         p.stems[k] = np.roll(p.stems[k], 2)        # alles 2 Takte spaeter
     p.gesamt = np.roll(p.gesamt, 2)
-    assert p.versatz() == 6 and p.phrase_start(9) == 66 and p.phrase_von(66) == 9
+    assert p.versatz() == 6 and p.drops() == [18, 66]                # Drops = Einsatz von Bass und Drums
+    assert p.phrase_start(p.phrase_von(66)) == 66 and p.grenzen()[:3] == [0, 10, 18]   # 2-Takt-Rest am Anfang verschmilzt
     drops = [p.phrase_start(q) for q, x in enumerate(p.etiketten()) if x == "drop"]
     assert 66 in drops and regie._drop_takt(p, 66) == 66
     b_ein = [t for t, _ in regie._b_kandidaten(p, Einstellungen(), None)]
     assert 10 in b_ein and 8 not in b_ein                     # B steigt auf seinen Phrasen ein
     assert _profil(SONG).versatz() == 0
+
+
+def test_profi_eq_swap_auf_4er_grenzen():
+    h = u._huellen(Einstellungen(art="eigen", eq="profi"), 16, 1600, 0.01)
+    tausch = lambda k: int(np.argmax(h[k] > 0.5)) / 100   # noqa: E731  (Takt)
+    assert abs(tausch("b_mitte") - 8) < 0.2 and abs(tausch("b_tief") - 12) < 0.2
+    assert abs(int(np.argmax(h["a_hoch"] < 0.5)) / 100 - 4) < 0.2      # Hoehen tauschen auf Takt 4
+    assert 0 < h["b_hoch"][50] < 0.1                                    # B's Hi-Hats vorher leise dabei
+
+
+def test_pegel_reparieren_hebt_loch_statt_verwerfen():
+    pa, pb = _profil(SONG), _profil(SONG)
+    rate, tn = 1000, int(TAKT * 1000)
+    blende = np.full((8 * tn, 2), 10 ** (-22 / 20), np.float32)
+    blende[3 * tn:4 * tn] *= 10 ** (-12 / 20)                           # 12 dB Loch in Takt 4
+    args = (rate, 8, pa, pb, 12 * PHRASE * TAKT, 0.0, 0.0, 0.0, "profi_eq")
+    assert "Loch" in regie.pruefen(blende, *args)
+    assert regie.pegel_reparieren(blende, *args) and regie.pruefen(blende, *args) is None
+    assert blende[0, 0] == pytest.approx(10 ** (-22 / 20), rel=1e-3)   # Anfang unveraendert

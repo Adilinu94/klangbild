@@ -140,8 +140,6 @@ def test_auto_dj_regie_plant_begruendet_und_wechselt(tmp_path, monkeypatch):
     nx = w.zustand()["naechster"]
     assert nx["rezept"] and nx["grund"] and nx["plan"] == 1 and nx["sync"]
     assert (tmp_path / "profil" / "1.json").exists()
-    w.anders()                                  # naechstbester Plan
-    assert w.vorbereiten() and w.zustand()["naechster"]["plan"] == 2
     w.fuellen(int(w.zustand()["naechster"]["in_s"] * RATE) + 10)
     assert w.zustand()["aktuell"]["id"] == 2 and w.verlauf[-1]["rezept"]
 

@@ -113,7 +113,7 @@ const FELDER = { takte: "Takte", art: "Art", lautstaerke: "Lautstärke", eq: "EQ
   tempo_modus: "Tempo", keylock: "Keylock" };
 function einstText(e, esc) {
   const w = (v) => esc(String(v).replace(/_/g, " "));
-  const kopf = [["Gewählt von", e.wahl], ["Rezept", e.rezept], ["Plan", e.plan], ["Stil", e.stil], ["Spielanteil", e.spielanteil],
+  const kopf = [["Gewählt von", e.wahl], ["Rezept", e.rezept], ["Übergänge", e.rezepte && e.rezepte.join(" → ")], ["Plan", e.plan], ["Stil", e.stil], ["Spielanteil", e.spielanteil],
     ["Experimente", e.experimente], ["WEITER", e.weiter ? "ja" : null], ["Stems", e.stems ? "ja" : "nein"],
     ["Tempo angeglichen", e.sync ? "ja" : "nein"], ["A ab Takt", e.aus_takt], ["B ab Takt", e.ein_takt],
     ["Blende", e.blende_s != null ? `${e.blende_s.toFixed(1)} s` : null], ["Selbstkontrolle", e.pruefung]];
@@ -165,6 +165,8 @@ async function laden(ziel, merken = true) {
   const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
   $("paar").innerHTML = `<b>${esc(fall.a.titel)}</b> (${fall.a.bpm} BPM, ${fall.a.camelot}) → `
     + `<b>${esc(fall.b.titel)}</b> (${fall.b.bpm} BPM, ${fall.b.camelot})`;
+  if (fall.titel)   // Set-Test: ganzes Set benoten (Reihenfolge, Energie, Genre); Markierung = erste Blende
+    $("paar").innerHTML = `SET · ${fall.titel.map((t) => `<b>${esc(t.titel)}</b> (${t.bpm})`).join(" → ")}`;
   $("einst").innerHTML = einstText(fall.einst || {}, esc);
   $("blende").style.left = `${100 * fall.blende_von_s / fall.dauer_s}%`;
   $("blende").style.width = `${100 * (fall.blende_bis_s - fall.blende_von_s) / fall.dauer_s}%`;

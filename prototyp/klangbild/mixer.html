@@ -17,34 +17,42 @@
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 var(--sans); }
-  .app { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(460px, 1.8fr) minmax(280px, 1fr);
-         height: 100vh; gap: 1px; background: var(--line); }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 19px/1.4 var(--sans); }
+  /* Spaltenbreiten per Griff (--links/--rechts, im Browser gemerkt) */
+  .app { display: grid; grid-template-columns: var(--links, 24vw) 7px minmax(420px, 1fr) 7px var(--rechts, 24vw);
+         height: 100vh; background: var(--bg); }
+  .griff { cursor: col-resize; touch-action: none; padding: 0 3px; background: var(--line); background-clip: content-box;
+           transition: background-color 150ms var(--ease); }
+  .griff:hover, .griff.zieht, .griff:focus-visible { background-color: var(--rot); outline: none; }
   .app > section { background: var(--bg); padding: 22px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
-  .label { font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
-  h1 { font: 300 30px/1 var(--sans); margin: 0 0 16px; letter-spacing: -.01em; }
+  .label { font: 700 14px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  h1 { font: 300 38px/1 var(--sans); margin: 0 0 16px; letter-spacing: -.01em; }
   input[type=search] { width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--text);
-         font: 14px var(--mono); padding: 10px 12px; border-radius: 6px; outline: none; margin-bottom: 10px; }
+         font: 18px var(--mono); padding: 10px 12px; border-radius: 6px; outline: none; margin-bottom: 10px; }
   input[type=search]:focus { border-color: var(--dim); }
   .liste { overflow-y: auto; flex: 1; min-height: 0; scrollbar-color: #333 transparent; scrollbar-width: thin; }
-  .zeile { display: grid; grid-template-columns: 1fr 14px 50px 44px 26px; gap: 8px; align-items: center;
+  .zeile { display: grid; grid-template-columns: 1fr 16px 64px 56px 30px; gap: 8px; align-items: center;
            padding: 8px 4px; border-bottom: 1px solid var(--surface); cursor: pointer; transition: background 150ms var(--ease); }
   .zeile:hover { background: var(--surface); }
+  /* schmale Bibliothek: erst den Stems-Haken, dann die Tonart ausblenden */
+  .app > section:first-child { container-type: inline-size; }
+  @container (max-width: 400px) { .zeile { grid-template-columns: 1fr 64px 56px 30px; } .zeile .haken { display: none; } }
+  @container (max-width: 320px) { .zeile { grid-template-columns: 1fr 64px 30px; } .zeile .key { display: none; } }
   .zeile.aktiv .titel { color: var(--rot); }
-  .haken { font: 700 12px var(--mono); color: #333; text-align: center; }
+  .haken { font: 700 15px var(--mono); color: #333; text-align: center; }
   .haken.ja { color: #4AC97A; }
   .titel { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--text2); overflow-wrap: anywhere; }
-  .bpm { font: 700 12px var(--mono); text-align: right; }
+  .bpm { font: 700 15px var(--mono); text-align: right; }
   .key { display: inline-block; min-width: 38px; text-align: center; border-radius: 999px; padding: 2px 6px;
-         font: 700 11px var(--mono); color: #111; }
+         font: 700 14px var(--mono); color: #111; }
   .key.leer { background: var(--raised); color: var(--dim); }
-  .plus { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 50%; width: 24px; height: 24px;
-          font: 13px var(--mono); cursor: pointer; padding: 0; flex: none; }
+  .plus { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 50%; width: 28px; height: 28px;
+          font: 16px var(--mono); cursor: pointer; padding: 0; flex: none; }
   .plus:hover { color: var(--text); border-color: var(--dim); }
-  .drop { border: 1px dashed var(--line); border-radius: 8px; padding: 12px; text-align: center; font: 12px var(--mono);
+  .drop { border: 1px dashed var(--line); border-radius: 8px; padding: 12px; text-align: center; font: 15px var(--mono);
           color: var(--muted); letter-spacing: .08em; margin-bottom: 10px; cursor: pointer; transition: border-color 150ms var(--ease); }
   .drop:hover, body.ziehen .drop { border-color: var(--rot); color: var(--text); }
-  .analyse { font: 11px var(--mono); color: var(--muted); margin: -2px 0 8px; min-height: 14px; }
+  .analyse { font: 14px var(--mono); color: var(--muted); margin: -2px 0 8px; min-height: 14px; }
 
   /* Cover-Scheiben */
   .disc { border-radius: 50%; overflow: hidden; flex: none; position: relative; background: var(--raised);
@@ -52,88 +60,86 @@
   .disc img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .disc::after { content: ""; position: absolute; inset: 42%; border-radius: 50%; background: var(--bg);
                  box-shadow: 0 0 0 1px rgba(255,255,255,.15); }
-  .disc.gross { width: 88px; height: 88px; animation: drehen 8s linear infinite; animation-play-state: paused; }
+  .disc.gross { width: clamp(140px, 26vh, 280px); height: clamp(140px, 26vh, 280px); animation: drehen 8s linear infinite; animation-play-state: paused; }
   .disc.gross.laeuft { animation-play-state: running; }
-  .disc.klein { width: 34px; height: 34px; }
+  .disc.klein { width: 40px; height: 40px; }
   .disc.klein::after { inset: 40%; }
   @keyframes drehen { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .disc.gross { animation: none; } }
 
   .player { gap: 14px; overflow-y: auto; }
-  .kopf { display: flex; gap: 18px; align-items: center; }
-  .kopf #weiter { margin-left: auto; align-self: flex-start; flex: none; }
-  .jetzt-titel { font: 500 22px/1.15 var(--sans); text-transform: uppercase; margin: 0 0 8px; }
-  .instrument { font: 13px var(--mono); color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .wellen { position: relative; flex: 0 1 auto; min-height: 200px; display: flex; flex-direction: column; }
-  .decks { width: 100%; flex: 1 1 380px; min-height: 110px; display: block; background: #0A0A0A; border-radius: 6px; }
+  .kopf { display: flex; gap: 24px; align-items: center; }
+  .deckkopf { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .jetzt-titel { font: 500 28px/1.15 var(--sans); text-transform: uppercase; margin: 0 0 8px; }
+  .instrument { font: 16px var(--mono); color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .wellen { position: relative; flex: 1 1 auto; min-height: 260px; display: flex; flex-direction: column; }
+  .deckbox { position: relative; flex: 1 1 0; min-height: 200px; overflow: hidden; border-radius: 6px; }
+  .decks { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #0A0A0A; }
   .uebersicht { width: 100%; height: 54px; display: block; cursor: pointer; }
-  .legende { display: flex; gap: 14px; flex-wrap: wrap; min-height: 18px; margin-top: 6px; font: 11px var(--mono); color: var(--muted); }
+  .legende { display: flex; gap: 14px; flex-wrap: wrap; min-height: 18px; margin-top: 6px; font: 14px var(--mono); color: var(--muted); }
   .legende i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
-  .zeiten { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); margin-top: 4px; }
-  .ueber { position: relative; }
-  /* Play mittig auf der Naht zwischen Deck-Ansicht und Uebersicht */
-  .rund { position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%); z-index: 2;
+  .zeiten { display: flex; justify-content: space-between; font: 15px var(--mono); color: var(--muted); margin-top: 4px; }
+  /* Play mittig zwischen Track A und Track B, auf dem Abspielkopf */
+  .rund { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2;
           width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--text); color: var(--bg);
-          font: 18px var(--mono); cursor: pointer; box-shadow: 0 0 0 6px rgba(0,0,0,.75); transition: opacity 100ms var(--ease); }
+          font: 22px var(--mono); cursor: pointer; box-shadow: 0 0 0 6px rgba(0,0,0,.75); transition: opacity 100ms var(--ease); }
   .rund:active { opacity: .7; }
   .knopf { background: none; border: 1px solid var(--line); color: var(--text2); border-radius: 999px;
-           padding: 9px 16px; font: 700 11px var(--mono); letter-spacing: .1em; cursor: pointer; }
+           padding: 9px 16px; font: 700 14px var(--mono); letter-spacing: .1em; cursor: pointer; }
   .knopf:hover { border-color: var(--dim); }
-  /* Bewertung nach jedem Uebergang (Schulnote 1-6) */
-  .popup { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; width: min(440px, calc(100vw - 32px));
-           background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
-           box-shadow: 0 12px 40px rgba(0,0,0,.6); font: 12px var(--mono); color: var(--muted); }
-  .popup .zu { position: absolute; top: 8px; right: 10px; background: none; border: none; color: var(--muted); font: 16px var(--mono); cursor: pointer; }
-  .popup .paar { color: var(--text2); font: 13px var(--sans); margin: 4px 24px 10px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .noten { display: flex; gap: 6px; margin-bottom: 8px; }
-  .noten button { flex: 1; height: 38px; border-radius: 6px; border: 1px solid var(--line); background: var(--raised);
-                  color: var(--text); font: 700 15px var(--mono); cursor: pointer; }
-  .noten button:hover, .noten button:focus-visible { border-color: var(--rot); outline: none; }
-  .popup select { width: 100%; background: var(--raised); color: var(--text2); border: 1px solid var(--line); border-radius: 6px; padding: 6px; font: 12px var(--sans); }
-  .naechster { border-top: 1px solid var(--line); padding-top: 14px; font: 12px var(--mono); color: var(--muted); min-height: 70px; }
+  /* Bewertung in der Uebergangsliste (Schulnote 1-6) */
+  .noten { display: flex; gap: 4px; margin-top: 6px; }
+  .noten button { width: 30px; height: 26px; border-radius: 5px; border: 1px solid var(--line); background: var(--raised);
+                  color: var(--text2); font: 700 14px var(--mono); cursor: pointer; padding: 0; }
+  .noten button:hover, .noten button:focus-visible { border-color: var(--rot); color: var(--text); outline: none; }
+  .verlauf .note { color: var(--text2); }
+  /* Naechster Titel in der freien Spur; die einlaufende Welle schiebt ihn nach links hinaus */
+  .naechster { position: absolute; left: 0; top: 0; max-width: 46%; padding: 14px 40px 10px 14px; pointer-events: none;
+               font: 14px var(--mono); color: var(--muted); overflow: hidden;
+               background: linear-gradient(90deg, rgba(10,10,10,.95) 75%, rgba(10,10,10,0)); }
   .naechster .wer { display: flex; gap: 10px; align-items: center; margin-top: 8px; color: var(--text2);
-                    font: 15px var(--sans); }
+                    font: 19px var(--sans); }
   .segmente { display: flex; gap: 3px; margin-top: 10px; }
-  .naechster .grund { margin-top: 6px; color: var(--text2); font: 12px var(--mono); line-height: 1.5; }
-  .knopf.klein { float: right; padding: 4px 8px; font-size: 10px; margin-top: -4px; }
+  .knopf.klein { float: right; padding: 4px 8px; font-size: 12px; margin-top: -4px; }
   .einst .aus { opacity: .4; pointer-events: none; }
   .segmente i { flex: 1; height: 6px; background: var(--raised); border-radius: 1px; }
-  .segmente i.voll { background: var(--rot); }
+  .segmente i.voll { background: currentColor; }
+  /* Countdown bis zum Einsatz: gruen > 30 s, gelb > 10 s, dann rot */
+  .countdown { font: 700 60px/1 var(--mono); margin: 8px 0 2px; transition: color 400ms var(--ease); }
 
   .tabs { display: flex; gap: 18px; margin-bottom: 12px; }
-  .tabs button { background: none; border: none; padding: 0 0 6px; font: 700 11px var(--mono); letter-spacing: .12em;
+  .tabs button { background: none; border: none; padding: 0 0 6px; font: 700 14px var(--mono); letter-spacing: .12em;
                  color: var(--dim); cursor: pointer; border-bottom: 1px solid transparent; }
   .tabs button.an { color: var(--text); border-bottom-color: var(--rot); }
   .knopfreihe { display: flex; gap: 8px; margin-bottom: 10px; }
   .knopfreihe .knopf { flex: 1; padding: 8px 6px; }
-  .knopfreihe select { background: var(--surface); color: var(--text2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font: 11px var(--mono); }
-  .qzeile { display: grid; grid-template-columns: 34px 1fr 22px 22px 22px; gap: 8px; align-items: center;
+  .qzeile { display: grid; grid-template-columns: 40px 1fr 26px 26px 26px; gap: 8px; align-items: center;
             padding: 7px 2px; border-bottom: 1px solid var(--surface); }
-  .qzeile .plus { width: 22px; height: 22px; font-size: 10px; }
+  .qzeile .plus { width: 26px; height: 26px; font-size: 12px; }
   .qinfo { min-width: 0; }
-  .qinfo .titel { -webkit-line-clamp: 1; font-size: 14px; }
+  .qinfo .titel { -webkit-line-clamp: 1; font-size: 18px; }
   .qmeta { display: flex; gap: 6px; align-items: center; margin-top: 3px; }
-  .qmeta .key { min-width: 32px; font-size: 10px; padding: 1px 5px; }
-  .qmeta .bpm { font-size: 11px; }
-  .verlauf { font: 12px var(--mono); color: var(--muted); }
+  .qmeta .key { min-width: 32px; font-size: 12px; padding: 1px 5px; }
+  .qmeta .bpm { font-size: 14px; }
+  .verlauf { font: 15px var(--mono); color: var(--muted); }
   .verlauf div { padding: 6px 0; border-bottom: 1px solid var(--surface); }
   .verlauf .sync { color: var(--ok); }
-  .status { font: 11px var(--mono); color: var(--dim); margin-top: 10px; }
+  .status { font: 14px var(--mono); color: var(--dim); margin-top: 10px; }
   .status.warn { color: var(--rot); }
-  .leer { color: var(--dim); font: 12px var(--mono); padding: 8px 0; }
+  .leer { color: var(--dim); font: 15px var(--mono); padding: 8px 0; }
 
   .einst { overflow-y: auto; flex: 1; min-height: 0; scrollbar-color: #333 transparent; scrollbar-width: thin; }
   .gruppe { border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px 12px; margin-bottom: 12px; }
-  .gruppe h3 { font: 700 11px var(--mono); letter-spacing: .12em; color: var(--text); margin: 10px 0 2px; }
-  .gruppe .zweck { font: 11px var(--sans); color: var(--dim); margin: 0 0 4px; }
-  .einst label { display: block; font: 700 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
+  .gruppe h3 { font: 700 14px var(--mono); letter-spacing: .12em; color: var(--text); margin: 10px 0 2px; }
+  .gruppe .zweck { font: 14px var(--sans); color: var(--dim); margin: 0 0 4px; }
+  .einst label { display: block; font: 700 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
   .einst select, .einst input[type=number] { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--line);
-          border-radius: 6px; padding: 8px; font: 13px var(--sans); }
+          border-radius: 6px; padding: 8px; font: 16px var(--sans); }
   .einst input[type=range] { width: 100%; accent-color: var(--rot); }
-  .einst .check { display: flex; align-items: center; gap: 10px; font: 13px var(--sans); text-transform: none; letter-spacing: 0; color: var(--text2); }
+  .einst .check { display: flex; align-items: center; gap: 10px; font: 16px var(--sans); text-transform: none; letter-spacing: 0; color: var(--text2); }
   .einst .check input { accent-color: var(--rot); width: 16px; height: 16px; }
   .einst .wert { float: right; color: var(--text); }
-  .einst .hinweis { font: 11px var(--mono); color: var(--dim); margin-top: 4px; }
+  .einst .hinweis { font: 14px var(--mono); color: var(--dim); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -147,6 +153,7 @@
     <input type="search" id="suche" placeholder="SUCHEN (TITEL ODER KEY, Z. B. 3M)" aria-label="Bibliothek durchsuchen">
     <div class="liste" id="bibliothek" role="list"></div>
   </section>
+  <div class="griff" data-seite="links" role="separator" aria-orientation="vertical" aria-label="Breite der Bibliothek (Pfeiltasten)" tabindex="0"></div>
 
   <section class="player">
     <div class="kopf">
@@ -156,23 +163,20 @@
         <h2 class="jetzt-titel" id="titel">Nichts ausgewählt</h2>
         <div class="instrument" id="instrument">Titel links anklicken</div>
       </div>
-      <button class="knopf" id="weiter">WEITER</button>
     </div>
     <div class="wellen">
-      <canvas class="decks" id="decks" aria-label="Deck-Ansicht: beide Songs während der Blende, mit Effekt-Kurven"></canvas>
-      <div class="legende" id="legende"></div>
-      <div class="ueber">
+      <div class="deckkopf"><button class="knopf" id="weiter">WEITER</button></div>
+      <div class="deckbox">
+        <canvas class="decks" id="decks" aria-label="Deck-Ansicht: beide Songs während der Blende, mit Effekt-Kurven"></canvas>
+        <div class="naechster" id="naechster" aria-live="polite"></div>
         <button class="rund" id="play" aria-label="Wiedergabe/Pause">▶</button>
-        <canvas class="uebersicht" id="welle" aria-label="Wellenform des ganzen Songs, klicken zum Springen"></canvas>
       </div>
+      <div class="legende" id="legende"></div>
+      <canvas class="uebersicht" id="welle" aria-label="Wellenform des ganzen Songs, klicken zum Springen"></canvas>
       <div class="zeiten"><span id="pos">0:00</span><span id="dauer">0:00</span></div>
     </div>
-    <div class="naechster" id="naechster"></div>
-    <div class="knopfreihe" id="vorhoer" hidden>
-      <button class="knopf klein" id="vorhoeren">VORHÖREN</button>
-      <select id="vorhoer-geraet" aria-label="Ausgabegerät fürs Vorhören"></select>
-    </div>
   </section>
+  <div class="griff" data-seite="rechts" role="separator" aria-orientation="vertical" aria-label="Breite der Warteschlange (Pfeiltasten)" tabindex="0"></div>
 
   <section class="rechts">
     <div class="tabs"><button class="an" data-tab="tab-queue">WARTESCHLANGE</button><button data-tab="tab-einst">EINSTELLUNGEN</button></div>
@@ -182,7 +186,7 @@
         <button class="knopf" id="leeren">ALLE ENTFERNEN</button>
       </div>
       <div class="liste" id="queue" style="flex: 0 1 auto; max-height: 55%"></div>
-      <p class="label" style="margin-top: 20px">Übergänge</p>
+      <p class="label" style="margin-top: 20px">Übergänge · Note 1 (sehr gut) – 6</p>
       <div class="liste verlauf" id="verlauf"></div>
     </div>
     <div id="tab-einst" class="einst" style="display: none"></div>
@@ -190,13 +194,6 @@
   </section>
 </div>
 
-<div class="popup" id="bewertung" role="dialog" aria-labelledby="bewertung-titel" hidden>
-  <button class="zu" id="bewertung-zu" aria-label="Ohne Bewertung schließen">×</button>
-  <div id="bewertung-titel">WIE WAR DER ÜBERGANG? (1 = SEHR GUT, 6 = UNGENÜGEND)</div>
-  <div class="paar" id="bewertung-paar"></div>
-  <div class="noten" id="noten"><button data-note="1" aria-label="Note 1">1</button><button data-note="2" aria-label="Note 2">2</button><button data-note="3" aria-label="Note 3">3</button><button data-note="4" aria-label="Note 4">4</button><button data-note="5" aria-label="Note 5">5</button><button data-note="6" aria-label="Note 6">6</button></div>
-  <select id="bewertung-wort" aria-label="Stichwort (optional)"><option value="">Stichwort (optional) …</option></select>
-</div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -316,6 +313,7 @@ function zeichneDecks() {
   const z = zustand;
   if (!z || !z.aktuell) return;
   reihenVergeben(z);
+  naechsterSchieben(z, B, H, dpr);
   const a = z.aktuell, v = z.vorher, jetzt = performance.now(), vergangen = z.spielt ? (jetzt - tPoll) / 1000 : 0;
   const echt = (x) => (x / B - 0.5) * 2 * FENSTER_S;   // Echtzeit-Offset in s zum Abspielkopf
   const posA = position(), rateA = a.orig_pro_s || 1, reihe = H / 2;
@@ -348,6 +346,17 @@ function zeichneDecks() {
   legende(ueb && ueb.k);
   ctx.fillStyle = "#262626"; ctx.fillRect(0, reihe, B, dpr);
   ctx.fillStyle = "#FFFFFF"; ctx.fillRect(B / 2 - dpr / 2, 0, dpr, H);   // Abspielkopf
+}
+// Info zum naechsten Titel in der freien Spur; laeuft dessen Welle ein, schiebt sie die Info links hinaus
+function naechsterSchieben(z, B, H, dpr) {
+  const box = $("naechster"), a = z.aktuell, v = z.vorher, nx = v ? null : z.naechster;
+  const vergangen = z.spielt ? (performance.now() - tPoll) / 1000 : 0, reihe = H / 2 / dpr;
+  // Spur des naechsten Titels: frei, solange er noch kommt; waehrend der Blende ist er schon der aktuelle
+  const spur = v ? (deckVon.get(a.id) || 0) : 1 - (deckVon.get(a.id) || 0);
+  const start = v ? -(v.seit_s + vergangen) : nx ? nx.in_s - vergangen : null;   // s bis zum Einsatz der Welle
+  const xw = start == null ? Infinity : (start / (2 * FENSTER_S) + 0.5) * B / dpr;
+  box.style.top = `${spur * reihe}px`; box.style.height = `${reihe}px`;
+  box.style.transform = `translateX(${Math.min(0, xw - box.offsetWidth)}px)`;
 }
 // Blendenzeit -> Zeit im (gedehnten) Ausschnitt von A, mit Loop-Spruengen
 function loopZeit(abschnitte, t) {
@@ -391,7 +400,7 @@ function takteZeichnen(ctx, t, zuZeit, B, y0, h, dpr) {
     const x0 = Math.max(von.x, xVon(a.von)), x1 = Math.min(bis.x, xVon(ende));
     ctx.fillStyle = ABSCHNITT[a.etikett][0]; ctx.fillRect(x0, y0, x1 - x0, 5 * dpr);
     if (x1 - x0 > 60 * dpr && (i === 0 || alle[i - 1].etikett !== a.etikett)) {
-      ctx.font = `700 ${9 * dpr}px "Space Mono", monospace`; ctx.fillText(ABSCHNITT[a.etikett][1], x0 + 4 * dpr, y0 + 17 * dpr);
+      ctx.font = `700 ${11 * dpr}px "Space Mono", monospace`; ctx.fillText(ABSCHNITT[a.etikett][1], x0 + 4 * dpr, y0 + 17 * dpr);
     }
   });
   t.takte.forEach((takt, i) => {
@@ -443,30 +452,27 @@ function zeige(z) {
   }
   if (z.vorher) holen(z.vorher.id);   // z. B. Seite mitten in einer Blende neu geladen
   const nx = z.naechster;
-  if (nx) {
+  if (z.vorher) {
+    // Blende laeuft: die Info zum eben eingelaufenen Titel bleibt stehen und faehrt mit seiner Welle hinaus
+  } else if (nx) {
     holen(nx.id);
     const takt = a ? 240 / a.bpm : 2, rest = Math.max(0, nx.in_s), n = nx.takte || 0;
-    const tempo = (nx.sync ? `${nx.bpm_a} → ${nx.bpm_b} BPM · ${MODUS[nx.modus] || ""}` : (nx.modus === "aus" ? "" : "TEMPO FREI"))
-      + (nx.stems ? " · MIT STEMS" : "") + (nx.hinweis ? ` · ${nx.hinweis.toUpperCase()}` : "");
     const voll = n ? Math.max(0, Math.min(n, n - Math.ceil(rest / takt))) : 0;
-    const auto = regieAn();
-    $("naechster").innerHTML = `NÄCHSTER · ${(ARTEN[nx.art] || nx.art).toUpperCase()}${n ? ` · ${n} TAKTE` : ""} · IN ${zeit(rest)}` +
-      (auto && nx.plan ? `<button class="knopf klein" id="anders" title="Nächstbesten Plan der Regie nehmen">ANDERER ÜBERGANG (${nx.plan}/3)</button>` : "") +
-      `<div class="wer">${disc(nx.id, false)}<span>${esc(nx.titel)}</span>${keyPill(nx.camelot)}</div>` +
-      (nx.grund ? `<div class="grund">${esc(nx.grund)}</div>` : "") +
-      (tempo ? `<div style="margin-top:6px">${tempo}</div>` : "") +
-      (n && rest < n * takt ? `<div class="segmente">${"<i class=voll></i>".repeat(voll)}${"<i></i>".repeat(n - voll)}</div>` : "");
+    const farbe = rest > 30 ? "#4AC97A" : rest > 10 ? "#F5C518" : "#D71921";
+    $("naechster").innerHTML = `NÄCHSTER · ${(ARTEN[nx.art] || nx.art).toUpperCase()}${n ? ` · ${n} TAKTE` : ""}` +
+      `<div class="countdown" style="color:${farbe}">${zeit(rest)}</div>` +
+      (n && rest < n * takt ? `<div class="segmente" style="color:${farbe}">${"<i class=voll></i>".repeat(voll)}${"<i></i>".repeat(n - voll)}</div>` : "") +
+      `<div class="wer">${disc(nx.id, false)}<span>${esc(nx.titel)}</span>${keyPill(nx.camelot)}</div>`;
   } else {
     const v = z.vorschau;
     $("naechster").innerHTML = v
       ? `NÄCHSTER · ${v.rezept ? `${esc(v.rezept.replace(/_/g, " ").toUpperCase())}${v.takte ? ` · ${v.takte} TAKTE` : ""}` +
           `${v.in_s != null ? ` · IN ${zeit(Math.max(0, v.in_s))}` : ""} · ` : ""}WIRD GEBACKEN …` +
-        `<div class="wer">${disc(v.id, false)}<span>${esc(v.titel)}</span>${keyPill(v.camelot)}</div>` +
-        (v.grund ? `<div class="grund">${esc(v.grund)}</div>` : "")
+        `<div class="wer">${disc(v.id, false)}<span>${esc(v.titel)}</span>${keyPill(v.camelot)}</div>`
       : z.autodj ? "NÄCHSTER · AUTO-DJ WÄHLT …" : (z.warteschlange.length ? "NÄCHSTER · WIRD GELADEN …" : "WARTESCHLANGE LEER");
     if (v) holen(v.id);
   }
-  const qSchluessel = JSON.stringify(z.warteschlange.map((q) => q.id));
+  const qSchluessel = JSON.stringify([bibliothek.length, z.warteschlange.map((q) => [q.id, q.note])]);   // Titel/BPM erst nach der Bibliothek
   if ($("queue").dataset.ids !== qSchluessel) {   // nur neu bauen, wenn sich etwas aendert (Cover flackern nicht)
     $("queue").dataset.ids = qSchluessel;
     $("queue").innerHTML = z.warteschlange.length ? z.warteschlange.map((q, i) => { const t = infoVon[q.id] || {};
@@ -479,9 +485,17 @@ function zeige(z) {
         <button class="plus" data-entfernen="${i}" aria-label="Entfernen">×</button></div>`; }).join("")
       : `<div class="leer">LEER · TITEL MIT + EINREIHEN ODER SORTIEREN</div>`;
   }
-  $("verlauf").innerHTML = z.verlauf.slice().reverse().map((v) =>
-    `<div><span class="${v.sync ? "sync" : ""}">${(ARTEN[v.art] || v.art).toUpperCase()}${v.stems ? " · STEMS" : ""}</span> → ${esc((infoVon[v.nach] || {}).titel || v.nach)}` +
-    (v.sync ? ` · ${v.bpm_a}→${v.bpm_b}` : "") + `</div>`).join("") || `<div class="leer">NOCH KEINE</div>`;
+  const vSchluessel = JSON.stringify([bibliothek.length, z.verlauf.map((v) => [v.von, v.nach, v.blende_nr, v.note, v.bewertbar])]);
+  if ($("verlauf").dataset.ids !== vSchluessel) {
+    $("verlauf").dataset.ids = vSchluessel;
+    $("verlauf").innerHTML = z.verlauf.slice().reverse().map((v) =>
+      `<div><span class="${v.sync ? "sync" : ""}">${(ARTEN[v.art] || v.art).toUpperCase()}${v.stems ? " · STEMS" : ""}</span> → ${esc((infoVon[v.nach] || {}).titel || v.nach)}` +
+      (v.sync ? ` · ${v.bpm_a}→${v.bpm_b}` : "") +
+      (v.note != null ? ` · <span class="note">NOTE ${v.note}</span>` : v.bewertbar
+        ? `<div class="noten" role="group" aria-label="Übergang bewerten, 1 = sehr gut, 6 = ungenügend">${[1, 2, 3, 4, 5, 6].map((n) =>
+          `<button data-nr="${v.blende_nr}" data-note="${n}" title="${n === 1 ? "sehr gut" : n === 6 ? "ungenügend" : ""}">${n}</button>`).join("")}</div>` : "") +
+      `</div>`).join("") || `<div class="leer">NOCH KEINE</div>`;
+  }
   const an = z.analyse || {};
   $("analyse").textContent = an.aktuell ? `ANALYSIERE ${an.aktuell} · NOCH ${an.offen}` :
     (an.fertig || an.fehler ? `${an.fertig} ANALYSIERT${an.fehler ? ` · ${an.fehler} FEHLER` : ""}${an.meldung ? " · " + an.meldung : ""}` : "");
@@ -489,11 +503,6 @@ function zeige(z) {
   if (!an.aktuell && sv.aktuell) $("analyse").textContent = `STEMS: ${sv.aktuell}`;
   if (z.bibliothek_anzahl !== bibliothek.length || (letzterStem && letzterStem !== sv.aktuell)) ladeBibliothek();
   letzterStem = sv.aktuell;
-  // Bewertungs-Popup: sobald die Blende vorbei ist, bis zur Note, zum Schliessen oder 60 s danach
-  const bw = z.bewertbar, zeigen = !!bw && bw.fertig && bw.bewertet == null && bw.nr !== bewertungZu;
-  if (zeigen && $("bewertung").hidden) $("bewertung-paar").textContent = `${bw.a} → ${bw.b}`;
-  $("bewertung").hidden = !zeigen;
-  $("vorhoer").hidden = !(vorhoerGeht && z.naechster);
   if (!$("status").classList.contains("warn") || z.underflows) {
     $("status").textContent = z.underflows ? `AUSSETZER: ${z.underflows}` : "AUDIO OK";
     $("status").classList.toggle("warn", z.underflows > 0);
@@ -505,7 +514,7 @@ $("bibliothek").addEventListener("click", (e) => {
   const q = e.target.dataset.queue;
   if (q) return senden("queue", { id: +q });
   const zeile = e.target.closest(".zeile");
-  if (zeile) senden("play", { id: +zeile.dataset.id });
+  if (zeile) senden("play", { id: +zeile.dataset.id }).then(() => senden("sortieren"));   // neue Reihenfolge ab diesem Titel
 });
 $("queue").addEventListener("click", (e) => {
   const d = e.target.dataset;
@@ -513,41 +522,34 @@ $("queue").addEventListener("click", (e) => {
   if (d.hoch) senden("verschieben", { index: +d.hoch, richtung: -1 });
   if (d.runter) senden("verschieben", { index: +d.runter, richtung: 1 });
 });
-$("sortieren").onclick = () => senden("sortieren");
+$("sortieren").onclick = () => senden("sortieren", { neu: true });   // jedes Mal eine andere Variante
 $("leeren").onclick = () => { if (!zustand || !zustand.warteschlange.length || confirm(`Alle ${zustand.warteschlange.length} Titel aus der Warteschlange entfernen?`)) senden("leeren"); };
 $("play").onclick = () => senden("pause");
 $("weiter").onclick = () => senden("weiter");
-$("naechster").addEventListener("click", (e) => { if (e.target.id === "anders") senden("anders"); });
-// Bewertung (BAUPLAN-UEBERGAENGE §7.1): Schulnote fuer den Kritiker und die Rezept-Vorlieben
-let bewertungZu = null;   // nr der Blende, deren Popup geschlossen wurde
-const bewertungSchliessen = () => { bewertungZu = zustand && zustand.bewertbar ? zustand.bewertbar.nr : null; $("bewertung").hidden = true; };
-$("noten").addEventListener("click", (e) => {
-  const n = e.target.dataset.note;
-  if (n) { senden("bewerten", { note: +n, stichwort: $("bewertung-wort").value || null }); $("bewertung-wort").value = ""; }
+// Bewertung (BAUPLAN-UEBERGAENGE §7.1): Schulnote je Uebergang fuer den Kritiker und die Rezept-Vorlieben
+$("verlauf").addEventListener("click", (e) => {
+  const d = e.target.dataset;
+  if (d.note) senden("bewerten", { nr: +d.nr, note: +d.note });
 });
-$("bewertung-zu").onclick = bewertungSchliessen;
-addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("bewertung").hidden) bewertungSchliessen(); });
-fetch("/api/einstellungen").then((r) => r.json()).then((d) => (d.stichworte || []).forEach((w) =>
-  $("bewertung-wort").insertAdjacentHTML("beforeend", `<option>${esc(w)}</option>`)));
-// Vorhoeren auf einem zweiten Ausgabegeraet (Chrome/Edge: setSinkId), ohne den laufenden Mix zu stoeren (§7.2)
-const vorhoerGeht = "setSinkId" in HTMLMediaElement.prototype;
-let vorhoerAudio = null;
-async function geraeteLaden() {
-  const liste = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
-  $("vorhoer-geraet").innerHTML = liste.map((d, i) => `<option value="${d.deviceId}">${esc(d.label || `Ausgang ${i + 1}`)}</option>`).join("");
+// Spaltenbreiten: Griff ziehen oder Pfeiltasten; im Browser gemerkt
+const app = document.querySelector(".app");
+function breiteSetzen(seite, px) {
+  px = Math.round(Math.min(innerWidth * 0.35, Math.max(240, px)));
+  app.style.setProperty(`--${seite}`, `${px}px`);
+  try { localStorage.setItem(`klangbild-spalte-${seite}`, px); } catch (_) {}
 }
-if (vorhoerGeht) geraeteLaden();
-$("vorhoeren").onclick = async () => {
-  if (vorhoerAudio) { vorhoerAudio.pause(); vorhoerAudio = null; $("vorhoeren").textContent = "VORHÖREN"; return; }
-  if (navigator.mediaDevices.selectAudioOutput && !$("vorhoer-geraet").value) {
-    try { const d = await navigator.mediaDevices.selectAudioOutput(); await geraeteLaden(); $("vorhoer-geraet").value = d.deviceId; } catch (_) {}
-  }
-  vorhoerAudio = new Audio(`/api/vorhoeren?t=${Date.now()}`);
-  try { await vorhoerAudio.setSinkId($("vorhoer-geraet").value || ""); } catch (_) {}
-  vorhoerAudio.onended = () => { vorhoerAudio = null; $("vorhoeren").textContent = "VORHÖREN"; };
-  vorhoerAudio.play();
-  $("vorhoeren").textContent = "STOPP";
-};
+document.querySelectorAll(".griff").forEach((g) => {
+  const seite = g.dataset.seite, links = seite === "links";
+  try { const w = localStorage.getItem(`klangbild-spalte-${seite}`); if (w) app.style.setProperty(`--${seite}`, `${w}px`); } catch (_) {}
+  const breite = () => (links ? g.previousElementSibling : g.nextElementSibling).getBoundingClientRect().width;
+  g.onpointerdown = (e) => { g.setPointerCapture(e.pointerId); g.classList.add("zieht"); };
+  g.onpointermove = (e) => { if (g.hasPointerCapture(e.pointerId)) breiteSetzen(seite, links ? e.clientX : innerWidth - e.clientX); };
+  g.onpointerup = g.onpointercancel = () => g.classList.remove("zieht");
+  g.onkeydown = (e) => {
+    const d = { ArrowLeft: -20, ArrowRight: 20 }[e.key];
+    if (d) { e.preventDefault(); breiteSetzen(seite, breite() + (links ? d : -d)); }
+  };
+});
 $("suche").oninput = zeichneBibliothek;
 $("welle").onclick = (e) => {
   if (!zustand || !zustand.aktuell) return;
@@ -664,8 +666,6 @@ const TAKT_FELDER = ["takte", "weiter_takte"];
 const AUTO_FELDER = ["art", "takte", "ausstieg", "vor_ende_takte", "einstieg", "weiter_takte", "weiter_ab", "tempo_modus",
   "lautstaerke", "eq", "filter", "effekt", "effekt_ein", "loop", "trick"];
 let einstWerte = null;
-// Die Regie (Auto-DJ) plant, wenn ein Mix-Stil gewaehlt ist - oder im Stil "Manuell" die Art "Automatisch".
-const regieAn = () => !!einstWerte && (einstWerte.modus !== "manuell" || einstWerte.art === "auto");
 function feld(k, v, auswahl, takte, grenzen) {
   const html = feldHtml(k, v, auswahl, takte, grenzen);
   const gesperrt = einstWerte && AUTO_FELDER.includes(k) &&

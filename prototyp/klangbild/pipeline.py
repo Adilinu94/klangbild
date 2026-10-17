@@ -444,6 +444,8 @@ def _parser() -> argparse.ArgumentParser:
                       help="Stufe(n) reihum, z. B. kreativ,wild (klassisch/kreativ/wild)")
     p_ut.add_argument("--gemma", default=None, help="Gemma-Versuch: jedes Paar auch mit Gemma's Wahl "
                       "(Modell, z. B. google/gemma-4-E4B-it)")
+    p_ut.add_argument("--set", type=int, default=0,
+                      help="Set-Test (Runde 18): so viele Sets aus je 6 Songs am Stueck statt einzelner Paare")
     p_ut.add_argument("--kritiker", action="store_true",
                       help="A/B-Runde: jedes Paar einmal mit, einmal ohne Kritiker (BAUPLAN-UEBERGAENGE §2.3)")
     p_ut.add_argument("--host", default="127.0.0.1")
@@ -455,6 +457,8 @@ def _parser() -> argparse.ArgumentParser:
     p_kr = unter.add_parser("kritiker", parents=[pfade], help="Kritiker trainieren und ehrlich messen")
     p_kr.add_argument("--trainieren", action="store_true", help="Datensatz neu bauen und trainieren")
     p_kr.set_defaults(funktion=lambda a: __import__("klangbild.kritiker", fromlist=["x"]).kommando(a))
+    p_an = unter.add_parser("anker", parents=[pfade], help="Beat-Raster auf die Drum-Anschlaege setzen (Raster-Anker)")
+    p_an.set_defaults(funktion=lambda a: __import__("klangbild.anker", fromlist=["x"]).kommando(a))
     p_pn = unter.add_parser("paarnoten", parents=[pfade], help="Erwartete Uebergangsnoten aller Paare vorrechnen")
     p_pn.set_defaults(funktion=lambda a: __import__("klangbild.paarnoten", fromlist=["x"]).kommando(a))
 

@@ -4,6 +4,7 @@ Aufruf:
     python -m klangbild uebergangstest               # backen im Hintergrund + Oberflaeche
     python -m klangbild uebergangstest --auswertung  # Noten je Rezept/Stil -> auswertung.md
     python -m klangbild uebergangstest --neu         # alten Test archivieren, neuen beginnen
+    python -m klangbild uebergangstest --set 6       # Set-Test: 6 Sets aus je SET_TITEL Songs am Stueck
 
 Jeder Fall ist ein Titelpaar, wie der Auto-DJ es waehlen und planen wuerde
 (`live.Wiedergabe._autodj_wahl`, `_auto_backen`), ohne gelernte Vorlieben. Jedes dritte
@@ -11,6 +12,12 @@ Paar kommt zusaetzlich mit Plan 2 und 3 der Regie: daran sieht man, ob Plan 1 wi
 der beste ist (und spaeter, ob ein Sprachmodell besser waehlt). Jeder fuenfte Fall ist
 ein WEITER-Uebergang. Gehoert wird nur der Ausschnitt um die Blende. Jede Note wird sofort
 gespeichert; Faelle, Clips und Noten liegen unter `ergebnisse/uebergangstest/`.
+
+Set-Test (`--set N`, BAUPLAN-UEBERGAENGE §9 Runde 18): je Fall SET_TITEL Songs in der Reihenfolge der
+Set-Planung (`plan.sortiere_alle` mit Paarnoten, ab einem zufaelligen Titel), Uebergang fuer Uebergang
+gebacken wie live. Zwischen zwei Blenden bleiben je SET_REST_S am Anfang und Ende jedes Songs, die Mitte
+faellt mit einer kurzen Pause weg: ein Set dauert so ~8-10 statt ~20 Minuten. Benotet wird das ganze Set
+(Reihenfolge, Energie, Genre-Wechsel). Set-Faelle fliessen nicht in den Kritiker-Datensatz.
 """
 
 from __future__ import annotations
@@ -35,6 +42,9 @@ SEITE = Path(__file__).with_name("uebergangstest.html")
 VOR_S = 8.0     # so viel von A vor der Blende
 NACH_S = 6.0    # so viel von B nach der Blende
 STILE = ("kurz", "ausgewogen", "lang")
+SET_TITEL = 6
+SET_REST_S = 30.0   # je Song so viel nach der Blende herein und vor der Blende hinaus
+SET_PAUSE_S = 0.4   # Aus- und Einblenden an der Schnittstelle (hoerbar: hier fehlt ein Stueck)
 STICHWORTE = ("Gesang prallt aufeinander", "Takt daneben / galoppiert", "Loch / zu leise", "Zu laut",
               "Doppelter Bass", "Loop fällt auf", "Effekt störend", "Effekt nicht hörbar",
               "Tonarten beißen sich", "Zu lang", "Zu kurz / abrupt", "Knacken", "Falsche Stelle im Song")
@@ -63,6 +73,30 @@ def faelle_planen(ids: list[int], paare: int, seed: int, stile: tuple[str, ...] 
     for pos, nr in enumerate(reihe):
         faelle[nr]["reihe"] = pos
     return faelle
+
+
+def set_faelle_planen(ids: list[int], anzahl: int, seed: int, stile: tuple[str, ...] = STILE,
+                      experimente: tuple[str, ...] = ("klassisch",)) -> list[dict]:
+    """Je Fall ein Start-Titel; die uebrigen Songs waehlt erst beim Backen die Set-Planung."""
+    rng = random.Random(seed)
+    return [{"nr": k, "a": a, "set": True, "stil": stile[k % len(stile)], "experimente": experimente[k % len(experimente)],
+             "spielanteil": "lang", "weiter": False, "rang": 0, "paar": k, "reihe": k}
+            for k, a in enumerate(rng.sample(sorted(ids), min(anzahl, len(ids))))]
+
+
+def set_clip(stuecke: list[np.ndarray]) -> np.ndarray:
+    """Stuecke mit kurzer Pause (Aus-/Einblenden) aneinander; Raender weich."""
+    rand = int(SET_PAUSE_S * RATE)
+    r = np.linspace(0.0, 1.0, rand, dtype=np.float32)[:, None]
+    teile = []
+    for k, x in enumerate(stuecke):
+        x = x.astype(np.float32).copy()
+        if k:
+            x[:rand] *= r
+        if k < len(stuecke) - 1:
+            x[len(x) - rand:] *= r[::-1]
+        teile.append(x)
+    return np.concatenate(teile)
 
 
 def clip(a_puffer: np.ndarray, start_n: int, b_puffer: np.ndarray, blende_s: float) -> tuple[np.ndarray, float]:
@@ -121,9 +155,59 @@ class Test:
     def _meta_schreiben(self, nr: int, meta: dict) -> None:
         _schreiben(self.clips / f"{nr:03d}.json", meta)
 
+    def _set_backen(self, f: dict) -> None:
+        """Ein Set wie live: Uebergang fuer Uebergang auf der gebackenen Spur des Vorgaengers."""
+        import soundfile as sf
+
+        from . import plan
+
+        w, nr = self.w, f["nr"]
+        e = einstellungen.Einstellungen(modus=f["stil"], spielanteil=f["spielanteil"],
+                                        experimente=f.get("experimente", "klassisch"))
+        tracks = [live._plan_track(x) for x in w.bibliothek.values()]
+        pn = w.paarnoten
+        folge = plan.sortiere_alle(tracks, e.max_bpm, e.harmonie, f["a"], paarnote=pn.note if pn else None,
+                                   rezept=pn.rezept if pn else None, bogen=e.set_bogen)[:SET_TITEL]
+        titel = [w.bibliothek[i] for i in folge]
+        spur, ab_s, stuecke, blenden, rezepte = Spur.roh(titel[0], w.laden(titel[0])), 20.0, [], [], []
+        w._rang, w._letztes_rezept, w.vorlieben, w.plan_waehler, w.kritiker = 0, None, {}, None, None
+        vorige_blende = None
+        for b in titel[1:]:
+            self.backt = f"Set {nr}: {spur.eintrag.titel} → {b.titel}"
+            g = w._auto_backen(spur, b, w.laden(b), einstellungen.regie_einst(e), ab_s, False)
+            # Spur k beginnt mit der vorigen Blende; der erste Song nur SET_REST_S vor seiner Blende
+            if vorige_blende is None:
+                stuecke.append(spur.puffer[max(0, g.start_n - int(SET_REST_S * RATE)):g.start_n])
+            else:
+                rein = int((vorige_blende + SET_REST_S) * RATE)
+                raus = g.start_n - int(SET_REST_S * RATE)
+                if raus - rein > 2 * RATE:   # Mitte faellt weg
+                    stuecke += [spur.puffer[:rein], spur.puffer[raus:g.start_n]]
+                else:
+                    stuecke.append(spur.puffer[:g.start_n])
+            pos = sum(len(x) for x in stuecke) / RATE
+            blende_s = g.info["blende_s"]
+            blenden.append([round(pos, 2), round(pos + blende_s, 2)])
+            rezepte.append(g.info.get("rezept") or g.info.get("art"))
+            w._letztes_rezept = g.info.get("rezept")
+            spur, ab_s, vorige_blende = g.spur, blende_s + 5.0, blende_s
+        stuecke.append(spur.puffer[:int((vorige_blende + SET_REST_S) * RATE)])
+        x = set_clip(stuecke)
+        sf.write(str(self.clips / f"{nr:03d}.flac"), x, RATE, subtype="PCM_16", format="FLAC")
+        eintrag = lambda t: {"id": t.id, "titel": t.titel, "bpm": round(t.bpm, 2), "camelot": t.camelot}  # noqa: E731
+        self._meta_schreiben(nr, {
+            "nr": nr, "set": True, "a": eintrag(titel[0]), "b": eintrag(titel[-1]), "titel": [eintrag(t) for t in titel],
+            **{k: f[k] for k in ("stil", "spielanteil", "weiter", "rang")}, "experimente": f.get("experimente", "klassisch"),
+            "gemma": False, "info": {"rezept": "set", "rezepte": rezepte, "blende_s": blenden[0][1] - blenden[0][0]},
+            "blenden": blenden, "blende_von_s": blenden[0][0], "blende_bis_s": blenden[0][1],
+            "dauer_s": round(len(x) / RATE, 2)})
+
     def _backen(self, f: dict) -> None:
         import soundfile as sf
 
+        if f.get("set"):
+            self._set_backen(f)
+            return
         w, nr = self.w, f["nr"]
         mit_kritiker = bool(f.get("gemma")) and f.get("waehler") == "Kritiker"
         e = einstellungen.Einstellungen(modus=f["stil"], spielanteil=f["spielanteil"],
@@ -199,7 +283,8 @@ class Test:
 
     def fall(self, nr: int) -> dict:
         m = self.meta(nr) or {}
-        blind = {k: m[k] for k in ("nr", "a", "b", "blende_von_s", "blende_bis_s", "dauer_s") if k in m}
+        blind = {k: m[k] for k in ("nr", "a", "b", "blende_von_s", "blende_bis_s", "dauer_s", "titel", "blenden")
+                 if k in m}
         # seit Runde 12 nicht mehr blind: der Nutzer will je Fall sehen, was eingestellt war
         einst = {k: m[k] for k in ("stil", "spielanteil", "experimente", "weiter") if k in m}
         bewertung = self.bewertungen.get(str(nr))
@@ -412,11 +497,14 @@ def laufen(args) -> int:
         # ohne Partner im Tempo-Rahmen wird jeder Uebergang ein Schnitt (kleine Ordner wie DnB): nicht als A
         grenze = einstellungen.Einstellungen().max_bpm
         ids = [i for i in ids if any(abs(bib[i].bpm - x.bpm) <= grenze for k, x in bib.items() if k != i)] or ids
-        _schreiben(ordner / "faelle.json", faelle_planen(ids, args.paare, args.seed,
-                                                         tuple(args.stil.split(",")) if args.stil else STILE,
-                                                         tuple(args.experimente.split(",")),
-                                                         gemma=bool(args.gemma or args.kritiker),
-                                                         waehler="Kritiker" if args.kritiker else "Gemma"))
+        stile = tuple(args.stil.split(",")) if args.stil else STILE
+        if args.set:
+            faelle = set_faelle_planen(ids, args.set, args.seed, stile, tuple(args.experimente.split(",")))
+        else:
+            faelle = faelle_planen(ids, args.paare, args.seed, stile, tuple(args.experimente.split(",")),
+                                   gemma=bool(args.gemma or args.kritiker),
+                                   waehler="Kritiker" if args.kritiker else "Gemma")
+        _schreiben(ordner / "faelle.json", faelle)
     url = f"http://{args.host}:{args.port}"
     try:   # Port zuerst: ein zweiter Test darf nicht neben dem alten laufen (alter Stand im Speicher)
         srv = mixer.EinzelServer((args.host, args.port), _Handler)
@@ -425,6 +513,9 @@ def laufen(args) -> int:
         webbrowser.open(url)
         return 0
     w = live.Wiedergabe(bib)
+    from . import paarnoten
+
+    w.paarnoten = paarnoten.Paarnoten(e.analyse_version)   # Set-Test: Reihenfolge wie "Perfekte Reihenfolge"
     uebergang.dehn_pool_starten()
     if stems.verfuegbar():
         w.stem_quelle = stems.trennen

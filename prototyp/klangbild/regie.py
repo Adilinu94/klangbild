@@ -43,6 +43,8 @@ DROP_SICHER_DB = 5.0    # Drop sicher neben dem Taktanfang: verwerfen (kalibrier
 PASSUNG_MIN = 0.35      # Double Drop/Drop-Cuts nur bis ~2,6 dB Pegel-Abstand der Drops (§4.2)
 VORLAUF_MAX = 0.08      # Tempo-Abstand, den A vor der Blende auf B's Tempo gleiten darf (§5.2)
 VORLAUF_TAKTE = 16
+# Energielevel beider Songs (profil.energielevel): hart -> hart lebt vom Drop-Wechsel, ruhig -> ruhig von langen Blends
+HART, RUHIG, ENERGIE_REZEPT_BONUS = 0.6, 0.35, 0.5
 LANG32_BONUS = 0.3      # Runde 13: 32 Takte 4,67 (n = 3) gegen 16 Takte 3,93 (§6.2, nach 2 Runden pruefen)
 BRUECKE = "B startet ohne Drums"
 KRITIK_GEWICHT = 1.0    # Rang der Regie (0..1) + Gewicht * (Note des Kritikers - 3) (§2.3)
@@ -125,18 +127,18 @@ def _a_kandidaten(pa: Profil, ab_takt: int, e: Einstellungen, sofort: bool,
             start = pa.phrase_start(q)
         else:
             start = mitte
-        for k, takt in enumerate(range(start, min(pa.n, start + 3 * PHRASE), PHRASE)):
+        for k, takt in enumerate([g for g in pa.grenzen() if g >= start][:3]):
             aus.append((takt, 3.0 - 1.5 * k, "zweite Hälfte nach dem Drop"))
-        if drops and start > drops[0] + PHRASE:   # Ausweg, wenn A nach seinem Drop zu kurz fuer die Blende ist
-            aus.append((drops[0] + PHRASE, -1.5, "zweite Hälfte nach dem Drop"))
+        if drops and start > pa.phrase_ab(drops[0] + 1):   # Ausweg, wenn A nach seinem Drop zu kurz ist
+            aus.append((pa.phrase_ab(drops[0] + 1), -1.5, "zweite Hälfte nach dem Drop"))
     else:
         # So lange wie moeglich: Kandidaten im letzten Drittel, spaeter = besser.
         start = pa.phrase_start(pa.phrase_von(int(pa.n * 0.7)))
-        for takt in range(start, pa.n, PHRASE):
+        for takt in [g for g in pa.grenzen() if g >= start]:
             aus.append((takt, 6.0 * takt / max(1, pa.n), "spielt lang"))
         ga = pa.gesang() if stems_da else None
         if ga is not None:   # A's letzte Gesangsteile: von dort kann A's Stimme lange ueber B weiterlaufen
-            for takt in range(pa.phrase_start(pa.phrase_von(pa.n // 2)), start, PHRASE):
+            for takt in [g for g in pa.grenzen() if pa.phrase_start(pa.phrase_von(pa.n // 2)) <= g < start]:
                 if ga[takt:takt + PHRASE].any():
                     aus.append((takt, 6.0 * takt / max(1, pa.n), FRUEH_GESANG))
     return [(t, p, g) for t, p, g in aus if t >= ab_takt] or [(pa.phrase_ab(ab_takt), -2.0, "")]
@@ -160,7 +162,7 @@ def _b_kandidaten(pb: Profil, e: Einstellungen, laengen, sync: bool = True) -> l
     et = pb.etiketten()
     aus = []
     # Songanfang und B's Phrasengrenzen (mit Versatz): nie mitten in B's Phrase einsteigen
-    for takt in dict.fromkeys([0] + list(range(pb.phrase_start(1), int(pb.n * 0.4) + 1, PHRASE))):
+    for takt in [g for g in pb.grenzen() if g <= int(pb.n * 0.4)]:
         if e.spielanteil == "schnell":
             p = 0.0    # Intro ueberspringen ist erlaubt
         else:
@@ -365,8 +367,11 @@ def _intro_loops(pb: Profil, j: int, L: int) -> list[tuple[int, int]]:
 
 
 def _drop_takt(p: Profil, takt: int) -> int:
-    """Drop-Takt auf den Takt genau: `takt` liegt auf dem versetzten Phrasenraster (Profil.versatz); bis
+    """Drop-Takt auf den Takt genau: ein erkannter Drop (Profil.drops) bis 4 Takte daneben, sonst bis
     +-2 Takte daneben, wenn Bass, Drums und Pegel dort deutlich staerker einsetzen (je 2 Takte)."""
+    nah = [d for d in p.drops() if abs(d - takt) <= 4]
+    if nah:
+        return min(nah, key=lambda d: abs(d - takt))
     reihen = [p.gesamt] + ([p.stems["bass"], p.stems["drums"]] if p.stems else [p.baender[:, 0]])
 
     def sprung(k: int) -> float:
@@ -538,6 +543,8 @@ def _rangliste(pa: Profil, pb: Profil, e: Einstellungen, ab_takt: int, sofort: b
         and (not sofort or L <= WEITER_GESANG_MAX))
     lagen = []
     drop_bonus = 0.0 if sofort else EXPERIMENT_DROP[e.experimente]
+    lo, hi = sorted((pa.energielevel(), pb.energielevel()))
+    hart, ruhig = lo >= HART, hi <= RUHIG
     for i, p_a, g_a in _a_kandidaten(pa, ab_takt, e, sofort, stems_da):
         for j, p_b in _b_kandidaten(pb, e, stufen, sync):
             for L in stufen + extra:
@@ -560,6 +567,12 @@ def _rangliste(pa: Profil, pb: Profil, e: Einstellungen, ab_takt: int, sofort: b
                         continue   # beissende Toene nicht lange uebereinander loopen
                     if "B's Drop direkt nach der Blende" in teile:   # Experimente: Drop-Tricks brauchen den Drop
                         p += drop_bonus
+                        if hart:
+                            p += ENERGIE_REZEPT_BONUS
+                            teile = teile + ["beide hart: Drop-Wechsel"]
+                    if ruhig and L >= 16:
+                        p += ENERGIE_REZEPT_BONUS
+                        teile = teile + ["beide ruhig: lange Blende"]
                     if not sync and _brueckenstart(pb, j):
                         teile = teile + [BRUECKE]
                     lagen.append(_Lage(i, j, L, p + p_a + p_b, ([g_a] if g_a else []) + teile, k_ein, mal, harm))
@@ -617,7 +630,8 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
         # Mit Stems tauscht auch die Stimme auf dem Drop; ohne (oder als Ersatz in backen) die Huellen der Art eigen
         # Runde 9: A's Drop bleibt voll (auch sein Bass), B kommt ohne Bass dazu - beide Drops voll, ein
         # Bass; am Ende der Bass-Switch auf B, dann geht A (mit Effekt: ins Echo)
-        if e.experimente == "wild" and (i // PHRASE + j // PHRASE + pa.n + pb.n) % 4 == 1 and \
+        # Drop-Cuts aus: 14 Runden 2,2 (4 von 5 Noten <= 2)
+        if False and e.experimente == "wild" and (i // PHRASE + j // PHRASE + pa.n + pb.n) % 4 == 1 and \
                 _drop_gleich(pa, pb, i + lage.drop_k, j + lage.drop_k):
             return "drop_cuts", {**basis, "trick": "wechsel", "eq": "keiner", "gesang_takt": lage.drop_k}, \
                 "Drop-Cuts: beide Drops übereinander, taktweise hin und her, dann B"
@@ -716,7 +730,7 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
         if a_break and not singt_b and not a_endet and not sofort:
             # B laeuft mit seinen Drums unter A's Break ein, A blendet ueber die ganze Blende aus
             # (frueher: A in der ersten Viertel weg -> im Test 10 von 10 Mal "zu abrupt").
-            kann("breakdown", dict(eq="bass_mitte"), "B übernimmt im Break von A", 2.0)
+            kann("breakdown", dict(eq="bass_mitte"), "B übernimmt im Break von A", 0.3)   # 14 Runden: 1,93
         # Loop von A braucht Drums; endet A in der Blende, ist er Pflicht. Loopt B's Intro, loopt A nicht
         # (Runde 5: A- und B-Loop zugleich 2,27, "zu viel auf einmal"; intro_loop_b loopt A nur, wenn A endet)
         if (not a_break or a_endet) and not lage.k_ein:
@@ -749,7 +763,7 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
             if e.spielanteil == "schnell" and b_drop_danach and harmonisch:
                 # Rolle = Aufbau in einen Drop; ohne Drop dahinter oder mit beissender Tonart klang sie
                 # im Test wie ein Unfall (1,3)
-                kann("rolle", dict(halten, loop="rolle"), "Loop-Rolle in B's Drop", 2.8)
+                kann("rolle", dict(halten, loop="rolle"), "Loop-Rolle in B's Drop", 0.3)   # 14 Runden: 1,33
                 kann("delay_out", dict(halten, effekt="delay75_ende_aus"), "kurzer Blend, A geht ins Delay", 2.0)
             kann("kurz_eq", {} if harmonisch else dict(lautstaerke="hart_aus", eq="bass_mitte", filter="hp_aus"),
                  "kurzer Profi-Blend" if harmonisch else "Tonarten passen nicht: A dünnt mit Hochpass aus", 1.0)
@@ -802,9 +816,10 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
 
 def _bass_takt(pa: Profil, pb: Profil, i: int, bi: np.ndarray, L: int) -> int:
     """Takt des Bass-Tauschs: wo B's Bassline einsetzt, sonst wo A's Bass am schwaechsten ist,
-    sonst die Mitte. Nur auf Taktgruppen (4er, bei kurzen Blenden 2er) im mittleren Bereich."""
+    sonst bei drei Vierteln. Nur auf Taktgruppen (4er, bei kurzen Blenden 2er) in der zweiten Haelfte:
+    der EQ-Swap tauscht vorher Hoehen und Mitten, der Bass kommt zuletzt."""
     raster = 4 if L >= 16 else 2 if L >= 4 else 1
-    erlaubt = [k for k in range(raster, L, raster) if L / 4 <= k <= 3 * L / 4] or [L // 2]
+    erlaubt = [k for k in range(raster, L, raster) if L / 2 <= k <= 3 * L / 4] or [max(1, L // 2)]
     bb = _werte(pb.bass(), bi[:L])
     for k in erlaubt:
         if bb[k] > 0.5 and bb[k - 1] < 0.5:
@@ -812,7 +827,7 @@ def _bass_takt(pa: Profil, pb: Profil, i: int, bi: np.ndarray, L: int) -> int:
     ba = _fenster(pa.stems["bass"] if pa.stems else pa.baender[:, 0], i, L)
     if np.ptp(ba[erlaubt]) > 6.0:
         return int(erlaubt[int(np.argmin(ba[erlaubt]))])
-    return L // 2
+    return erlaubt[-1]
 
 
 LOOP_GUETE_MIN = 0.7   # darunter faellt die Wiederholung auf: kein A-Loop an dieser Stelle
@@ -909,28 +924,69 @@ def plan_merkmale(plan: Plan, pa: Profil, pb: Profil, e: Einstellungen, sync: bo
                     k_ein=plan.einst.loop_ein, mal=plan.einst.loop_ein_mal)
 
 
-def pruefen(blende: np.ndarray, rate: int, n_takte: int, pa: Profil, pb: Profil, aus_s: float,
-            ein_s: float, gain_a: float, gain_b: float, rezept: str) -> str | None:
-    """Selbstkontrolle des fertigen Uebergangs: Lautstaerke-Buckel oder -Loch gegenueber den
-    beiden Songs an derselben Stelle. Gibt eine Begruendung zurueck, wenn er durchfaellt."""
+def _pegel_soll(blende: np.ndarray, rate: int, n_takte: int, pa: Profil, pb: Profil, aus_s: float,
+                ein_s: float, gain_a: float, gain_b: float, rezept: str):
+    """Je Takt der Blende (Ist-Pegel, Obergrenze, Untergrenze) in dB, oder None, wenn das Rezept nicht
+    geprueft wird. Obergrenze: der lautere Song an derselben Stelle +3,5 dB; Untergrenze: die ideale
+    Blende (Leistung gleitet von A nach B) -9 dB, nicht im ersten/letzten Takt."""
     if n_takte < 2 or rezept in ("schnitt", "echo_out", "schnitt_echo", "echo_drop", "intro_loop_b", "double_drop",
                                  "drop_cuts")\
             or rezept in DROP_TRICKS:
         return None
     takt_s = len(blende) / rate / n_takte
     mono = blende.mean(axis=1) if blende.ndim > 1 else blende
+    ist, oben, unten = np.zeros(n_takte), np.zeros(n_takte), np.full(n_takte, -np.inf)
     for k in range(n_takte):
         teil = mono[int(k * takt_s * rate):int((k + 1) * takt_s * rate)]
-        ist = 10 * np.log10(np.mean(teil.astype(np.float64) ** 2) + 1e-10)
+        ist[k] = 10 * np.log10(np.mean(teil.astype(np.float64) ** 2) + 1e-10)
         # Mit Loop wiederholt A seinen Anfang: dessen Pegel ist der Vergleich
         ia = pa.takt_bei(aus_s + (0 if "loop" in rezept or rezept == "rolle" else k * takt_s))
         jb = pb.takt_bei(ein_s + k * takt_s)
         la, lb = pa.gesamt[ia] + gain_a, pb.gesamt[jb] + gain_b
-        if ist > max(la, lb) + 3.5:
-            return f"zu laut in Takt {k + 1} (+{ist - max(la, lb):.1f} dB)"
-        x = (k + 0.5) / n_takte   # ideale Blende: Leistung gleitet von A nach B
-        soll = 10 * np.log10((1 - x) * 10 ** (la / 10) + x * 10 ** (lb / 10))
+        oben[k] = max(la, lb) + 3.5
+        x = (k + 0.5) / n_takte
         # gesang_zuerst: bis zur Uebergabe traegt A allein (B nur mit Gesang) - kein Loch
-        if ist < soll - 9.0 and k not in (0, n_takte - 1) and rezept != "gesang_zuerst":
-            return f"Loch in Takt {k + 1} ({ist - soll:.1f} dB)"
+        if k not in (0, n_takte - 1) and rezept != "gesang_zuerst":
+            unten[k] = 10 * np.log10((1 - x) * 10 ** (la / 10) + x * 10 ** (lb / 10)) - 9.0
+    return ist, oben, unten
+
+
+def pruefen(blende: np.ndarray, rate: int, n_takte: int, pa: Profil, pb: Profil, aus_s: float,
+            ein_s: float, gain_a: float, gain_b: float, rezept: str) -> str | None:
+    """Selbstkontrolle des fertigen Uebergangs: Lautstaerke-Buckel oder -Loch gegenueber den
+    beiden Songs an derselben Stelle. Gibt eine Begruendung zurueck, wenn er durchfaellt."""
+    werte = _pegel_soll(blende, rate, n_takte, pa, pb, aus_s, ein_s, gain_a, gain_b, rezept)
+    if werte is None:
+        return None
+    for k, (ist, oben, unten) in enumerate(zip(*werte)):
+        if ist > oben:
+            return f"zu laut in Takt {k + 1} (+{ist - oben + 3.5:.1f} dB)"
+        if ist < unten:
+            return f"Loch in Takt {k + 1} ({ist - unten - 9.0:.1f} dB)"
     return None
+
+
+REPARATUR_MAX_DB = 6.0   # ein Loch wird hoechstens um 6 dB angehoben (tiefer: Plan verwerfen)
+
+
+def pegel_reparieren(blende: np.ndarray, rate: int, n_takte: int, pa: Profil, pb: Profil, aus_s: float,
+                     ein_s: float, gain_a: float, gain_b: float, rezept: str) -> bool:
+    """Statt einen Plan wegen Buckel/Loch zu verwerfen (Runde 14: zu viele Sicherheits-Blends): den
+    Pegel je Takt in die Grenzen ziehen (1 dB Abstand), weich ueber die Taktmitten, an Anfang und Ende
+    der Blende unveraendert (kein Sprung zu A davor / B danach). Aendert `blende` in place."""
+    werte = _pegel_soll(blende, rate, n_takte, pa, pb, aus_s, ein_s, gain_a, gain_b, rezept)
+    if werte is None:
+        return False
+    ist, oben, unten = werte
+    g_db = np.clip(np.minimum(0.0, oben - 1.0 - ist) + np.maximum(0.0, unten + 1.0 - ist), -12.0, REPARATUR_MAX_DB)
+    if not np.any(np.abs(g_db) > 0.05):
+        return False
+    from .uebergang import _begrenzen
+
+    n = len(blende)
+    mitte = (np.arange(n_takte) + 0.5) * n / n_takte
+    g = 10 ** (np.interp(np.arange(n), np.concatenate([[0], mitte, [n]]), np.concatenate([[0], g_db, [0]])) / 20)
+    blende *= g[:, None].astype(blende.dtype) if blende.ndim > 1 else g.astype(blende.dtype)
+    if blende.ndim > 1:
+        _begrenzen(blende, n)
+    return True

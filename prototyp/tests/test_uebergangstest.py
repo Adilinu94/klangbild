@@ -80,3 +80,13 @@ def test_neue_runde_kennt_die_lieder_der_runden_davor(tmp_path):
     (alt / "001.json").write_text(json.dumps({"nr": 1, "fehler": "kein passender Partner"}), encoding="utf-8")
     assert ut._bekannte_ids(tmp_path / "uebergangstest") == {3, 7}
     assert ut.Test(tmp_path / "uebergangstest").bekannt == {3, 7}
+
+
+def test_set_faelle_und_clip_mit_pause():
+    f = ut.set_faelle_planen(list(range(20)), 3, 1, ("lang",), ("kreativ",))
+    assert len(f) == 3 and all(x["set"] and x["experimente"] == "kreativ" for x in f)
+    stuecke = [np.ones((ut.RATE, 2), np.float32), np.ones((2 * ut.RATE, 2), np.float32)]
+    x = ut.set_clip(stuecke)
+    rand = int(ut.SET_PAUSE_S * ut.RATE)
+    assert len(x) == 3 * ut.RATE and x[ut.RATE - 1, 0] == 0.0 and x[ut.RATE, 0] == 0.0   # Pause an der Naht
+    assert x[0, 0] == 1.0 and x[-1, 0] == 1.0 and x[ut.RATE + rand, 0] == 1.0          # Raender des Sets bleiben

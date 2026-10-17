@@ -25,6 +25,11 @@ VERSION = 2   # 2: Chroma je Takt
 PHRASE = 8
 STEMS = ("vocals", "drums", "bass", "other")
 ETIKETTEN = ("intro", "aufbau", "drop", "haupt", "break", "outro")
+# Drops (nach Runde 14, "ein Lied hat meist 1-3 Drops"): Einsatz von Bass + Drums + Pegel (Summe der Spruenge, je 4
+# Takte davor/danach); an 417 Titeln: 1 Drop 76, 2 Drops 254, 3 Drops 75, keiner 12
+DROP_SPRUNG_DB = 9.0
+DROP_ABSTAND = 24     # Takte zwischen zwei Drops (ein Drop-Abschnitt ist mindestens 16 Takte lang)
+DROP_REL = 0.4        # schwaechere Einsaetze zaehlen nur ab 40 % des staerksten
 
 
 def _einmal(f):
@@ -109,9 +114,62 @@ class Profil:
             o = 0
         return (PHRASE - o) % PHRASE
 
+    @_einmal
+    def drops(self) -> list[int]:
+        """1-3 Drop-Takte: wo Bass und Drums nach einem leiseren Teil voll einsetzen. Je Takt der Sprung
+        (Mittel der 4 Takte danach minus der 4 davor) in Pegel, Bass und Drums, summiert; die staerksten
+        Einsaetze mit DROP_ABSTAND Takten Abstand, danach muessen Bass und Drums laufen (3 von 4 Takten)."""
+        if self.n < 16:
+            return []
+        reihen = [self.gesamt] + ([self.stems["bass"], self.stems["drums"]] if self.stems else [self.baender[:, 0]])
+        k = np.arange(4, self.n - 3)
+        sprung = np.zeros(len(k))
+        for x in reihen:
+            c = np.concatenate([[0.0], np.cumsum(x)])
+            sprung += ((c[k + 4] - c[k]) - (c[k] - c[k - 4])) / 4
+        cb, cd = (np.concatenate([[0.0], np.cumsum(r)]) for r in (self.bass(), self.drums()))
+        voll = ((cb[k + 4] - cb[k]) >= 3) & ((cd[k + 4] - cd[k]) >= 3)
+        auswahl: list[int] = []
+        oben = None   # staerkster Einsatz mit vollem Bass und Drums danach
+        for m in np.argsort(-sprung, kind="stable"):
+            if sprung[m] < DROP_SPRUNG_DB or (oben is not None and sprung[m] < DROP_REL * oben):
+                break
+            if not voll[m]:
+                continue
+            oben = sprung[m] if oben is None else oben
+            if all(abs(int(k[m]) - a) >= DROP_ABSTAND for a in auswahl):
+                auswahl.append(int(k[m]))
+            if len(auswahl) == 3:
+                break
+        return sorted(auswahl)
+
+    @_einmal
+    def grenzen(self) -> list[int]:
+        """Phrasenanfaenge (aufsteigend, ab 0): 8er-Raster ab jedem Drop, vor dem ersten Drop rueckwaerts
+        gezaehlt (nach Runde 14: bei 39 % der Titel lag der staerkste Drop nicht auf dem alten, festen Raster;
+        bei 140 lagen die Drops eines Titels nicht im selben 8er-Raster). Ohne Drops: fester Versatz.
+        Phrasen unter 3 Takten gehen in der Nachbarphrase auf."""
+        d = self.drops()
+        if d:
+            g = {0} | set(range(d[0], 0, -PHRASE))
+            for a, b in zip(d, d[1:] + [self.n]):
+                g |= set(range(a, b, PHRASE))
+        else:
+            g = {0} | {q * PHRASE - self.versatz() for q in range(1, self.n // PHRASE + 2)}
+        g = sorted(x for x in g if 0 <= x < self.n)
+        fest = {0, *d}
+        aus = []
+        for i, x in enumerate(g):
+            naechste = g[i + 1] if i + 1 < len(g) else self.n
+            if x not in fest and ((aus and x - aus[-1] < 3) or naechste - x < 3):
+                continue
+            aus.append(x)
+        return aus
+
     def phrase_start(self, q: int) -> int:
-        """Erster Takt der Phrase q (Phrase 0 beginnt am Songanfang, ist mit Versatz kuerzer)."""
-        return max(0, q * PHRASE - self.versatz())
+        """Erster Takt der Phrase q (Phrase 0 beginnt am Songanfang; Grenzen siehe `grenzen`)."""
+        g = self.grenzen()
+        return g[q] if q < len(g) else g[-1] + PHRASE * (q - len(g) + 1)
 
     def phrase_ab(self, takt: int) -> int:
         """Erste Phrasengrenze ab `takt`."""
@@ -120,11 +178,12 @@ class Profil:
 
     @_einmal
     def etiketten(self) -> list[str]:
-        """Etikett je Phrase (8 Takte, mit Versatz: siehe phrase_start)."""
-        n_ph = max(1, int(np.ceil((self.n + self.versatz()) / PHRASE)))
-        grenzen = [self.phrase_start(q) for q in range(n_ph)] + [self.n]
+        """Etikett je Phrase (Grenzen siehe `grenzen`); "drop" nur, wo ein Drop beginnt (`drops`)."""
+        n_ph = len(self.grenzen())
+        grenzen = self.grenzen() + [self.n]
         e = np.array([np.mean(self.gesamt[a:max(a + 1, b)]) for a, b in zip(grenzen, grenzen[1:])])
         d = np.array([np.mean(self.drums()[a:max(a + 1, b)]) for a, b in zip(grenzen, grenzen[1:])])
+        bass = np.array([np.mean(self.bass()[a:max(a + 1, b)]) for a, b in zip(grenzen, grenzen[1:])])
         laut = np.percentile(e, 75)
         leise = e < laut - 4.0
         aus = ["haupt"] * n_ph
@@ -141,14 +200,14 @@ class Profil:
                 aus[p] = "break"
             elif leise[p]:
                 aus[p] = "aufbau"
-        for p in range(i, j + 1):   # Drop: lauter, mit Drums, nach Tal/Aufbau oder Sprung >= 3 dB
-            if aus[p] in ("haupt",) and p > 0 and (aus[p - 1] in ("intro", "aufbau", "break")
-                                                   or e[p] - e[p - 1] >= 3.0):
-                aus[p] = "drop"
+        for t in self.drops():   # Drop = Einsatz von Bass und Drums (Runde 11, hedex: Drop auf dem Drum-Aufbau)
+            aus[self.phrase_von(t)] = "drop"
         return aus
 
     def phrase_von(self, takt: int) -> int:
-        return (max(0, takt) + self.versatz()) // PHRASE
+        g = self.grenzen()
+        q = int(np.searchsorted(g, max(0, takt), side="right")) - 1
+        return q if takt < self.n or q < len(g) - 1 else q + (max(0, takt) - g[-1]) // PHRASE
 
     def takt_bei(self, t: float) -> int:
         return int(np.clip(np.argmin(np.abs(self.takte - t)), 0, self.n - 1))
@@ -278,14 +337,24 @@ def gespeichert(track_id: int, cache: Path | None = None) -> Profil | None:
         return None
 
 
-def laden(eintrag, audio_quelle, cache: Path | None = None) -> Profil:
+def passt(p: Profil, downbeats) -> bool:
+    """Liegt das Taktraster des Profils auf den Downbeats des Eintrags (z. B. nach einem Raster-Anker)?"""
+    d = np.asarray(downbeats, float)
+    if len(d) < 4 or p.n < 4:
+        return True
+    mitte = d[len(d) // 2 - 2:len(d) // 2 + 2]
+    return float(np.median(np.min(np.abs(p.takte[:, None] - mitte[None, :]), axis=0))) < 0.01
+
+
+def laden(eintrag, audio_quelle, cache: Path | None = None, neu: bool = False) -> Profil:
     """Profil aus dem Cache; fehlt es (oder fehlen darin Stems, die inzwischen im Vorrat
-    liegen), wird es aus `audio_quelle()` (rohes Audio) neu berechnet."""
+    liegen, oder passt sein Raster nicht mehr zu den Downbeats), wird es aus `audio_quelle()`
+    (rohes Audio) neu berechnet."""
     from . import stems as st
 
-    p = gespeichert(eintrag.id, cache)
+    p = None if neu else gespeichert(eintrag.id, cache)
     mit_stems = st.vorrat_fertig(eintrag.id)
-    if p is not None and (p.stems is not None or not mit_stems):
+    if p is not None and (p.stems is not None or not mit_stems) and passt(p, eintrag.downbeats):
         return p
     audio = audio_quelle()
     stems = st.aus_vorrat(eintrag.id, 0.0, audio) if mit_stems else None

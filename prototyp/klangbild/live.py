@@ -107,7 +107,8 @@ class Wiedergabe:
         # und das Vorrechnen fuer C dekodieren sonst jedes Mal neu (~0,5 s je Song).
         self._dekodiert: OrderedDict[int, np.ndarray] = OrderedDict()
         self._dekodiert_lock = threading.Lock()
-        self._rang = 0                       # "anderer Uebergang": n-ter Plan der Regie
+        self._rang = 0                       # Uebergangstest: mit dem n-ten Plan der Regie beginnen (Plan 2/3)
+        self._blende_nr = 0                  # laufende Nummer der Blenden (Bewertung in der Uebergangsliste)
         # Gemma-Versuch: (plaene, a, pa, b, pb, einst) -> (Index, Grund); waehlt statt der Regie-Reihenfolge
         self.plan_waehler: Callable | None = None
         self._letztes_rezept: str | None = None   # Abwechslung: nicht zweimal dasselbe
@@ -175,14 +176,17 @@ class Wiedergabe:
 
     def _umschalten(self) -> None:
         _, spur, info = self._naechste
-        self.verlauf.append({"von": self.spur.eintrag.id, "nach": spur.eintrag.id,
-                             **{k: v for k, v in info.items() if k != "kurven"}})
+        eintrag = {"von": self.spur.eintrag.id, "nach": spur.eintrag.id,
+                   **{k: v for k, v in info.items() if k != "kurven"}}
         self.vorher = (self.spur.eintrag, info) if info.get("blende_s") else None
         if info.get("rezept"):   # nur die Meta merken (kein Datei-Zugriff im Audio-Callback)
             t = lambda e: {"id": e.id, "titel": e.titel, "bpm": round(e.bpm, 2), "camelot": e.camelot}  # noqa: E731
-            self.blenden = (self.blenden + [{"a": t(self.spur.eintrag), "b": t(spur.eintrag), "info": {
+            self._blende_nr += 1
+            eintrag["blende_nr"] = self._blende_nr
+            self.blenden = (self.blenden + [{"nr": self._blende_nr, "a": t(self.spur.eintrag), "b": t(spur.eintrag), "info": {
                 k: v for k, v in info.items() if k != "kurven"}, **{k: info.get(k) for k in (
                     "stil", "spielanteil", "weiter", "experimente")}}])[-20:]
+        self.verlauf.append(eintrag)
         self.spur, self.pos, self._naechste = spur, 0, None
         # Erst beim echten Wechsel aus der Warteschlange: ein verworfener Uebergang verliert nichts.
         if self.warteschlange and self.warteschlange[0] == spur.eintrag.id:
@@ -195,7 +199,6 @@ class Wiedergabe:
         if info.get("energie_schritt") is not None:
             self._energie_schritte = (self._energie_schritte + [info["energie_schritt"]])[-4:]
         self._frueh = False
-        self._rang = 0
         self._gen += 1
 
     # --- Bedienung -------------------------------------------------------
@@ -213,7 +216,6 @@ class Wiedergabe:
             self._gespielt.add(track_id)
             self.warteschlange = [i for i in self.warteschlange if i != track_id]
             self._frueh = False
-            self._rang = 0
             self._verwerfen()
 
     def pause(self) -> None:
@@ -239,17 +241,18 @@ class Wiedergabe:
             except OSError:
                 pass
 
-    def bewerten(self, schulnote: int, stichwort: str | None = None) -> None:
-        """Schulnote 1 (sehr gut) .. 6 (ungenuegend) fuer die eben gespielte Blende, im Format des Hoertests
+    def bewerten(self, nr: int, schulnote: int, stichwort: str | None = None) -> None:
+        """Schulnote 1 (sehr gut) .. 6 (ungenuegend) fuer eine der letzten 20 Blenden (`nr` aus der
+        Uebergangsliste), im Format des Hoertests
         (datensatz.live_faelle, Note 5 = beste: 1 -> 5,0 ... 6 -> 1,0); 1-3 zaehlt fuer die Rezept-Vorlieben
         wie ein durchgehoerter, 4-6 wie ein abgebrochener Uebergang."""
         import json
         from datetime import date
 
         with self.lock:
-            if not self.blenden or self.blenden[-1].get("bewertet") is not None:
-                raise ValueError("keine Blende zu bewerten")
-            meta = self.blenden[-1]
+            meta = next((m for m in self.blenden if m["nr"] == nr and m.get("bewertet") is None), None)
+            if meta is None:
+                raise ValueError("Übergang nicht (mehr) bewertbar")
             meta["bewertet"] = int(schulnote)
         self._lernen(meta["info"]["rezept"], schulnote <= 3)
         if self.bewertung_ordner is None:
@@ -260,20 +263,11 @@ class Wiedergabe:
         noten = json.loads(datei.read_text(encoding="utf-8")) if datei.exists() else {}
         nr = len(noten)
         (ordner / "clips" / f"{nr:03d}.json").write_text(json.dumps(
-            {"nr": nr, **{k: v for k, v in meta.items() if k != "bewertet"}}, ensure_ascii=False), encoding="utf-8")
+            {**{k: v for k, v in meta.items() if k not in ("bewertet", "nr")}, "nr": nr}, ensure_ascii=False),
+            encoding="utf-8")
         noten[str(nr)] = {"note": round(1.0 + (6 - schulnote) * 0.8, 1), "schulnote": int(schulnote),
                           "stichworte": [stichwort] if stichwort else []}
         datei.write_text(json.dumps(noten, ensure_ascii=False, indent=1), encoding="utf-8")
-
-    def vorhoeren(self) -> np.ndarray | None:
-        """Die schon gebackene naechste Blende ab 4 s davor bis 4 s danach (nichts wird neu gerechnet)."""
-        with self.lock:
-            if self._naechste is None or self.spur is None:
-                return None
-            wechsel_n, spur, info = self._naechste
-            a = self.spur.puffer[max(0, wechsel_n - 4 * RATE):wechsel_n]
-            b = spur.puffer[:int((info.get("blende_s", 0.0) + 4.0) * RATE)]
-        return np.concatenate([a, b])
 
     def weiter(self) -> None:
         with self.lock:
@@ -287,15 +281,6 @@ class Wiedergabe:
             naechster = self.warteschlange.pop(0) if self.warteschlange else None
         if naechster is not None:
             self.play(naechster)
-
-    def anders(self) -> None:
-        """Naechstbesten Plan der Regie fuer den kommenden Uebergang nehmen."""
-        with self.lock:
-            if self.autodj and self.spur is not None:
-                if self._naechste is not None and self._naechste[2].get("rezept"):
-                    self._lernen(self._naechste[2]["rezept"], False)
-                self._rang = (self._rang + 1) % 3
-                self._verwerfen()
 
     def einreihen(self, track_id: int) -> None:
         with self.lock:
@@ -322,8 +307,11 @@ class Wiedergabe:
                 w[index], w[ziel] = w[ziel], w[index]
                 self._verwerfen()
 
-    def sortieren(self) -> None:
-        """Ganze Bibliothek in die beste Reihenfolge; sie wird die Warteschlange."""
+    def sortieren(self, neu: bool = False) -> None:
+        """Ganze Bibliothek in die beste Reihenfolge; sie wird die Warteschlange. `neu`: eine andere, ebenso
+        gute Variante (Zufall in der gierigen Wahl, plan.set_planen)."""
+        import random
+
         from . import profil
 
         with self.lock:
@@ -341,7 +329,8 @@ class Wiedergabe:
         pn = self.paarnoten = self.paarnoten.neu_laden() if self.paarnoten is not None else None
         folge = plan.sortiere_alle(tracks, einst.max_bpm, einst.harmonie, aktuell, bonus,
                                    paarnote=pn.note if pn is not None else None,
-                                   rezept=pn.rezept if pn is not None else None, bogen=einst.set_bogen)
+                                   rezept=pn.rezept if pn is not None else None, bogen=einst.set_bogen,
+                                   zufall=random.Random() if neu else None)
         with self.lock:
             self.warteschlange = [i for i in folge if i != aktuell]
             self._verwerfen()
@@ -481,7 +470,7 @@ class Wiedergabe:
         t0 = time.perf_counter()
         pa, pb = self._profil(a.eintrag), self._profil(b)
         t_profil = time.perf_counter() - t0
-        grenze = max(einst.max_bpm, 0.05)
+        grenze = max(einst.max_bpm, 0.05) + uebergang.TEMPO_SPIEL   # wie backen (Runde 14, Fall 36: 129,99 -> 135)
         sync = abs(a.bpm_bei(ab_s) - b.bpm) <= grenze
         if not sync:   # §5.3 Doppel-/Halbtempo (z. B. 85 <-> 170): B laeuft im doppelten/halben Taktraster
             f = next((f for f in (2.0, 0.5) if abs(a.bpm_bei(ab_s) - f * b.bpm) <= grenze), None)
@@ -537,9 +526,14 @@ class Wiedergabe:
                                   "backen": round(time.perf_counter() - t0 - t_profil - t_plan, 1)})
             n, v = int(g.info["blende_s"] * RATE), int(g.info.get("vorlauf_s", 0.0) * RATE)
             lw = g.info.get("loop_wahl")
+            pegel = (g.spur.puffer[v:n], RATE, g.info["takte"], pa, pb, plan.aus_s, plan.ein_s,
+                     gain(a.eintrag), gain(b), plan.rezept)
             fehler = (f"Loop nicht sauber (Güte {lw['guete']})" if lw and lw["guete"] < regie.LOOP_GUETE_MIN else
-                      regie.pruefen(g.spur.puffer[v:n], RATE, g.info["takte"], pa, pb, plan.aus_s,
-                                    plan.ein_s, gain(a.eintrag), gain(b), plan.rezept))
+                      regie.pruefen(*pegel))
+            # Buckel/Loch: erst den Pegel reparieren, nur wenn das nicht reicht den Plan verwerfen
+            if fehler is not None and fehler.startswith(("zu laut", "Loch")) and regie.pegel_reparieren(*pegel):
+                g.info["pegel_reparatur"] = fehler
+                fehler = regie.pruefen(*pegel)
             if fehler is None and plan.rezept in ("double_drop", "drop_cuts"):   # §3.2: zwei versetzte Kick-Zuege?
                 raster = np.round(np.asarray(g.info["raster_s"]) * RATE)
                 fehler = regie.pruefen_drop(g.spur.puffer, RATE, raster, regie.PHRASE)
@@ -553,7 +547,7 @@ class Wiedergabe:
                 fehler = f"Kritiker: {note:.1f}" if note < kritiker.NACHHER_MIN else None
             return g, fehler
 
-        for k, plan in enumerate(plaene[start:start + (2 if frueh else 3)]):
+        for k, plan in enumerate(plaene[start:start + (2 if frueh else 5)]):   # mehr Versuche statt Sicherheits-Blend
             g, fehler = backen_plan(plan, k)
             if fehler is None:
                 return g
@@ -569,7 +563,7 @@ class Wiedergabe:
                          takte=kurz, einst=replace(p0.einst, takte=kurz, weiter_takte=kurz, art="eigen",
                                        lautstaerke="nahtlos", eq="profi", filter="keiner",
                                        effekt="keiner", effekt_ein="keiner", loop="auto" if a_endet else "keiner",
-                                       loop_ein=0, loop_ein_mal=0))
+                                       loop_ein=0, loop_ein_mal=0, trick="keiner", gesang_takt=-1))
         g, fehler = backen_plan(sicher, 0)
         g.info["pruefung"] = fehler
         return g
@@ -596,6 +590,7 @@ class Wiedergabe:
     # --- Zustand fuer die Oberflaeche -------------------------------------
     def zustand(self) -> dict:
         with self.lock:
+            noten = {m["nr"]: m.get("bewertet") for m in self.blenden}
             z: dict = {"spielt": self.spielt, "autodj": self.autodj, "underflows": self.underflows,
                        "aktuell": None, "naechster": None,
                        "warteschlange": [{"id": i, "titel": self.bibliothek[i].titel,
@@ -603,7 +598,8 @@ class Wiedergabe:
                                          for vor, i in zip([self.spur.eintrag.id if self.spur else None]
                                                            + self.warteschlange, self.warteschlange)
                                          if i in self.bibliothek],
-                       "verlauf": self.verlauf[-10:]}
+                       "verlauf": [{**v, "bewertbar": v.get("blende_nr") in noten,
+                                    "note": noten.get(v.get("blende_nr"))} for v in self.verlauf[-10:]]}
             if self.spur is not None:
                 s, e = self.spur, self.spur.eintrag
                 t = self.pos / RATE
@@ -623,12 +619,6 @@ class Wiedergabe:
                                    "blende_s": info["blende_s"], "art": info["art"],
                                    "kurven": info.get("kurven"), "a_loop": info.get("a_loop", []),
                                    "a_orig_start": info["a_orig_start"]}
-            if self.blenden and self.spur is not None and self.blenden[-1]["b"]["id"] == self.spur.eintrag.id \
-                    and self.pos / RATE < self.blenden[-1]["info"].get("blende_s", 0.0) + 60.0:
-                bl = self.blenden[-1]
-                z["bewertbar"] = {"nr": len(self.blenden), "rezept": bl["info"]["rezept"], "a": bl["a"]["titel"],
-                                  "b": bl["b"]["titel"], "bewertet": bl.get("bewertet"),
-                                  "fertig": self.pos / RATE >= bl["info"].get("blende_s", 0.0)}
             if self._naechste is None and self._vorschau is not None:
                 z["vorschau"] = dict(self._vorschau)
             if self._naechste is not None:

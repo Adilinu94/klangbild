@@ -149,9 +149,9 @@ val hostTest = tasks.register("hostTest") {
         prozess(
             cmake, "-S", quelleDir, "-B", bau,
             "-DCMAKE_BUILD_TYPE=Release",
-            "-DKLINGBILD_GOLDENDIR=$goldendaten"
+            "-DKLINGBILD_GOLDENDIR=${goldendaten.replace("\\", "/")}"
         )
         prozess(cmake, "--build", bau, "--config", "Release", "--parallel")
-        prozess(cmake, "--build", bau, "--config", "Release", "--target", "test")
+        prozess(cmake, "--build", bau, "--config", "Release", "--target", "RUN_TESTS")
     }
 }

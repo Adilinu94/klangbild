@@ -29,9 +29,13 @@ UPLOAD_ENDUNGEN = config.AUDIO_ENDUNGEN - {".m4a", ".aac"}
 UPLOAD_MAX_BYTES = 1 << 30   # 1 GB je Datei
 
 
-def bibliothek_laden(conn, version: str) -> dict[int, live.Eintrag]:
-    """Mischbare Tracks (ohne Dubletten, `autodj.lade_tracks`) plus Pegel, Energie, Abschnitte."""
+def bibliothek_laden(conn, version: str, anker_an: bool = True) -> dict[int, live.Eintrag]:
+    """Mischbare Tracks (ohne Dubletten, `autodj.lade_tracks`) plus Pegel, Energie, Abschnitte.
+    Downbeats mit Raster-Anker (anker.py: Raster auf die Drum-Anschlaege), sofern berechnet."""
+    from . import anker
+
     tracks, downbeats, pfade, _ = autodj.lade_tracks(conn, version, start=None, laenge=0)
+    versatz = anker.laden() if anker_an else {}
     extra = {
         int(z["track_id"]): z for z in conn.execute(
             "SELECT track_id, lufs, true_peak, energie_json, abschnitte_json FROM features"
@@ -43,7 +47,8 @@ def bibliothek_laden(conn, version: str) -> dict[int, live.Eintrag]:
         energie = [float(v) for _, v in json.loads(z["energie_json"] or "[]")] if z else []
         abschnitte = [float(x) for x in json.loads(z["abschnitte_json"] or "[]")] if z else []
         bib[t.id] = live.Eintrag(
-            id=t.id, pfad=pfade[t.id], bpm=t.bpm, camelot=t.camelot, downbeats=downbeats[t.id],
+            id=t.id, pfad=pfade[t.id], bpm=t.bpm, camelot=t.camelot,
+            downbeats=anker.anwenden(downbeats[t.id], versatz.get(t.id, 0.0)),
             gain_db=live.gain_db(z["lufs"], z["true_peak"]) if z else 0.0,
             energie=energie, abschnitte=abschnitte)
     return bib
@@ -270,22 +275,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._sende(SEITE.read_bytes(), "text/html; charset=utf-8")
         elif pfad == "/api/zustand":
             self._json(_M.zustand())
-        elif pfad == "/api/vorhoeren":   # gebackene naechste Blende als FLAC (zweites Ausgabegeraet, §7.2)
-            import io
-
-            import soundfile as sf
-
-            x = w.vorhoeren()
-            if x is None:
-                self._json({"fehler": "noch keine Blende gebacken"}, 404)
-            else:
-                puffer = io.BytesIO()
-                sf.write(puffer, x, live.RATE, format="FLAC", subtype="PCM_16")
-                self._sende(puffer.getvalue(), "audio/flac")
         elif pfad == "/api/einstellungen":
-            from .uebergangstest import STICHWORTE
-
-            self._json({"werte": asdict(w.einst), "auswahl": einstellungen.AUSWAHL, "stichworte": STICHWORTE,
+            self._json({"werte": asdict(w.einst), "auswahl": einstellungen.AUSWAHL,
                         "takte": einstellungen.TAKTE, "grenzen": einstellungen.GRENZEN})
         elif pfad == "/api/bibliothek":
             from . import stems
@@ -353,14 +344,15 @@ class _Handler(BaseHTTPRequestHandler):
             if befehl == "einstellungen":
                 self._json(_M.einstellungen_setzen(daten))
                 return
-            if befehl == "bewerten":   # {note: 1..6 (Schulnote), stichwort?: aus uebergangstest.STICHWORTE}
+            if befehl == "bewerten":   # {nr: Blende, note: 1..6 (Schulnote), stichwort?: uebergangstest.STICHWORTE}
                 from .uebergangstest import STICHWORTE
 
                 stichwort = daten.get("stichwort") or None
-                note = daten.get("note")
-                if type(note) is not int or not 1 <= note <= 6 or (stichwort is not None and stichwort not in STICHWORTE):
-                    raise ValueError("note (1-6) und optional ein bekanntes Stichwort")
-                w.bewerten(note, stichwort)
+                nr, note = daten.get("nr"), daten.get("note")
+                if type(nr) is not int or type(note) is not int or not 1 <= note <= 6 \
+                        or (stichwort is not None and stichwort not in STICHWORTE):
+                    raise ValueError("nr, note (1-6) und optional ein bekanntes Stichwort")
+                w.bewerten(nr, note, stichwort)
                 self._json(_M.zustand())
                 return
             aktionen = {
@@ -368,11 +360,10 @@ class _Handler(BaseHTTPRequestHandler):
                 "pause": w.pause,
                 "seek": lambda: w.seek(float(daten["s"])),
                 "weiter": w.weiter,
-                "anders": w.anders,
                 "queue": lambda: w.einreihen(int(daten["id"])),
                 "entfernen": lambda: w.entfernen(int(daten["index"])),
                 "verschieben": lambda: w.verschieben(int(daten["index"]), int(daten["richtung"])),
-                "sortieren": w.sortieren,
+                "sortieren": lambda: w.sortieren(bool(daten.get("neu"))),
                 "leeren": w.leeren,
             }
             if befehl not in aktionen:

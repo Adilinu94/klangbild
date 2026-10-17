@@ -21,7 +21,7 @@ import numpy as np
 from . import config
 
 CACHE = config.CACHE / "paarnoten.json"
-REGIE_VERSION = "2026-10-16"   # bei Aenderungen an der Regie hochzaehlen: alte Paarnoten verfallen
+REGIE_VERSION = "2026-10-17"   # bei Aenderungen an der Regie hochzaehlen: alte Paarnoten verfallen
 
 
 class Paarnoten:

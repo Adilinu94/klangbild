@@ -308,6 +308,7 @@ BOGEN = 0.25          # Strafe 1 je 0,25 Energielevel Abstand zur Zielkurve (auf
 ENERGIE_SPRUNG = 4.0  # Strafe je Energielevel-Sprung (0..1): hart -> ruhig kostet ~2 Notenpunkte
 GENRE_STRAFE = 1.5    # Wechsel des Genres (Ordner)
 REZEPT_STRAFE = 1.0   # zweimal hintereinander dasselbe Rezept
+VARIANTE = 1.0        # "neue Reihenfolge": Zufall bis 1 Notenpunkt je Schritt der gierigen Wahl
 
 
 def bogen_ziel(energien: list[float], n: int, bogen: str) -> list[float | None]:
@@ -367,7 +368,7 @@ def _zwei_opt(folge: list[int], index: dict, ziel, note, rezept, fenster: int = 
 
 
 def set_planen(tracks: list[Track], start_id: int, max_bpm: float, harmonie: str, paarnote, rezept=None,
-               bogen: str = "gleichmaessig") -> list[int]:
+               bogen: str = "gleichmaessig", zufall=None) -> list[int]:
     """Reihenfolge nach erwarteten Uebergangsnoten (`paarnote(a, b) -> 1..5 | None`, paarnoten.py): gierig den
     naechsten mit den geringsten Kosten (Note, Energiesprung, Genre, Bogen), dann 2-opt. Fehlt eine Paarnote,
     schaetzt sie Tempo/Tonart/Energie."""
@@ -388,7 +389,8 @@ def set_planen(tracks: list[Track], start_id: int, max_bpm: float, harmonie: str
     folge, uebrig = [start_id], set(index) - {start_id}
     while uebrig:
         vor = folge[-2] if len(folge) >= 2 else None
-        b = min(sorted(uebrig), key=lambda x: _set_schritt(index, folge[-1], x, vor, len(folge), ziel, note, rezept))
+        b = min(sorted(uebrig), key=lambda x: _set_schritt(index, folge[-1], x, vor, len(folge), ziel, note, rezept)
+                + (zufall.uniform(0.0, VARIANTE) if zufall else 0.0))
         folge.append(b)
         uebrig.remove(b)
     return _zwei_opt(folge, index, ziel, note, rezept)
@@ -396,13 +398,14 @@ def set_planen(tracks: list[Track], start_id: int, max_bpm: float, harmonie: str
 
 def sortiere_alle(
     tracks: list[Track], max_bpm: float, harmonie: str = "locker", start_id: int | None = None,
-    bonus=None, paarnote=None, rezept=None, bogen: str = "gleichmaessig",
+    bonus=None, paarnote=None, rezept=None, bogen: str = "gleichmaessig", zufall=None,
 ) -> list[int]:
     """Alle Tracks in eine Reihenfolge bringen (gierig, jeder Song einmal).
 
     Start: `start_id` oder der groesste Tempo-Cluster (wie autodj.lade_tracks).
     Mit `paarnote` (BAUPLAN-UEBERGAENGE §8) nach erwarteten Uebergangsnoten, Energiebogen und Abwechslung
-    der Rezepte (set_planen), sonst nach Tempo/Tonart/Energie (rangliste).
+    der Rezepte (set_planen), sonst nach Tempo/Tonart/Energie (rangliste). `zufall` (random.Random): eine
+    andere Variante (nur mit `paarnote`).
     shortcut: O(n^2) gierig; bei ~8.000 Titeln einige Minuten. Upgrade: Cluster
     nach Tempo vorsortieren und nur Nachbarn vergleichen.
     """
@@ -415,7 +418,7 @@ def sortiere_alle(
         modal = Counter(round(t.bpm or 0) for t in tracks).most_common(1)[0][0]
         start_id = next(t.id for t in tracks if round(t.bpm or 0) == modal)
     if paarnote is not None:
-        return set_planen(tracks, start_id, max_bpm, harmonie, paarnote, rezept, bogen)
+        return set_planen(tracks, start_id, max_bpm, harmonie, paarnote, rezept, bogen, zufall)
     aktuell = index[start_id]
     uebrig = [t for t in tracks if t.id != start_id]
     folge = [start_id]
