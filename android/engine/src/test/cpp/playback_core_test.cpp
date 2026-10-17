@@ -13,6 +13,7 @@
 #include <thread>
 #include <vector>
 
+#include "denormals.h"
 #include "output_ring.h"
 #include "playback_core.h"
 #include "sine_feeder.h"
@@ -494,3 +495,23 @@ TEST(SineFeeder, ThreadUndEchtzeitCallbackOhneUnterlauf) {
     EXPECT_EQ(core.underflows(), 0u);
     EXPECT_EQ(core.framesPlayed(), 60u * 441u);
 }
+
+// ============================== Denormals =======================================================
+
+#if defined(__SSE__) || defined(_M_X64)
+// Das Register gilt je Thread: der Test laeuft in einem eigenen Thread und laesst die anderen Tests unberuehrt.
+TEST(Denormals, FlushToZeroGiltImAufrufenderThread) {
+    volatile float denormal = 1e-39f;          // kleiner als die kleinste normale float-Zahl (~1,2e-38)
+    volatile float halb = 0.5f;
+    float vorher = -1.0f, nachher = -1.0f;
+    std::thread t([&] {
+        vorher = denormal * halb;              // ohne FTZ/DAZ: bleibt eine (denormale) Zahl > 0
+        klangbild::enableFlushToZero();
+        nachher = denormal * halb;             // mit FTZ/DAZ: 0
+    });
+    t.join();
+    EXPECT_GT(vorher, 0.0f);
+    EXPECT_EQ(nachher, 0.0f);
+    EXPECT_GT(denormal * halb, 0.0f);          // dieser Thread ist unveraendert
+}
+#endif

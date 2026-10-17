@@ -17,12 +17,22 @@ endif()
 
 add_library(klangbild SHARED
     jni_bridge.cpp
+    oboe_output.cpp
 )
 
 # Oboe als Quellcode (Apache-2.0), statisch gelinkt wie bei djay §61: nur so ist
 # auch oboe::resampler::MultiChannelResampler nutzbar (im Prefab-Paket privat).
-# Wird in M1 (T1.1) als Untermodul unter third_party/oboe dazu gebunden.
+# Liegt unter third_party/oboe (Version 1.11.0). Holen:
+#   git clone --branch 1.11.0 --depth 1 https://github.com/google/oboe third_party/oboe
 # KissFFT (BSD-3) und Signalsmith Stretch (MIT) folgen in M5/M6.
+set(KLANGBILD_OBOE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/oboe)
+if(NOT EXISTS ${KLANGBILD_OBOE_DIR}/CMakeLists.txt)
+    message(FATAL_ERROR
+        "Oboe fehlt unter ${KLANGBILD_OBOE_DIR}. Holen mit: "
+        "git clone --branch 1.11.0 --depth 1 https://github.com/google/oboe ${KLANGBILD_OBOE_DIR}")
+endif()
+add_subdirectory(${KLANGBILD_OBOE_DIR} oboe-build)
+target_link_libraries(klangbild oboe)
 
 if(NOT DEFINED KLINGBILD_TEST)
     target_compile_options(klangbild PRIVATE
