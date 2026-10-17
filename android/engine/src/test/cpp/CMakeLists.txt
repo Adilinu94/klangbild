@@ -65,3 +65,21 @@ gtest_discover_tests(klangbild_hosttest)
 # Der Gradle-Task hostTest ruft `--build ... --target test` auf. Diesen Target
 # legt CTest selbst an (enable_testing() oben), darum hier NICHT erneut anlegen
 # (sonst Konflikt). gtest_discover_tests haengt die Faelle dort ein.
+
+# Callback-Logik, OutputRing, Rampen (BAUPLAN T1.1/T1.2): dieselben Header wie das Geraet
+# (src/main/cpp). Eigenes Test-Ziel, weil es weder Oboe noch die Golden-Daten braucht.
+find_package(Threads REQUIRED)
+add_executable(playback_core_test
+    playback_core_test.cpp
+)
+target_compile_definitions(playback_core_test PRIVATE KLINGBILD_TEST=1)
+target_include_directories(playback_core_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(playback_core_test PRIVATE -Wall -Wextra -Wno-unused-parameter)
+elseif(MSVC)
+    target_compile_options(playback_core_test PRIVATE /W4)
+endif()
+target_link_libraries(playback_core_test PRIVATE GTest::gtest_main Threads::Threads)
+gtest_discover_tests(playback_core_test)
