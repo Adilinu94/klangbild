@@ -14,6 +14,7 @@
 
 #include "dsp/curves.h"
 #include "dsp/filters.h"
+#include "dsp/mixing.h"
 #include "golden.h"
 
 namespace {
@@ -249,4 +250,57 @@ TEST(DspFilters, BandSplitMonoAndOutOfRange) {
     // Low + High ergibt das Signal (komplementaer), bis auf float32-Rundung
     const auto st = klangbild::dsp::bandSplit(stereo.data(), 40, 2, 44100, 200.0);
     for (std::size_t i = 0; i < stereo.size(); ++i) ASSERT_NEAR(st.low[i] + st.high[i], stereo[i], 1e-6f) << i;
+}
+
+// ============================== T5.3 mischen ====================================================
+
+namespace {
+
+std::vector<float> floatsOf(Golden& g, const Json& ref) {
+    const std::vector<double> v = g.values(ref);
+    return std::vector<float>(v.begin(), v.end());
+}
+
+}  // namespace
+
+TEST(DspMixing, MixMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    for (const char* art : {"eq", "filter", "echo", "schnitt", "crossfade"}) {
+        for (int bars : {1, 4, 16}) {
+            const std::string name = std::string("mischen_") + art + "_" + std::to_string(bars);
+            SCOPED_TRACE(name);
+            const GoldenCase c = g.case_of(name);
+            ASSERT_EQ(c.inputs.at("art").as_string(), art);
+            ASSERT_EQ(static_cast<int>(c.inputs.at("takte").as_double()), bars);
+            const std::vector<float> a = floatsOf(g, c.inputs.at("a"));
+            const std::vector<float> b = floatsOf(g, c.inputs.at("b"));
+            const std::vector<float> out = klangbild::dsp::mix(art, a, b, bars);
+            ASSERT_EQ(c.tolerance, "dsp");
+            g.expect_dsp(name, c.expected, std::vector<double>(out.begin(), out.end()));
+        }
+    }
+}
+
+TEST(DspMixing, FadeSegmentAndEchoEdgeCases) {
+    using klangbild::dsp::echo;
+    using klangbild::dsp::fadeSegment;
+    using klangbild::dsp::mix;
+    EXPECT_TRUE(fadeSegment({}, {}, 44100, true).empty());
+    EXPECT_TRUE(mix("eq", {}, {}, 4).empty());
+    // Ungleich lange Eingaben: die kuerzere bestimmt die Laenge (n = min(len(a), len(b)))
+    const std::vector<float> a(2 * 100, 1.0f), b(2 * 60, 0.5f);
+    EXPECT_EQ(mix("crossfade", a, b, 4).size(), 2u * 60);
+    EXPECT_EQ(mix("schnitt", a, b, 4).size(), 2u * 60);
+    // Echo: bei Stille bleibt es still; ein Impuls auf dem ersten Sample liefert 0,7^k im Abstand k * beatN.
+    std::vector<float> impulse(2 * 40, 0.0f);
+    impulse[0] = 1.0f;
+    impulse[1] = 1.0f;
+    const auto tail = echo(impulse, 10);   // beatN = 10: der Impuls liegt in der ersten Huelle (1,0), Echos bei 10, 20, 30
+    ASSERT_EQ(tail.size(), impulse.size());
+    EXPECT_FLOAT_EQ(tail[0], 1.0f);
+    EXPECT_FLOAT_EQ(tail[2 * 10], 0.7f);
+    EXPECT_FLOAT_EQ(tail[2 * 20], 0.49f);
+    EXPECT_FLOAT_EQ(tail[2 * 30 + 1], 0.343f);
+    EXPECT_EQ(tail[2 * 5], 0.0f);
 }

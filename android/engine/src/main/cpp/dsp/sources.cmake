@@ -4,4 +4,13 @@
 # Header-only-Teile (curves.h) stehen hier nicht.
 set(KLANGBILD_DSP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/filters.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/mixing.cpp
 )
+
+# numpy verschmilzt a*b + c nie zu einem FMA; Clang auf ARM taete es standardmaessig, und die Haupt-CMake
+# setzt fuer das ganze Ziel -ffp-contract=fast. Fuer gleiche Rundung wie die Python-Referenz bekommen die
+# DSP-Quellen -ffp-contract=off als Datei-Option; sie steht nach den Ziel-Optionen und gewinnt
+# (BAUPLAN §13, float32 vs. float64). Gilt in dem Verzeichnis, das diese Datei einbindet.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    set_source_files_properties(${KLANGBILD_DSP_SOURCES} PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+endif()
