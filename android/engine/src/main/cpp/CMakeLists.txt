@@ -20,6 +20,10 @@ add_library(klangbild SHARED
     oboe_output.cpp
 )
 
+# DSP-Port (M5): dieselbe Quellenliste wie der Host-Test.
+include(${CMAKE_CURRENT_SOURCE_DIR}/dsp/sources.cmake)
+target_sources(klangbild PRIVATE ${KLANGBILD_DSP_SOURCES})
+
 # Oboe als Quellcode (Apache-2.0), statisch gelinkt wie bei djay §61: nur so ist
 # auch oboe::resampler::MultiChannelResampler nutzbar (im Prefab-Paket privat).
 # Liegt unter third_party/oboe (Version 1.11.0). Holen:

@@ -83,3 +83,36 @@ elseif(MSVC)
 endif()
 target_link_libraries(playback_core_test PRIVATE GTest::gtest_main Threads::Threads)
 gtest_discover_tests(playback_core_test)
+
+# DSP-Port (BAUPLAN M5): Golden-Tests der portierten Funktionen. Dieselben Quellen wie auf dem Geraet
+# (src/main/cpp/dsp); die Liste steht in dsp/sources.cmake und dient beiden Builds.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/dsp/sources.cmake)
+if(KLANGBILD_DSP_SOURCES)
+    add_library(klangbild_dsp STATIC ${KLANGBILD_DSP_SOURCES})
+    target_include_directories(klangbild_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(klangbild_dsp PRIVATE -Wall -Wextra)
+    elseif(MSVC)
+        target_compile_options(klangbild_dsp PRIVATE /W4)
+    endif()
+endif()
+add_executable(dsp_golden_test
+    dsp_golden_test.cpp
+)
+target_include_directories(dsp_golden_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp
+)
+target_compile_definitions(dsp_golden_test PRIVATE
+    KLINGBILD_GOLDENDIR_DEFAULT="${KLINGBILD_GOLDENDIR}"
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(dsp_golden_test PRIVATE -Wall -Wextra -Wno-unused-parameter)
+elseif(MSVC)
+    target_compile_options(dsp_golden_test PRIVATE /W4)
+endif()
+target_link_libraries(dsp_golden_test PRIVATE GTest::gtest_main)
+if(TARGET klangbild_dsp)
+    target_link_libraries(dsp_golden_test PRIVATE klangbild_dsp)
+endif()
+gtest_discover_tests(dsp_golden_test)
