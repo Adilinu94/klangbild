@@ -338,6 +338,15 @@ public:
             std::vector<float> roh = f32(element.at("file").as_string(), shape);
             return std::vector<double>(roh.begin(), roh.end());
         }
+        // Liste aus Verweisen (z. B. [tief, hoch]): hintereinandergehaengt in Listenreihenfolge.
+        if (element.is_array() && !element.items.empty() && element.items.front().is_object()) {
+            std::vector<double> alle;
+            for (const auto& teil : element.items) {
+                const std::vector<double> werte = values(teil);
+                alle.insert(alle.end(), werte.begin(), werte.end());
+            }
+            return alle;
+        }
         return element.numbers();
     }
 
