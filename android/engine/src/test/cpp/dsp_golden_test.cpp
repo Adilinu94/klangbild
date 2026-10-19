@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "dsp/curves.h"
+#include "dsp/envelopes.h"
 #include "dsp/filters.h"
 #include "dsp/mixing.h"
 #include "golden.h"
@@ -303,4 +304,234 @@ TEST(DspMixing, FadeSegmentAndEchoEdgeCases) {
     EXPECT_FLOAT_EQ(tail[2 * 20], 0.49f);
     EXPECT_FLOAT_EQ(tail[2 * 30 + 1], 0.343f);
     EXPECT_EQ(tail[2 * 5], 0.0f);
+}
+
+// ============================== T5.4 Huellkurven ================================================
+
+namespace {
+
+using klangbild::dsp::Envelopes;
+using klangbild::dsp::Settings;
+
+Settings settingsFromJson(const Json& e) {
+    Settings s;
+    s.volume = e.at("lautstaerke").as_string();
+    s.eq = e.at("eq").as_string();
+    s.filter = e.at("filter").as_string();
+    s.effect = e.at("effekt").as_string();
+    s.effectIn = e.at("effekt_ein").as_string();
+    s.loop = e.at("loop").as_string();
+    s.trick = e.at("trick").as_string();
+    s.bassBar = static_cast<int>(e.at("bass_takt").as_double());
+    s.vocalBar = static_cast<int>(e.at("gesang_takt").as_double());
+    s.loopStart = static_cast<int>(e.at("loop_start").as_double());
+    s.loopIn = static_cast<int>(e.at("loop_ein").as_double());
+    s.loopInTimes = static_cast<int>(e.at("loop_ein_mal").as_double());
+    return s;
+}
+
+/// Die Kurven eines Ergebnisses unter ihren Python-Schluesseln (nullptr = inaktiv).
+std::vector<std::pair<const char*, const std::vector<float>*>> curveList(const Envelopes& h) {
+    const auto p = [](const std::optional<std::vector<float>>& o) { return o ? &*o : nullptr; };
+    return {{"a_vol", &h.aVol},          {"b_vol", &h.bVol},         {"a_tief", p(h.aLow)},       {"b_tief", p(h.bLow)},
+            {"a_mitte", p(h.aMid)},      {"b_mitte", p(h.bMid)},     {"a_hoch", p(h.aHigh)},      {"b_hoch", p(h.bHigh)},
+            {"a_tp", p(h.aLowpass)},     {"a_hp", p(h.aHighpass)},   {"b_tp", p(h.bLowpass)},     {"b_hp", p(h.bHighpass)},
+            {"a_send", p(h.aSend)},      {"b_send", p(h.bSend)},     {"nass_ab", p(h.wetOff)}};
+}
+
+}  // namespace
+
+TEST(DspEnvelopes, MatchesAllGoldenCases) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    int checked = 0;
+    const std::vector<std::pair<std::string, std::vector<const char*>>> groups = {
+        {"lautstaerke", {"nahtlos", "linear", "ueberlappung", "hart_ein", "hart_aus", "hart_beide", "mitte", "mitte_weich", "frueh",
+                         "spaet", "letzter_takt", "drop", "doppel"}},
+        {"eq", {"keiner", "profi", "bass_mitte", "bass_anfang", "bass_ende", "drei_band", "bass_schnell", "bass_lang", "bass_takt"}},
+        {"filter", {"keiner", "tp_aus", "tp_ein", "tp_beide", "hp_aus", "hp_ein", "hp_beide", "tp_ein_hp_aus", "hp_ein_tp_aus",
+                    "hp_aus_reso", "tp_aus_reso"}},
+        {"loop", {"keiner", "auto", "1", "2", "4", "8", "16", "32", "rolle"}},
+        {"trick", {"keiner", "bremse", "spinback", "flanger", "phaser", "gate", "crush", "riser", "wechsel", "teaser"}},
+        {"effekt_ein", {"keiner", "hall", "rueckhall"}},
+    };
+    std::vector<std::string> names;
+    for (const auto& [group, values] : groups)
+        for (const char* v : values) names.push_back("huellen_" + (group == "effekt_ein" ? std::string("effekt_ein") : group) + "_" + v);
+    for (const char* effect : {"keiner", "hall", "echo50", "echo75", "echo100", "delay50", "delay75", "delay100", "pingpong50", "pingpong75"})
+        for (const char* mode : {"mitte_aus", "ende_aus", "ende_ab"}) {
+            if (std::string(effect) == "keiner") continue;
+            names.push_back(std::string("huellen_effekt_") + effect + "_" + mode);
+        }
+    names.push_back("huellen_effekt_keiner");
+    for (const std::string& name : names) {
+        SCOPED_TRACE(name);
+        GoldenCase c;
+        try {
+            c = g.case_of(name);
+        } catch (const GoldenError&) {
+            continue;   // Fallnamen, die es nicht gibt (z. B. effekt_ein_keiner heisst anders): nicht erfinden
+        }
+        const Settings s = settingsFromJson(c.inputs.at("e"));
+        const int takte = static_cast<int>(c.inputs.at("takte").as_double());
+        const int n = static_cast<int>(c.inputs.at("n").as_double());
+        const Envelopes h = klangbild::dsp::envelopes(s, takte, n, c.inputs.at("kante").as_double());
+        ASSERT_EQ(c.tolerance, "values");
+        for (const auto& [key, curve] : curveList(h)) {
+            const Json& want = c.expected.at(key);
+            if (want.is_null()) {
+                EXPECT_EQ(curve, nullptr) << key << ": im Golden inaktiv, hier gesetzt";
+            } else {
+                ASSERT_NE(curve, nullptr) << key << ": im Golden gesetzt, hier inaktiv";
+                g.expect_values(name + "/" + key, want, std::vector<double>(curve->begin(), curve->end()));
+            }
+        }
+        const Json& reverse = c.expected.at("b_rueck");
+        if (reverse.is_null()) {
+            EXPECT_FALSE(h.bReverse.has_value());
+        } else {
+            ASSERT_TRUE(h.bReverse.has_value());
+            EXPECT_NEAR(*h.bReverse, reverse.as_double(), 1e-9);
+        }
+        ++checked;
+    }
+    EXPECT_EQ(checked, 83);   // alle huellen-Faelle des Golden-Satzes wurden verglichen
+}
+
+TEST(DspEnvelopes, UnknownVolumeAndFilterThrow) {
+    Settings s;
+    s.volume = "gibt_es_nicht";
+    EXPECT_THROW(klangbild::dsp::envelopes(s, 8, 100, 0.01), std::invalid_argument);
+    Settings f;
+    f.filter = "gibt_es_nicht";
+    EXPECT_THROW(klangbild::dsp::envelopes(f, 8, 100, 0.01), std::invalid_argument);
+}
+
+// Zweige, die der Golden-Satz nicht erreicht (er nutzt nur takte = 16, gesang_takt = -1, bass_takt = -1):
+// Fingerabdruecke (Summe, drei Stichproben) aus uebergang._huellen des Prototyps, numpy 2.4.4.
+TEST(DspEnvelopes, BranchesWithoutGoldenMatchPrototype) {
+    struct Print { const char* key; double sum; float at[3]; };   // at: Index 7 % n, 311 % n, n - 1; b_rueck: nur sum
+    struct Known { const char* name; Settings settings; int bars; int n; double edge; std::vector<Print> prints; };
+    const std::vector<Known> known = {
+        {"wechsel_g3_t16", {.trick = "wechsel", .vocalBar = 3}, 16, 1000, 0.001, {
+            {"a_tief", 502.6338607111062, {1.0f, 1.0f, -4.371138828673793e-08f}},
+            {"a_vol", 568.0500334501266, {1.0f, 1.0f, 0.0f}},
+            {"b_tief", 501.63388238847256, {0.0f, 0.0f, 1.0f}},
+            {"b_vol", 431.9499665975509, {0.0f, 0.0f, 1.0f}},
+        }},
+        {"wechsel_g5_t8", {.trick = "wechsel", .vocalBar = 5}, 8, 512, 0.01, {
+            {"a_tief", 258.6777226479566, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_vol", 390.15644186735153, {1.0f, 1.0f, 0.0f}},
+            {"b_tief", 257.6777339428663, {0.0f, 1.0f, 1.0f}},
+            {"b_vol", 121.84355814854166, {0.0f, 0.0f, 1.0f}},
+        }},
+        {"profi_bass10_t16", {.eq = "profi", .bassBar = 10}, 16, 1000, 0.001, {
+            {"a_hoch", 127.63384566044007, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_mitte", 377.63385542599656, {1.0f, 1.0f, -4.371138828673793e-08f}},
+            {"a_tief", 627.6338656981925, {1.0f, 1.0f, -4.371138828673793e-08f}},
+            {"a_vol", 977.7866402994841, {1.0f, 1.0f, 0.025129729881882668f}},
+            {"b_hoch", 888.3101962432265, {0.03551403433084488f, 1.0f, 1.0f}},
+            {"b_mitte", 626.6338829249144, {0.0f, 0.0f, 1.0f}},
+            {"b_tief", 376.633882150054, {0.0f, 0.0f, 1.0f}},
+            {"b_vol", 976.7866424601525, {0.17502307891845703f, 1.0f, 1.0f}},
+        }},
+        {"profi_t8", {.eq = "profi"}, 8, 512, 0.01, {
+            {"a_hoch", 130.6777170528989, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_mitte", 258.6777226479566, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_tief", 386.6777282430143, {1.0f, 1.0f, -4.371138828673793e-08f}},
+            {"a_vol", 489.24161895364523, {1.0f, 1.0f, 0.024541135877370834f}},
+            {"b_hoch", 397.6402034498751, {0.035417571663856506f, 1.0f, 1.0f}},
+            {"b_mitte", 257.6777339428663, {0.0f, 1.0f, 1.0f}},
+            {"b_tief", 129.67773394286633, {0.0f, 0.0f, 1.0f}},
+            {"b_vol", 488.2416209131479, {0.1709619015455246f, 1.0f, 1.0f}},
+        }},
+        {"profi_t1", {.eq = "profi"}, 1, 300, 0.01, {
+            {"a_hoch", 296.40707409381866, {1.0f, 1.0f, 0.7217602133750916f}},
+            {"a_mitte", 296.40707409381866, {1.0f, 1.0f, 0.7217602133750916f}},
+            {"a_tief", 296.40707409381866, {1.0f, 1.0f, 0.7217602133750916f}},
+            {"a_vol", 191.48548977868631, {0.9993283748626709f, 0.9983417987823486f, 0.005235962104052305f}},
+            {"b_hoch", 38.09970026090741, {0.03318944573402405f, 0.03411928936839104f, 0.6921432018280029f}},
+            {"b_mitte", 13.63317490927875, {0.0f, 0.0f, 0.6921432018280029f}},
+            {"b_tief", 13.63317490927875, {0.0f, 0.0f, 0.6921432018280029f}},
+            {"b_vol", 190.48549884278327, {0.03664370998740196f, 0.05756402388215065f, 0.9999862909317017f}},
+        }},
+        {"teaser_t4", {.trick = "teaser"}, 4, 400, 0.01, {
+            {"a_tief", 203.9181081086421, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_vol", 208.68356175534427, {0.9996222257614136f, 0.34243011474609375f, 0.003926938399672508f}},
+            {"b_tief", 202.91811179369688, {0.0f, 1.0f, 1.0f}},
+            {"b_vol", 276.35741935065016, {0.027485473081469536f, 0.9395433068275452f, 0.999992311000824f}},
+        }},
+        {"teaser_t6", {.trick = "teaser"}, 6, 600, 0.01, {
+            {"a_tief", 303.9180971660912, {1.0f, 0.09410854429006577f, -4.371138828673793e-08f}},
+            {"a_vol", 350.5890162747819, {0.9998320937156677f, 0.6864531636238098f, 0.0026179084088653326f}},
+            {"b_tief", 302.9181188121438, {0.0f, 0.995561957359314f, 1.0f}},
+            {"b_vol", 389.8810722674243, {0.01832493208348751f, 0.7271740436553955f, 0.9999966025352478f}},
+        }},
+        {"basstakt5_t16", {.eq = "bass_takt", .bassBar = 5}, 16, 1000, 0.001, {
+            {"a_tief", 315.1371439614404, {1.0f, 0.80530846118927f, -4.371138828673793e-08f}},
+            {"a_vol", 637.1196234467207, {0.9999395608901978f, 0.8830295205116272f, 0.0015707764541730285f}},
+            {"b_tief", 689.1371744386852, {0.0f, 0.5928559899330139f, 1.0f}},
+            {"b_vol", 636.1196536332136, {0.010995353572070599f, 0.4693174362182617f, 0.9999987483024597f}},
+        }},
+        {"bassanfang_t1", {.eq = "bass_anfang"}, 1, 200, 0.01, {
+            {"a_tief", 57.328364075307526, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_vol", 127.8232964836061, {0.9984890818595886f, 0.6434558033943176f, 0.007853860035538673f}},
+            {"b_tief", 156.32837127894163, {0.0f, 1.0f, 1.0f}},
+            {"b_vol", 126.82330223545432, {0.054950181394815445f, 0.7654832601547241f, 0.9999691843986511f}},
+        }},
+        {"bassende_t1", {.eq = "bass_ende"}, 1, 200, 0.01, {
+            {"a_tief", 157.3283685805568, {1.0f, 1.0f, -4.371138828673793e-08f}},
+            {"a_vol", 127.8232964836061, {0.9984890818595886f, 0.6434558033943176f, 0.007853860035538673f}},
+            {"b_tief", 56.328370809555054, {0.0f, 0.0f, 1.0f}},
+            {"b_vol", 126.82330223545432, {0.054950181394815445f, 0.7654832601547241f, 0.9999691843986511f}},
+        }},
+        {"filter_effekt", {.volume = "letzter_takt", .filter = "tp_aus", .effect = "echo75_ende_ab"}, 4, 400, 0.01, {
+            {"a_send", 181.32837030291557, {0.0f, 1.0f, 1.0f}},
+            {"a_tief", 203.9181081086421, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_tp", 167.70000368263572, {0.017500000074505806f, 0.6000000238418579f, 0.6000000238418579f}},
+            {"a_vol", 364.16066617146134, {1.0f, 0.9851093292236328f, 0.01570728048682213f}},
+            {"b_tief", 202.91811179369688, {0.0f, 1.0f, 1.0f}},
+            {"b_vol", 254.14758605649695, {0.027485473081469536f, 0.9395433068275452f, 0.999992311000824f}},
+            {"nass_ab", 399.01367142796516, {1.0f, 1.0f, 0.3826844394207001f}},
+        }},
+        {"rueckhall_t4", {.volume = "ueberlappung", .effectIn = "rueckhall"}, 4, 400, 0.01, {
+            {"a_tief", 203.9181081086421, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_vol", 327.82329576835036, {1.0f, 0.6434559226036072f, 0.007853860035538673f}},
+            {"b_rueck", 0.1675, {}},
+            {"b_tief", 202.91811179369688, {0.0f, 1.0f, 1.0f}},
+            {"b_vol", 326.8233022354543, {0.054950181394815445f, 1.0f, 1.0f}},
+        }},
+        {"hall_ein_t4", {.effectIn = "hall"}, 4, 400, 0.01, {
+            {"a_tief", 203.9181081086421, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"a_vol", 255.14757535792887, {0.9996222257614136f, 0.34243011474609375f, 0.003926938399672508f}},
+            {"b_send", 164.1606575036895, {1.0f, -4.371138828673793e-08f, -4.371138828673793e-08f}},
+            {"b_tief", 202.91811179369688, {0.0f, 1.0f, 1.0f}},
+            {"b_vol", 254.14758605649695, {0.027485473081469536f, 0.9395433068275452f, 0.999992311000824f}},
+        }},
+    };
+    for (const Known& k : known) {
+        SCOPED_TRACE(k.name);
+        const Envelopes h = klangbild::dsp::envelopes(k.settings, k.bars, k.n, k.edge);
+        const auto curves = curveList(h);
+        std::size_t active = h.bReverse ? 1u : 0u;
+        for (const auto& c : curves) active += c.second != nullptr ? 1u : 0u;
+        EXPECT_EQ(active, k.prints.size()) << "Zahl der aktiven Kurven";
+        for (const Print& want : k.prints) {
+            if (std::string(want.key) == "b_rueck") {
+                ASSERT_TRUE(h.bReverse.has_value());
+                EXPECT_NEAR(*h.bReverse, want.sum, 1e-9);
+                continue;
+            }
+            const std::vector<float>* got = nullptr;
+            for (const auto& c : curves)
+                if (std::string(c.first) == want.key) got = c.second;
+            ASSERT_NE(got, nullptr) << want.key;
+            ASSERT_EQ(static_cast<int>(got->size()), k.n);
+            double sum = 0.0;
+            for (float f : *got) sum += static_cast<double>(f);
+            EXPECT_NEAR(sum, want.sum, 2e-4) << want.key;
+            const int idx[3] = {7 % k.n, 311 % k.n, k.n - 1};
+            for (int j = 0; j < 3; ++j) EXPECT_NEAR((*got)[static_cast<std::size_t>(idx[j])], want.at[j], 2e-6) << want.key << " @" << idx[j];
+        }
+    }
 }
