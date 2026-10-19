@@ -16,6 +16,7 @@
 #include "dsp/envelopes.h"
 #include "dsp/filters.h"
 #include "dsp/mixing.h"
+#include "dsp/sweep.h"
 #include "golden.h"
 
 namespace {
@@ -534,4 +535,130 @@ TEST(DspEnvelopes, BranchesWithoutGoldenMatchPrototype) {
             for (int j = 0; j < 3; ++j) EXPECT_NEAR((*got)[static_cast<std::size_t>(idx[j])], want.at[j], 2e-6) << want.key << " @" << idx[j];
         }
     }
+}
+
+// ============================== T5.5 Sweep ======================================================
+
+namespace {
+
+/// Zwei Toene (rund 350 Hz und 6 kHz) mit Phasenversatz je Kanal: der Filter hat etwas zu tun.
+std::vector<float> sweepSignal(int frames) {
+    std::vector<float> x(static_cast<std::size_t>(frames) * 2);
+    for (int i = 0; i < frames; ++i)
+        for (int c = 0; c < 2; ++c)
+            x[static_cast<std::size_t>(i * 2 + c)] = static_cast<float>(0.3 * std::sin(0.05 * i + 0.5 * c) + 0.2 * std::sin(0.9 * i + c));
+    return x;
+}
+
+}  // namespace
+
+TEST(DspSweep, MatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    for (const char* name : {"sweep_tp_0", "sweep_tp_1", "sweep_hp_0", "sweep_hp_1"}) {
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const std::vector<float> x = floatsOf(g, c.inputs.at("x"));
+        const std::vector<float> amount = floatsOf(g, c.inputs.at("menge"));
+        const auto kind = c.inputs.at("art").as_string() == "tp" ? klangbild::dsp::SweepKind::Lowpass : klangbild::dsp::SweepKind::Highpass;
+        const std::vector<float> y = klangbild::dsp::sweep(x, amount, kind, c.inputs.at("reso").as_bool());
+        ASSERT_EQ(c.tolerance, "dsp");
+        g.expect_dsp(name, c.expected, std::vector<double>(y.begin(), y.end()));
+    }
+}
+
+// Zweige, die die Golden-Kurve (menge 0 -> 1) nicht erreicht: Rand am Ende offen, beide Raender offen,
+// konstante Menge, Menge 0 (Fruehausstieg). Fingerabdruecke (Summe, 5 Frames) aus uebergang._sweep.
+TEST(DspSweep, BranchesWithoutGoldenMatchPrototype) {
+    using klangbild::dsp::SweepKind;
+    constexpr int n = 5000;
+    struct Known { const char* name; SweepKind kind; bool reso; double sum; float at[5][2]; };
+    const Known known[] = {
+        {"tp_fallend", SweepKind::Lowpass, false, 21.014003429922298, {{1.8480925518815638e-06f, 0.3121219277381897f}, {-0.04620583355426788f, 0.03851282224059105f}, {-0.2648535668849945f, -0.1671144813299179f}, {0.09876973181962967f, 0.1438128501176834f}, {-0.2278386503458023f, -0.036060504615306854f}}},
+        {"hp_buckel_reso", SweepKind::Highpass, true, -94.6462245730927, {{0.13022790849208832f, 0.07348844408988953f}, {-0.009647448547184467f, -0.17381273210048676f}, {0.1940479278564453f, 0.16088193655014038f}, {0.2060304582118988f, 0.21119119226932526f}, {-0.2278386503458023f, -0.036060504615306854f}}},
+        {"tp_halb", SweepKind::Lowpass, false, 14.455316205904637, {{0.0017933930503204465f, 0.31214600801467896f}, {0.11793545633554459f, -0.029914088547229767f}, {-0.2686472535133362f, -0.17354899644851685f}, {0.28459683060646057f, 0.2966701090335846f}, {-0.28819769620895386f, -0.2903670072555542f}}},
+        {"hp_steigend", SweepKind::Highpass, false, 26.722936185346043, {{0.13027016818523407f, 0.07347358018159866f}, {0.09657807648181915f, 0.035591915249824524f}, {0.3822247087955475f, 0.49584758281707764f}, {-0.03426017239689827f, 0.14777526259422302f}, {0.15333926677703857f, 0.1892092227935791f}}},
+        {"tp_null", SweepKind::Lowpass, false, 6.376514907187811, {{0.1303074210882187f, 0.07558869570493698f}, {0.15675988793373108f, 0.01754099503159523f}, {-0.06866045296192169f, 0.1508685052394867f}, {0.16541145741939545f, 0.2968747019767761f}, {-0.2278386503458023f, -0.036060504615306854f}}},
+    };
+    const std::vector<float> x = sweepSignal(n);
+    const auto ramp = [&](float from, float to) {
+        std::vector<float> m(n);
+        for (int i = 0; i < n; ++i) m[static_cast<std::size_t>(i)] = static_cast<float>(from + (static_cast<double>(to) - from) * i / (n - 1));
+        m.back() = to;
+        return m;
+    };
+    std::vector<float> buckel(n);
+    for (int i = 0; i < n; ++i) buckel[static_cast<std::size_t>(i)] = static_cast<float>(std::sin(std::numbers::pi * i / (n - 1)));
+    const std::vector<std::pair<std::string, std::vector<float>>> amounts = {
+        {"tp_fallend", ramp(1.0f, 0.0f)}, {"hp_buckel_reso", buckel}, {"tp_halb", std::vector<float>(n, 0.5f)},
+        {"hp_steigend", ramp(0.0f, 1.0f)}, {"tp_null", std::vector<float>(n, 0.0f)}};
+    const int idx[5] = {3, 441, 2500, 4558, n - 1};
+    for (std::size_t k = 0; k < std::size(known); ++k) {
+        SCOPED_TRACE(known[k].name);
+        ASSERT_EQ(amounts[k].first, known[k].name);
+        const std::vector<float> y = klangbild::dsp::sweep(x, amounts[k].second, known[k].kind, known[k].reso);
+        ASSERT_EQ(y.size(), x.size());
+        double sum = 0.0;
+        for (float f : y) sum += static_cast<double>(f);
+        EXPECT_NEAR(sum, known[k].sum, 5e-4);
+        for (int j = 0; j < 5; ++j)
+            for (int c = 0; c < 2; ++c)
+                EXPECT_NEAR(y[static_cast<std::size_t>(idx[j] * 2 + c)], known[k].at[j][c], 5e-6) << "Frame " << idx[j] << " Kanal " << c;
+    }
+    // Menge 0 (unter 1e-3): der Eingang kommt unveraendert zurueck
+    EXPECT_EQ(klangbild::dsp::sweep(x, std::vector<float>(n, 0.0f), SweepKind::Lowpass), x);
+    EXPECT_EQ(klangbild::dsp::sweep(x, {}, SweepKind::Lowpass), x);
+}
+
+TEST(DspSweep, BiquadCoefficientsKnownValues) {
+    // Tiefpass bei 1000 Hz: Butterworth-Paar (Q = 0.5412 und 1.3066), RBJ-Cookbook
+    const double fc[1] = {1000.0};
+    const auto lp = klangbild::dsp::sweepBiquads(fc, klangbild::dsp::SweepKind::Lowpass, false);
+    ASSERT_EQ(lp.size(), 1u);
+    for (int s = 0; s < 2; ++s) {   // Tiefpass: b0 = b2 = b1 / 2, Verstaerkung 1 bei 0 Hz
+        const auto& q = lp[0][static_cast<std::size_t>(s)];
+        EXPECT_NEAR(q.b0, q.b2, 1e-15);
+        EXPECT_NEAR(q.b1, 2 * q.b0, 1e-15);
+        EXPECT_NEAR((q.b0 + q.b1 + q.b2) / (1 + q.a1 + q.a2), 1.0, 1e-12);
+    }
+    const auto hp = klangbild::dsp::sweepBiquads(fc, klangbild::dsp::SweepKind::Highpass, false);
+    for (int s = 0; s < 2; ++s) {   // Hochpass: Verstaerkung 0 bei 0 Hz
+        const auto& q = hp[0][static_cast<std::size_t>(s)];
+        EXPECT_NEAR(q.b0 + q.b1 + q.b2, 0.0, 1e-15);
+    }
+    // Resonanz: nur die zweite Stufe aendert sich (Q = 4 statt 1.3066)
+    const auto res = klangbild::dsp::sweepBiquads(fc, klangbild::dsp::SweepKind::Lowpass, true);
+    EXPECT_EQ(res[0][0].a1, lp[0][0].a1);
+    EXPECT_NE(res[0][1].a1, lp[0][1].a1);
+    // fc wird auf 10 Hz .. 0.45 * Rate begrenzt
+    const double extreme[2] = {1.0, 1e6};
+    const auto clipped = klangbild::dsp::sweepBiquads(extreme, klangbild::dsp::SweepKind::Lowpass, false);
+    const double ten[1] = {10.0}, top[1] = {0.45 * 44100};
+    EXPECT_EQ(clipped[0][0].a1, klangbild::dsp::sweepBiquads(ten, klangbild::dsp::SweepKind::Lowpass, false)[0][0].a1);
+    EXPECT_EQ(clipped[1][0].a1, klangbild::dsp::sweepBiquads(top, klangbild::dsp::SweepKind::Lowpass, false)[0][0].a1);
+}
+
+TEST(DspSweep, WeightBandsKnownValuesFromPrototype) {
+    constexpr int n = 1200;
+    const std::vector<float> x = sweepSignal(n);
+    // alle Baender ohne Gewicht: x kommt unveraendert zurueck
+    EXPECT_EQ(klangbild::dsp::weightBands(x, nullptr, nullptr, nullptr), x);
+    std::vector<float> low(n), high(n, 0.5f);
+    for (int i = 0; i < n; ++i) low[static_cast<std::size_t>(i)] = static_cast<float>(1.0 - static_cast<double>(i) / (n - 1));
+    low.back() = 0.0f;
+    const auto y = klangbild::dsp::weightBands(x, &low, nullptr, &high);
+    const double sum = [&] { double s = 0; for (float f : y) s += f; return s; }();
+    EXPECT_NEAR(sum, 23.567964026413392, 5e-4);
+    const float want[3][2] = {{0.08736026287078857f, 0.1655636727809906f}, {-0.3294559717178345f, -0.1763421893119812f},
+                              {-0.2638530135154724f, -0.3227608799934387f}};
+    const int at[3] = {3, 600, 1199};
+    for (int j = 0; j < 3; ++j)
+        for (int c = 0; c < 2; ++c) EXPECT_NEAR(y[static_cast<std::size_t>(at[j] * 2 + c)], want[j][c], 5e-6) << at[j];
+    // Tiefband stumm, Mitte und Hoehen voll: Bass fehlt, Rest bleibt
+    const std::vector<float> zeros(n, 0.0f), ones(n, 1.0f);
+    const auto noBass = klangbild::dsp::weightBands(x, &zeros, &ones, &ones);
+    double sum2 = 0;
+    for (float f : noBass) sum2 += f;
+    EXPECT_NEAR(sum2, 18.06835986720398, 5e-4);
+    EXPECT_NEAR(noBass[static_cast<std::size_t>(3 * 2)], 0.19920025765895844f, 5e-6);
 }
