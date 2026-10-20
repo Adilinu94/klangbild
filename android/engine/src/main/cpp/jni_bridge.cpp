@@ -33,7 +33,8 @@ namespace {
 // 5: queueFile (nahtlose Folgedatei).
 // 6: queueFile mit geplantem Wechsel ab Frame.
 // 7: Vorschau auf einem zweiten Stream.
-constexpr int kAbiVersion = 7;
+// 8: startFile mit wachsender Datei und quelleFertig.
+constexpr int kAbiVersion = 8;
 
 // Anzahl der Felder von poll() (BAUPLAN §5.4); steht gleich in NativeEngine.POLL_SIZE.
 constexpr jsize kPollSize = 7;
@@ -94,10 +95,10 @@ Java_de_klangbild_engine_NativeEngine_setPlaying(JNIEnv* /*env*/, jclass /*typ*/
 }
 
 // Spielt eine PCM-Cache-Datei ab `startFrame` (M2). Startet den Stream beim ersten Aufruf.
-// `spur` ist die Kennung fuer poll(); der Feeder liest ab dem naechsten Flush.
+// `spur` ist die Kennung fuer poll(); `wachsend` sagt, dass die Datei noch dekodiert wird.
 extern "C" JNIEXPORT jboolean JNICALL
 Java_de_klangbild_engine_NativeEngine_startFile(JNIEnv* env, jclass /*typ*/, jstring pfad, jlong startFrame,
-                                                jlong spur) {
+                                                jlong spur, jboolean wachsend) {
     if (pfad == nullptr) return JNI_FALSE;
     const char* text = env->GetStringUTFChars(pfad, nullptr);
     const std::string pfadText = text != nullptr ? std::string(text) : std::string();
@@ -111,10 +112,17 @@ Java_de_klangbild_engine_NativeEngine_startFile(JNIEnv* env, jclass /*typ*/, jst
         if (!engine->output->start()) return JNI_FALSE;
         gEngine = std::move(engine);
     }
-    if (!gEngine->feeder.oeffne(pfadText, startFrame, spur)) return JNI_FALSE;
+    if (!gEngine->feeder.oeffne(pfadText, startFrame, spur, wachsend == JNI_TRUE)) return JNI_FALSE;
     gEngine->core.setPlaying(true);
     gEngine->feeder.start();
     return JNI_TRUE;
+}
+
+// Meldet, dass die wachsende Datei zu Ende geschrieben ist (der Feeder darf abschliessen).
+extern "C" JNIEXPORT void JNICALL
+Java_de_klangbild_engine_NativeEngine_quelleFertig(JNIEnv* /*env*/, jclass /*typ*/) {
+    std::lock_guard<std::mutex> lock(gMutex);
+    if (gEngine) gEngine->feeder.quelleFertig();
 }
 
 // Haengt eine Datei an, die ab `abFrame` der aktuellen (oder am Dateiende, wenn negativ) nahtlos

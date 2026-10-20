@@ -1,133 +1,111 @@
 package de.klangbild
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.klangbild.engine.NativeEngine
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import de.klangbild.bibliothek.Bibliothek
+import de.klangbild.bibliothek.Titel
+import de.klangbild.ui.BibliothekBildschirm
+import de.klangbild.ui.Kb
+import de.klangbild.ui.KlangbildThema
+import de.klangbild.ui.PlayerBildschirm
+import de.klangbild.wiedergabe.Spielmodell
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Einzige Activity der App (M0: leeres Gerüst).
- *
- * Die Oberfläche kommt mit M9 (T9.1 ff., Screen 01–09 nach
- * `ui/mockups/klangbild.html`). Bis dahin zeigt sie nur den Gerüst-Status,
- * damit der Build prüfbar ist.
+ * Einzige Activity der App (M9): Bibliothek und Player, dazwischen nur ein Zustand
+ * (`offen`). Der Motor liegt im [Spielmodell]; die Activity haelt nichts davon.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent { KlangbildGeruest() }
+        setContent { KlangbildThema { Oberflaeche() } }
+    }
+}
+
+private fun erlaubnis(): String =
+    if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
+    else Manifest.permission.READ_EXTERNAL_STORAGE
+
+private fun hatErlaubnis(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, erlaubnis()) == PackageManager.PERMISSION_GRANTED
+
+@Composable
+private fun Oberflaeche() {
+    val context = LocalContext.current
+    val modell: Spielmodell = viewModel()
+    var erlaubt by remember { mutableStateOf(hatErlaubnis(context)) }
+    var titel by remember { mutableStateOf(emptyList<Titel>()) }
+    var offen by remember { mutableStateOf(false) }
+
+    val frager = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { erlaubt = it }
+    LaunchedEffect(erlaubt) {
+        if (erlaubt) titel = withContext(Dispatchers.IO) { Bibliothek.lesen(context) }
+    }
+
+    when {
+        !erlaubt -> ZugriffBildschirm { frager.launch(erlaubnis()) }
+        offen -> PlayerBildschirm(modell) { offen = false }
+        else -> BibliothekBildschirm(titel, modell, onOeffnen = { t ->
+            modell.spiele(t)
+            offen = true
+        })
     }
 }
 
 @Composable
-private fun KlangbildGeruest() {
-    MaterialTheme {
-        Scaffold { innen ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innen)
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "KLINGBILD",
-                    fontSize = 40.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Text(
-                    text = "GERUEST · M0",
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Text(
-                    text = "Modul :app läuft. :core und :engine sind gebaut, " +
-                        "die Motor-Oberfläche folgt ab M9.",
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Default,
-                )
-                EngineDiagnose()
-            }
+private fun ZugriffBildschirm(onFragen: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Kb.Schwarz)
+            .systemBarsPadding()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("KLINGBILD", fontFamily = FontFamily.Monospace, fontSize = 32.sp, color = Kb.Weiss)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "Die Bibliothek liest nur Dateien auf diesem Geraet.",
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            color = Kb.TextMittel,
+        )
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = onFragen) {
+            Text("MUSIK-ZUGRIFF", fontFamily = FontFamily.Monospace)
         }
     }
-}
-
-/**
- * Diagnose für den Engine-Spike (M1, T1.4): Stream starten, Sinus spielen oder pausieren und
- * die Zähler aus `NativeEngine.poll` zeigen. Wird mit M9 durch die echte Oberfläche ersetzt.
- */
-@Composable
-private fun EngineDiagnose() {
-    val scope = rememberCoroutineScope()
-    var running by remember { mutableStateOf(false) }
-    var playing by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Stream aus") }
-    var text by remember { mutableStateOf("") }
-
-    // 10-mal pro Sekunde lesen (kein JNI je Frame, BAUPLAN §5.4).
-    LaunchedEffect(running) {
-        val werte = LongArray(NativeEngine.POLL_SIZE)
-        while (running) {
-            NativeEngine.poll(werte)
-            val frames = werte[NativeEngine.POLL_HEARD_FRAME]
-            text = "Frames ${frames}  (${frames / 44100} s)\n" +
-                "Underflows ${werte[NativeEngine.POLL_UNDERFLOWS]}\n" +
-                "Spielt ${if (werte[NativeEngine.POLL_PLAYING] == 1L) "ja" else "nein"}"
-            delay(100)
-        }
-    }
-
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
-            onClick = {
-                scope.launch {
-                    if (!running) {
-                        val ok = withContext(Dispatchers.Default) { NativeEngine.start() }
-                        running = ok
-                        status = if (ok) "Stream läuft" else "Stream ließ sich nicht öffnen"
-                    } else {
-                        withContext(Dispatchers.Default) { NativeEngine.stop() }
-                        running = false
-                        playing = false
-                        status = "Stream aus"
-                    }
-                }
-            },
-        ) { Text(if (running) "STOP" else "START") }
-        Button(
-            enabled = running,
-            onClick = {
-                playing = !playing
-                NativeEngine.setPlaying(playing)
-            },
-        ) { Text(if (playing) "PAUSE" else "SPIELEN") }
-    }
-    Text(text = status, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-    if (running) Text(text = text, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
 }

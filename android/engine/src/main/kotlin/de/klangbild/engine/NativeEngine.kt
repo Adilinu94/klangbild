@@ -36,7 +36,14 @@ object NativeEngine {
      * Aufruf. [spur] ist die Kennung, die [poll] als [POLL_FEEDER_SPUR] meldet.
      * `false`, wenn die Datei fehlt oder keinen gültigen Kopf hat.
      */
-    external fun startFile(pfad: String, startFrame: Long, spur: Long): Boolean
+    /**
+     * Spielt eine PCM-Cache-Datei ab [startFrame]. [wachsend] sagt, dass die Datei noch
+     * dekodiert wird: der Feeder wartet am vorläufigen Ende statt abzuschließen.
+     */
+    external fun startFile(pfad: String, startFrame: Long, spur: Long, wachsend: Boolean): Boolean
+
+    /** Meldet, dass die wachsende Datei fertig geschrieben ist. */
+    external fun quelleFertig()
 
     /**
      * Hängt eine Datei an, die ab [abFrame] der aktuellen (oder am Dateiende bei -1) nahtlos beginnt

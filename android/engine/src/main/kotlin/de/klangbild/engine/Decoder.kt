@@ -8,24 +8,34 @@ import de.klangbild.core.AudioKonverter
 import de.klangbild.core.PcmCache
 import de.klangbild.core.PcmDatei
 import java.io.File
+import kotlin.math.min
 import kotlin.math.pow
 
 /**
  * Dekodiert eine Audiodatei nach Stereo/44,1 kHz und legt sie im PCM-Cache ab (BAUPLAN §4.3).
  *
  * Ablauf: MediaExtractor → MediaCodec → float je Kanal → Stereo → lineares Resampling →
- * `gain_db` → PCM-Cache (1-s-Blöcke). Der Limiter aus §4.3 Schritt 3 folgt, sobald
- * `dsp/begrenzen` über JNI erreichbar ist.
+ * `gain_db` → PCM-Cache. Geschrieben wird **fortschreitend** in 1-s-Blöcken; der Speicher
+ * bleibt dadurch klein (vorher sammelte der Decoder den ganzen Titel und lief bei langen
+ * Stücken in einen OutOfMemoryError). [beiBlock] meldet nach jedem Block die Gesamtzahl der
+ * Frames, damit der Player schon nach der ersten Sekunde starten kann.
  *
  * Blockiert (CPU und I/O): im Planer-Thread aufrufen, nie im UI- oder Audio-Thread.
  */
 class Decoder(private val zielRate: Int = 44100) {
 
-    data class Ergebnis(val datei: PcmDatei, val frames: Int, val rate: Int)
+    data class Ergebnis(val frames: Int, val rate: Int)
 
-    fun dekodiere(datei: File, cache: PcmCache, trackId: Int, gainDb: Double = 0.0): Ergebnis {
+    fun dekodiere(
+        datei: File,
+        cache: PcmCache,
+        trackId: Int,
+        gainDb: Double = 0.0,
+        beiBlock: ((Int) -> Unit)? = null,
+    ): Ergebnis {
         val extraktor = MediaExtractor()
         var codec: MediaCodec? = null
+        var ziel: PcmDatei? = null
         try {
             extraktor.setDataSource(datei.absolutePath)
             val spur = (0 until extraktor.trackCount).firstOrNull { index ->
@@ -40,11 +50,30 @@ class Decoder(private val zielRate: Int = 44100) {
             codec.configure(format, null, null, 0)
             codec.start()
 
+            cache.loesche(trackId)
+            val dateiZiel = cache.anlegen(trackId, 0, 0, zielRate)
+            ziel = dateiZiel
+
             var kanaele = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             var rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             var floatPcm = lesePcmFloat(format)
+            val gain = if (gainDb != 0.0) 10.0.pow(gainDb / 20.0).toFloat() else 1f
 
-            val sammler = FloatSammler()
+            var strom: Strom? = null
+            var gesamt = 0
+            val sammler = FloatSammler(BLOCK_FRAMES * 4)
+
+            fun schreibe() {
+                val roh = sammler.nehmen() ?: return
+                val stereo = AudioKonverter.aufStereo(roh, kanaele)
+                val wandler = strom ?: Strom(rate, zielRate, gain).also { strom = it }
+                val gewandelt = wandler.wandle(stereo)
+                if (gewandelt.isEmpty()) return
+                dateiZiel.schreibeBlock(gewandelt, 2)
+                gesamt += gewandelt.size / 2
+                beiBlock?.invoke(gesamt)
+            }
+
             val info = MediaCodec.BufferInfo()
             var eingabeFertig = false
             var ausgabeFertig = false
@@ -68,6 +97,8 @@ class Decoder(private val zielRate: Int = 44100) {
 
                 when (val ausgabeIndex = codec.dequeueOutputBuffer(info, TIMEOUT_US)) {
                     MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        schreibe()
+                        strom = null
                         val neu = codec.outputFormat
                         kanaele = neu.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                         rate = neu.getInteger(MediaFormat.KEY_SAMPLE_RATE)
@@ -86,6 +117,7 @@ class Decoder(private val zielRate: Int = 44100) {
                                     if (floatPcm) AudioKonverter.pcmFloatZuFloat(bytes)
                                     else AudioKonverter.pcm16ZuFloat(bytes),
                                 )
+                                if (sammler.frames(kanaele) >= BLOCK_FRAMES) schreibe()
                             }
                         }
                         codec.releaseOutputBuffer(ausgabeIndex, false)
@@ -94,24 +126,23 @@ class Decoder(private val zielRate: Int = 44100) {
                 }
             }
 
-            val roh = sammler.zusammen()
-            val stereo = AudioKonverter.aufStereo(roh, kanaele)
-            val gewandelt = AudioKonverter.resampleLinear(stereo, 2, rate, zielRate)
-            if (gainDb != 0.0) {
-                val faktor = 10.0.pow(gainDb / 20.0).toFloat()
-                for (i in gewandelt.indices) gewandelt[i] *= faktor
+            schreibe()
+            strom?.let { rest ->
+                val letzte = rest.rest()
+                if (letzte.isNotEmpty()) {
+                    dateiZiel.schreibeBlock(letzte, 2)
+                    gesamt += letzte.size / 2
+                }
             }
-
-            val ziel = cache.anlegen(trackId, 0, gewandelt.size / 2, zielRate)
-            var von = 0
-            while (von < gewandelt.size) {
-                val bis = minOf(von + BLOCK_FRAMES * 2, gewandelt.size)
-                ziel.schreibeBlock(gewandelt.copyOfRange(von, bis), 2)
-                von = bis
-            }
-            ziel.close()
-            return Ergebnis(ziel, gewandelt.size / 2, zielRate)
+            dateiZiel.close()
+            ziel = null
+            return Ergebnis(gesamt, zielRate)
         } finally {
+            try {
+                ziel?.close()
+            } catch (_: Exception) {
+                // Datei war schon geschlossen.
+            }
             try {
                 codec?.stop()
             } catch (_: Exception) {
@@ -127,9 +158,9 @@ class Decoder(private val zielRate: Int = 44100) {
         return format.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
     }
 
-    /** Wachsendes float-Array ohne O(n²): Kapazität verdoppeln. */
-    private class FloatSammler {
-        private var daten = FloatArray(1 shl 16)
+    /** Wachsender float-Puffer; wird bei rund einer Sekunde geleert, also klein gehalten. */
+    private class FloatSammler(kapazitaet: Int) {
+        private var daten = FloatArray(kapazitaet)
         private var laenge = 0
 
         fun hinzu(teil: FloatArray) {
@@ -142,7 +173,63 @@ class Decoder(private val zielRate: Int = 44100) {
             laenge += teil.size
         }
 
-        fun zusammen(): FloatArray = daten.copyOf(laenge)
+        fun frames(kanaele: Int): Int = laenge / kanaele
+
+        fun nehmen(): FloatArray? {
+            if (laenge == 0) return null
+            val aus = daten.copyOf(laenge)
+            laenge = 0
+            return aus
+        }
+    }
+
+    /**
+     * Lineares Resampling ueber Blockgrenzen (ADR-014): behaelt einen Frame Ueberhang und die
+     * Bruchposition, sonst gäbe es an jeder Blockgrenze einen Sprung.
+     */
+    private class Strom(private val von: Int, private val nach: Int, private val gain: Float) {
+        private val schritt = von.toDouble() / nach
+        private var position = 0.0
+        private var ueberhang = FloatArray(0)
+
+        fun wandle(eingang: FloatArray): FloatArray {
+            if (von == nach) {
+                if (gain == 1f) return eingang
+                val aus = eingang.copyOf()
+                for (i in aus.indices) aus[i] *= gain
+                return aus
+            }
+            val daten = if (ueberhang.isEmpty()) eingang else ueberhang + eingang
+            val frames = daten.size / 2
+            val aus = FloatArray((frames / schritt).toInt() * 2 + 2)
+            var n = 0
+            var p = position
+            while (true) {
+                val i = p.toInt()
+                if (i >= frames - 1) break
+                val f = (p - i).toFloat()
+                val a0 = daten[i * 2]
+                val a1 = daten[i * 2 + 1]
+                val b0 = daten[(i + 1) * 2]
+                val b1 = daten[(i + 1) * 2 + 1]
+                aus[n++] = (a0 + (b0 - a0) * f) * gain
+                aus[n++] = (a1 + (b1 - a1) * f) * gain
+                p += schritt
+            }
+            val verbraucht = min(p.toInt(), frames - 1)
+            ueberhang = daten.copyOfRange(verbraucht * 2, daten.size)
+            position = p - verbraucht
+            return aus.copyOf(n)
+        }
+
+        /** Letzten Ueberhang ausgeben, damit das Ende nicht fehlt. */
+        fun rest(): FloatArray {
+            if (ueberhang.isEmpty()) return FloatArray(0)
+            val aus = ueberhang.copyOf()
+            for (i in aus.indices) aus[i] *= gain
+            ueberhang = FloatArray(0)
+            return aus
+        }
     }
 
     private companion object {

@@ -3,6 +3,7 @@ package de.klangbild.engine
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import de.klangbild.core.PcmCache
+import de.klangbild.core.PcmDatei
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -36,8 +37,9 @@ class DecoderTest {
         assertEquals(44100, ergebnis.rate)
         assertTrue("Frames: ${ergebnis.frames}", abs(ergebnis.frames - 44100) <= 1)
 
-        val datei = cache.oeffnen(1, 0, ergebnis.frames)
-        assertNotNull("Cache-Datei fehlt", datei)
+        val pfad = cache.finde(1)
+        assertNotNull("Cache-Datei fehlt", pfad)
+        val datei = PcmDatei.oeffnen(pfad!!)
         datei!!.use {
             assertEquals(2, it.kopf().channels)
             val werte = it.lese(0, 4)

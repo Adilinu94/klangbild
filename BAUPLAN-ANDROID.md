@@ -1384,7 +1384,14 @@ WEITER und „anderer Übergang" je 5× ohne Abbruch.
 ### M9 · Oberfläche
 
 **T9.1 Theme, Fonts, Tokens** (DIRECTION.md). **T9.2 Bibliothek + Alle Titel +
-Mini-Player.** **T9.3a Laufende Wellenform mit Play-Knopf in der Mitte und
+Mini-Player.**
+
+**Stand 20.10.2026:** T9.1 (Farb-Tokens, System-Monospace statt Doto/Space) und T9.2
+(Bibliothek aus MediaStore mit Covern, Mini-Player, Player mit rotierender Scheibe und
+Segment-Fortschritt) stehen und sind auf dem Gerät geprüft. Der Decoder schreibt jetzt
+fortschreitend; die Wiedergabe startet nach der ersten Sekunde statt nach dem ganzen Titel
+(vorher OutOfMemoryError bei langen Stücken). Offen: T9.3b Cover-Pager, T9.4 Auto-DJ-Konsole,
+T9.5 Queue-Sheet, T9.6 Suche, T9.7 Einstellungen, T9.8 Animationen. **T9.3a Laufende Wellenform mit Play-Knopf in der Mitte und
 Wisch-Seek** (§8.4 A). **T9.3b Cover-Pager mit 3D-Ausblendung** (§8.4 B,
 inkl. Rückkopplungs-Regeln). **T9.4 Auto-DJ-Konsole mit
 Deck-Ansicht und Kurven.** **T9.5 Queue-Sheet.** **T9.6 Suche.** **T9.7
@@ -1664,11 +1671,12 @@ keine Playlist.
 | JNI-Bäcker | `BakePlan` (§4.5-JSON), `NativeBaker`, `NativeEngine.bake/bakeAudio/bakeInfo/releaseBake` | Plan-JSON und Info-Felder |
 | PCM-Cache | §4.3: Kopf `KBPC`, int16, fortschreitendes Schreiben, LRU (4 Dateien) | Rundlauf, LRU |
 | Decoder-Bausteine | §4.3: PCM16/float → float, auf Stereo, lineares Resampling (ADR-014) | Tests |
-| Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke) | Gerätetest grün |
+| Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke, **fortschreitend**); Wiedergabe startet nach der ersten Sekunde Cache | Gerätetest grün |
 | Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen, Folgedatei nahtlos (am Dateiende oder ab geplantem Frame) anschließen; Sinus als Rückfall | 6 Host-Tests |
 | Player | `engine/Player.kt`: dekodieren (einmal), Cache suchen, `startFile`, Pause/Weiter/Stopp, Zustand aus `poll` | Gerätetest grün |
 | Auto-DJ-Kette | `engine/AutoDjPlayer.kt`: gebackene Blende in den Cache schreiben, ab `abS` anhängen, B ab Blendenende nachziehen, Verwerfen (Blende ab sofort) | Gerätetest grün |
 | Vorschau | `Player.vorschau`: eigener Oboe-Stream neben der Wiedergabe (JNI `vorschauStarte/Stoppe/Poll`) | Gerätetest grün |
+| Oberfläche | `:app` Compose: Bibliothek aus MediaStore (Timetable, Cover), Mini-Player, Player mit rotierender Scheibe und Segment-Fortschritt | auf Gerät geprüft |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
 `./gradlew :core:test` grün (38 Tests, 146 Golden-Fälle plus Fingerabdrücke).

@@ -52,8 +52,10 @@ public:
     PcmFeeder& operator=(const PcmFeeder&) = delete;
 
     /// Oeffnet eine PCM-Cache-Datei und setzt die Leseposition. Fordert einen Flush an, damit
-    /// die alte Spur sauber ausblendet. `false` bei fehlender/ungueltiger Datei (alte Quelle bleibt).
-    bool oeffne(const std::string& pfad, int64_t startFrame = 0, int64_t spur = 0) {
+    /// die alte Spur sauber ausblendet. `wachsend`: die Datei wird noch geschrieben; am
+    /// vorlaeufigen Ende wird nicht abgeschlossen, sondern gewartet (fortschreitendes Dekodieren).
+    /// `false` bei fehlender/ungueltiger Datei (alte Quelle bleibt).
+    bool oeffne(const std::string& pfad, int64_t startFrame = 0, int64_t spur = 0, bool wachsend = false) {
         Quelle neu;
         if (!oeffneQuelle(neu, pfad, startFrame, spur)) return false;
         core_.requestFlush();   // vor dem Tausch: der Callback wirft die alte Spur weg
@@ -63,8 +65,15 @@ public:
         aktuell_ = neu;
         hatNaechste_ = false;
         fertig_ = false;
+        wachsend_ = wachsend;
         phase_ = 0.0;
         return true;
+    }
+
+    /// Meldet, dass die wachsende Datei fertig geschrieben ist (Ende erreicht).
+    void quelleFertig() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        wachsend_ = false;
     }
 
     /// Haengt eine Datei an, die ab `abFrame` der aktuellen (oder am Dateiende, wenn `abFrame` < 0)
@@ -112,6 +121,7 @@ public:
                     wechsle();
                     continue;
                 }
+                if (wachsend_) break;   // Datei waechst noch: spaeter weiterfuellen
                 fertig_ = true;
                 break;
             }
@@ -259,6 +269,7 @@ private:
     Quelle naechste_;
     bool hatNaechste_ = false;
     int64_t naechsteAb_ = -1;
+    bool wachsend_ = false;
     bool fertig_ = false;
 
     std::vector<float> buffer_;

@@ -32,7 +32,7 @@ class PcmPlaybackTest {
         datei.close()
 
         val pfad = cache.datei(77, 0, 2 * 44100).absolutePath
-        assertTrue("startFile", NativeEngine.startFile(pfad, 0, 77))
+        assertTrue("startFile", NativeEngine.startFile(pfad, 0, 77, false))
         try {
             NativeEngine.setPlaying(true)
             val werte = LongArray(NativeEngine.POLL_SIZE)
@@ -69,7 +69,7 @@ class PcmPlaybackTest {
         val a = cache.datei(77, 0, 44100).absolutePath
         val b = cache.datei(78, 0, 44100).absolutePath
 
-        assertTrue("startFile", NativeEngine.startFile(a, 0, 77))
+        assertTrue("startFile", NativeEngine.startFile(a, 0, 77, false))
         try {
             assertTrue("queueFile", NativeEngine.queueFile(b, 0, 78, -1))
             NativeEngine.setPlaying(true)

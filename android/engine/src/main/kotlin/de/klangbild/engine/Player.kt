@@ -22,11 +22,55 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
     )
 
     private var dauer: Long = 0
+    private var aktuelleDatei: File? = null
+    private var aktuelleSpur: Long = 0
 
-    /** Spielt [datei] ab [startFrame]. Beim ersten Mal wird dekodiert und der Cache angelegt. */
+    /**
+     * Spielt [datei] ab [startFrame]. Beim ersten Mal wird dekodiert; die Wiedergabe startet
+     * bereits nach der ersten Sekunde Cache, der Rest wird im Hintergrund weitergeschrieben.
+     */
     fun spiele(datei: File, spurId: Long, startFrame: Long = 0): Boolean {
-        val ziel = pfadFuer(spurId, datei) ?: return false
-        if (!NativeEngine.startFile(ziel.absolutePath, startFrame, spurId)) return false
+        val vorhanden = cache.finde(spurId.toInt())
+        if (vorhanden != null) {
+            dauer = PcmDatei.oeffnen(vorhanden)?.use { it.frames().toLong() } ?: 0
+            return starte(vorhanden, spurId, startFrame)
+        }
+        if (!datei.isFile) return false
+
+        val ziel = cache.datei(spurId.toInt(), 0, 0)
+        var gestartet = false
+        val ergebnis = try {
+            decoder.dekodiere(datei, cache, spurId.toInt(), beiBlock = { frames ->
+                if (!gestartet && frames >= 44100) {
+                    gestartet = NativeEngine.startFile(ziel.absolutePath, 0, spurId, true)
+                    if (gestartet) NativeEngine.setPlaying(true)
+                }
+            })
+        } catch (_: Throwable) {
+            if (gestartet) NativeEngine.stop()
+            return false
+        }
+        dauer = ergebnis.frames.toLong()
+        if (!gestartet) return starte(ziel, spurId, 0)
+        NativeEngine.quelleFertig()
+        aktuelleDatei = ziel
+        aktuelleSpur = spurId
+        return true
+    }
+
+    /** Startet [datei] ohne Umweg ueber den Decoder (Cache liegt schon vor). */
+    private fun starte(datei: File, spurId: Long, startFrame: Long): Boolean {
+        if (!NativeEngine.startFile(datei.absolutePath, startFrame, spurId, false)) return false
+        NativeEngine.setPlaying(true)
+        aktuelleDatei = datei
+        aktuelleSpur = spurId
+        return true
+    }
+
+    /** Springt im laufenden Titel an [frame] (Flush, Warteschlange wird verworfen). */
+    fun springeZu(frame: Long): Boolean {
+        val datei = aktuelleDatei ?: return false
+        if (!NativeEngine.startFile(datei.absolutePath, frame.coerceAtLeast(0), aktuelleSpur, false)) return false
         NativeEngine.setPlaying(true)
         return true
     }
@@ -70,11 +114,12 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
             return vorhanden
         }
         if (!datei.isFile) return null
-        val ergebnis = decoder.dekodiere(datei, cache, spurId.toInt())
+        val ergebnis = try {
+            decoder.dekodiere(datei, cache, spurId.toInt())
+        } catch (_: Throwable) {
+            return null
+        }
         dauer = ergebnis.frames.toLong()
-        return cache.datei(spurId.toInt(), 0, ergebnis.frames)
+        return cache.finde(spurId.toInt())
     }
-
-    /** Cache-Datei des Titels, notfalls vorher dekodieren. */
-    private fun pfadFuer(spurId: Long, datei: File): File? = vorbereiten(datei, spurId)
 }

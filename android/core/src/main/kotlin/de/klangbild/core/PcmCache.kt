@@ -69,10 +69,14 @@ class PcmDatei private constructor(private val datei: File, private var zugriff:
         zugriff.seek(12)
         val kopfFrames = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(alt.frames + frames).array()
         zugriff.write(kopfFrames)
-        zugriff.fd.sync()
     }
 
     override fun close() {
+        try {
+            zugriff.fd.sync()
+        } catch (_: Exception) {
+            // Synchronschreiben ist nur fuer die Dauerhaftigkeit noetig, nicht fuer Leser.
+        }
         zugriff.close()
     }
 
@@ -150,6 +154,11 @@ class PcmCache(val ordner: File, val maxDateien: Int = 4) {
 
     fun alle(): List<File> =
         ordner.listFiles { f -> f.isFile && f.name.endsWith(".pcm") }?.sortedBy { it.lastModified() } ?: emptyList()
+
+    /** Löscht alle Cache-Dateien eines Titels (vor einem neuen Dekodieren). */
+    fun loesche(trackId: Int) {
+        ordner.listFiles { f -> f.isFile && f.name.startsWith("${trackId}_") }?.forEach { it.delete() }
+    }
 
     /** Findet die neueste Cache-Datei eines Titels (Dateiname beginnt mit `<trackId>_`). */
     fun finde(trackId: Int): File? =
