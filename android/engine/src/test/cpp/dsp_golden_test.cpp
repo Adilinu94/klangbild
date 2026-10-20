@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "dsp/curves.h"
+#include "dsp/effects.h"
+#include "dsp/fft.h"
 #include "dsp/envelopes.h"
 #include "dsp/filters.h"
 #include "dsp/mixing.h"
@@ -661,4 +663,142 @@ TEST(DspSweep, WeightBandsKnownValuesFromPrototype) {
     for (float f : noBass) sum2 += f;
     EXPECT_NEAR(sum2, 18.06835986720398, 5e-4);
     EXPECT_NEAR(noBass[static_cast<std::size_t>(3 * 2)], 0.19920025765895844f, 5e-6);
+}
+
+// ============================== T5.6 Effekte (Echo, Delay, Ping-Pong, Hall) =====================
+
+namespace {
+
+std::vector<double> randomSignal(std::size_t n, unsigned seed) {
+    std::vector<double> v(n);
+    unsigned state = seed;
+    for (double& x : v) {
+        state = state * 1664525u + 1013904223u;   // lineare Kongruenz: fester Ablauf, kein <random>
+        x = static_cast<double>(state >> 8) / static_cast<double>(1u << 24) - 0.5;
+    }
+    return v;
+}
+
+}  // namespace
+
+TEST(DspFft, MatchesNaiveDftAndRoundTrips) {
+    for (std::size_t n : {1u, 2u, 8u, 64u, 256u}) {
+        const klangbild::dsp::Fft fft(n);
+        std::vector<std::complex<double>> data(n), original;
+        const auto re = randomSignal(n, 11), im = randomSignal(n, 12);
+        for (std::size_t i = 0; i < n; ++i) data[i] = {re[i], im[i]};
+        original = data;
+        fft.forward(data.data());
+        for (std::size_t k = 0; k < n; ++k) {   // naive DFT: X[k] = sum x[j] * exp(-2 pi i j k / n)
+            std::complex<double> sum = 0.0;
+            for (std::size_t j = 0; j < n; ++j) sum += original[j] * std::polar(1.0, -2.0 * 3.14159265358979323846 * static_cast<double>(j * k) / static_cast<double>(n));
+            ASSERT_NEAR(std::abs(data[k] - sum), 0.0, 1e-11) << "n=" << n << " k=" << k;
+        }
+        fft.inverse(data.data());
+        for (std::size_t i = 0; i < n; ++i) ASSERT_NEAR(std::abs(data[i] - original[i]), 0.0, 1e-13) << n;
+    }
+    EXPECT_THROW(klangbild::dsp::Fft(12), std::invalid_argument);
+    EXPECT_EQ(klangbild::dsp::nextPowerOfTwo(1), 1u);
+    EXPECT_EQ(klangbild::dsp::nextPowerOfTwo(129), 256u);
+}
+
+TEST(DspFft, ConvolveMatchesDirectSumIncludingOverlapAddBlocks) {
+    const auto x = randomSignal(1000, 21);
+    const auto h = randomSignal(37, 22);
+    std::vector<double> direct(x.size() + h.size() - 1, 0.0);
+    for (std::size_t i = 0; i < x.size(); ++i)
+        for (std::size_t j = 0; j < h.size(); ++j) direct[i + j] += x[i] * h[j];
+    for (std::size_t fftSize : {0u, 128u, 256u, 4096u}) {   // 128: viele Bloecke; 0: automatisch (ein Block)
+        const auto got = klangbild::dsp::convolve(x, h, fftSize);
+        ASSERT_EQ(got.size(), direct.size()) << fftSize;
+        for (std::size_t i = 0; i < got.size(); ++i) ASSERT_NEAR(got[i], direct[i], 1e-12) << "fft " << fftSize << " i=" << i;
+    }
+    EXPECT_TRUE(klangbild::dsp::convolve({}, h).empty());
+    EXPECT_TRUE(klangbild::dsp::convolve(x, {}).empty());
+    const auto single = klangbild::dsp::convolve(x, {2.0});   // IR aus einem Wert: Skalierung
+    ASSERT_EQ(single.size(), x.size());
+    for (std::size_t i = 0; i < x.size(); ++i) ASSERT_NEAR(single[i], 2.0 * x[i], 1e-13);
+    EXPECT_THROW(klangbild::dsp::convolve(x, h, 100), std::invalid_argument);   // keine Zweierpotenz
+    EXPECT_THROW(klangbild::dsp::convolve(x, h, 64), std::invalid_argument);    // kleiner als 2 * |h|
+}
+
+TEST(DspEffects, WetSignalMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    // Die Hall-IR ist ein Asset und kommt hier aus dem Golden-Fall hall_ir (Stereo, interleaved).
+    const GoldenCase irCase = g.case_of("hall_ir");
+    const std::vector<float> ir = floatsOf(g, irCase.expected);
+    ASSERT_EQ(ir.size(), 106722u * 2);
+    for (const char* name : {"nass_echo50", "nass_echo75", "nass_echo100", "nass_delay50", "nass_delay75", "nass_delay100",
+                             "nass_pingpong50", "nass_pingpong75", "nass_hall"}) {
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const std::vector<float> send = floatsOf(g, c.inputs.at("send"));
+        const std::vector<float> wet = klangbild::dsp::wetSignal(c.inputs.at("typ").as_string(), send, c.inputs.at("schlag_n").as_double(), ir);
+        const std::vector<double> got(wet.begin(), wet.end());
+        if (c.tolerance == "reverb") {
+            g.expect_reverb(name, c.expected, got);
+        } else {
+            ASSERT_EQ(c.tolerance, "dsp");
+            g.expect_dsp(name, c.expected, got);
+        }
+    }
+}
+
+#ifdef KLINGBILD_HALL_IR_ASSET
+TEST(DspEffects, HallIrAssetEqualsTheGoldenImpulseResponse) {
+    REQUIRE_BINARIES();
+    std::ifstream asset(KLINGBILD_HALL_IR_ASSET, std::ios::binary | std::ios::ate);
+    ASSERT_TRUE(asset.good()) << "Asset fehlt: " << KLINGBILD_HALL_IR_ASSET;
+    const std::streamsize bytes = asset.tellg();
+    ASSERT_EQ(bytes, static_cast<std::streamsize>(106722) * 2 * 4);   // 2,42 s Stereo, float32 little endian, ohne Kopf
+    std::vector<float> fromAsset(static_cast<std::size_t>(bytes) / 4);
+    asset.seekg(0);
+    asset.read(reinterpret_cast<char*>(fromAsset.data()), bytes);
+    Golden& g = golden();
+    const std::vector<float> golden = floatsOf(g, g.case_of("hall_ir").expected);
+    ASSERT_EQ(golden.size(), fromAsset.size());
+    double worst = 0.0;
+    for (std::size_t i = 0; i < golden.size(); ++i) worst = std::max(worst, static_cast<double>(std::abs(golden[i] - fromAsset[i])));
+    EXPECT_LE(worst, 1e-6) << "Das Asset passt nicht mehr zum Prototyp: Golden neu erzeugen und hall_ir.f32 ersetzen";
+}
+#endif
+
+TEST(DspEffects, EdgeCasesRoundingAndPingPong) {
+    using klangbild::dsp::wetSignal;
+    std::vector<float> impulse(2 * 64, 0.0f);
+    impulse[0] = 1.0f;
+    impulse[1] = 0.5f;
+    const std::vector<float> noIr;
+    // Python round() rundet halbe Werte zur geraden Zahl: 1102.5 -> 1102, 1103.5 -> 1104 (BAUPLAN §13)
+    const auto a = wetSignal("delay100", impulse, 1102.5, noIr);
+    EXPECT_NE(a[2 * 1102], 0.0f);
+    EXPECT_EQ(a[2 * 1103], 0.0f);
+    const auto b = wetSignal("delay100", impulse, 1103.5, noIr);
+    EXPECT_NE(b[2 * 1104], 0.0f);
+    EXPECT_EQ(b[2 * 1103], 0.0f);
+    // Delay: Wiederholung k im Abstand k * Verzoegerung, Pegel 0,35^k * 1,1; beide Kanaele
+    const auto d = wetSignal("delay100", impulse, 10.0, noIr);
+    EXPECT_NEAR(d[2 * 10], 1.1f * 0.35f, 1e-6);
+    EXPECT_NEAR(d[2 * 10 + 1], 1.1f * 0.35f * 0.5f, 1e-6);
+    EXPECT_NEAR(d[2 * 20], 1.1f * 0.35f * 0.35f, 1e-6);
+    // Ping-Pong: abwechselnd links/rechts, Mono-Summe: k = 1 rechts, k = 2 links
+    const auto pp = wetSignal("pingpong100", impulse, 10.0, noIr);
+    const float mono = (1.0f + 0.5f) / 2.0f;
+    EXPECT_EQ(pp[2 * 10], 0.0f);                                   // k = 1: nur rechts
+    EXPECT_NEAR(pp[2 * 10 + 1], 1.4f * mono * 0.55f, 1e-6);
+    EXPECT_NEAR(pp[2 * 20], 1.4f * mono * 0.55f * 0.55f, 1e-6);    // k = 2: nur links
+    EXPECT_EQ(pp[2 * 20 + 1], 0.0f);
+    // Laenge: send + Wiederholungen * Verzoegerung (Echo 0,7: 13, Delay 0,35: 5, Ping-Pong 0,55: 8)
+    EXPECT_EQ(wetSignal("echo100", impulse, 10.0, noIr).size(), 2u * (64 + 13 * 10));
+    EXPECT_EQ(wetSignal("delay50", impulse, 10.0, noIr).size(), 2u * (64 + 5 * 5));
+    EXPECT_EQ(wetSignal("pingpong75", impulse, 10.0, noIr).size(), 2u * (64 + 8 * 8));   // verz = round(7.5) = 8
+    // Fehler und leere Eingaben
+    EXPECT_THROW(wetSignal("reverse100", impulse, 10.0, noIr), std::invalid_argument);
+    EXPECT_THROW(wetSignal("echo", impulse, 10.0, noIr), std::invalid_argument);   // Prozent fehlt (int("") im Prototyp)
+    EXPECT_TRUE(wetSignal("hall", {}, 10.0, noIr).empty());
+    // Leere Quelle: nur Stille der Laenge Wiederholungen * Verzoegerung (Prototyp: zeros((0 + 13 * 5, 2)))
+    const auto silent = wetSignal("echo50", {}, 10.0, noIr);
+    EXPECT_EQ(silent.size(), 2u * 13 * 5);
+    for (float v : silent) ASSERT_EQ(v, 0.0f);
 }

@@ -38,6 +38,11 @@ std::vector<double> sosfiltZi(const Sos& sos);
 /// Ist `x` nicht laenger als `padlen`, wirft scipy ValueError; hier `std::nullopt`.
 std::optional<std::vector<double>> sosfiltfilt(const Sos& sos, const std::vector<double>& x);
 
+/// `mix._filtern(sos, signal)`: filtert jeden Kanal (interleaved) nullphasig mit `sosfiltfilt`; zu kurze
+/// Signale (<= 15 Samples) laufen ueber das kausale `sosfilt`. Eine leere `sos` (der Prototyp bekommt dort
+/// None) gibt das Signal unveraendert zurueck. Gerechnet wird in double, das Ergebnis ist float32.
+std::vector<float> filterSignal(const Sos& sos, const float* signal, std::size_t frames, int channels);
+
 /// Ergebnis von `band_teilen`: Tief- und Hochband im Format der Eingabe (interleaved).
 struct BandSplit {
     std::vector<float> low;

@@ -105,6 +105,7 @@ target_include_directories(dsp_golden_test PRIVATE
 )
 target_compile_definitions(dsp_golden_test PRIVATE
     KLINGBILD_GOLDENDIR_DEFAULT="${KLINGBILD_GOLDENDIR}"
+    KLINGBILD_HALL_IR_ASSET="${CMAKE_CURRENT_SOURCE_DIR}/../../main/assets/hall_ir.f32"
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(dsp_golden_test PRIVATE -Wall -Wextra -Wno-unused-parameter)

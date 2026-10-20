@@ -136,30 +136,34 @@ std::optional<std::vector<double>> sosfiltfilt(const Sos& sos, const std::vector
                                ext.begin() + static_cast<std::ptrdiff_t>(edge + n));
 }
 
-BandSplit bandSplit(const float* signal, std::size_t frames, int channels, int rate, double splitHz) {
-    BandSplit out;
-    const std::size_t total = frames * static_cast<std::size_t>(channels);
-    out.low.resize(total);
-    out.high.resize(total);
-    const Sos sos = butterworthLowpass(4, splitHz, rate);   // FILTER_ORDNUNG = 4
+std::vector<float> filterSignal(const Sos& sos, const float* signal, std::size_t frames, int channels) {
+    const std::size_t stride = static_cast<std::size_t>(channels);
+    std::vector<float> out(frames * stride);
+    if (sos.empty()) {
+        std::copy(signal, signal + frames * stride, out.begin());   // _sos lieferte None: das Signal bleibt
+        return out;
+    }
     std::vector<double> channel(frames);
     for (int c = 0; c < channels; ++c) {
-        for (std::size_t i = 0; i < frames; ++i) channel[i] = static_cast<double>(signal[i * static_cast<std::size_t>(channels) + static_cast<std::size_t>(c)]);
+        for (std::size_t i = 0; i < frames; ++i) channel[i] = static_cast<double>(signal[i * stride + static_cast<std::size_t>(c)]);
         std::vector<double> filtered;
-        if (sos.empty()) {
-            filtered = channel;   // _sos lieferte None: das Signal bleibt, high wird 0
-        } else if (auto zeroPhase = sosfiltfilt(sos, channel)) {
+        if (auto zeroPhase = sosfiltfilt(sos, channel)) {
             filtered = std::move(*zeroPhase);
         } else {
             filtered = channel;   // zu kurz fuer die Polsterung: kausales sosfilt
             sosfilt(sos, filtered);
         }
-        for (std::size_t i = 0; i < frames; ++i) {
-            const std::size_t k = i * static_cast<std::size_t>(channels) + static_cast<std::size_t>(c);
-            out.low[k] = static_cast<float>(filtered[i]);                 // low.astype(np.float32)
-            out.high[k] = signal[k] - out.low[k];                         // (signal - low), beides float32
-        }
+        for (std::size_t i = 0; i < frames; ++i) out[i * stride + static_cast<std::size_t>(c)] = static_cast<float>(filtered[i]);
     }
+    return out;
+}
+
+BandSplit bandSplit(const float* signal, std::size_t frames, int channels, int rate, double splitHz) {
+    BandSplit out;
+    const std::size_t total = frames * static_cast<std::size_t>(channels);
+    out.low = filterSignal(butterworthLowpass(4, splitHz, rate), signal, frames, channels);   // FILTER_ORDNUNG = 4
+    out.high.resize(total);
+    for (std::size_t k = 0; k < total; ++k) out.high[k] = signal[k] - out.low[k];             // (signal - low), beides float32
     return out;
 }
 
