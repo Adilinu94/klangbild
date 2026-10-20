@@ -11,6 +11,7 @@ import de.klangbild.core.Abtastung
 import de.klangbild.core.Lautheit
 import de.klangbild.core.PcmCache
 import de.klangbild.core.PcmDatei
+import de.klangbild.core.Profil
 import de.klangbild.core.ProfilBau
 import de.klangbild.core.Taktraster
 import de.klangbild.core.TitelAnalyse
@@ -52,6 +53,10 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
 
     /** Tonart und Lautheit des laufenden Titels; null, solange keine Analyse vorliegt. */
     var analyse by mutableStateOf<TitelAnalyse?>(null)
+        private set
+
+    /** Profil des laufenden Titels fuer die Regie (aus [analyse]); null ohne Takte. */
+    var profil by mutableStateOf<Profil?>(null)
         private set
 
     private var liste: List<Titel> = emptyList()
@@ -105,6 +110,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
         titel = t
         wellenform = null
         analyse = analysen.lade(t.id)
+        profil = analyse?.zuProfil()
         zustand = Player.Zustand(0, 0, 0, false, 0)
         viewModelScope.launch {
             val ok = try {
@@ -167,6 +173,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                     }
                     if (titel?.id == t.id && gefunden != null) {
                         analyse = gefunden
+                        profil = gefunden.zuProfil()
                         analysen.sichere(t.id, gefunden)
                     }
                 }

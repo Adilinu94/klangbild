@@ -54,6 +54,28 @@ data class TitelAnalyse(
         }
     }
 
+    /**
+     * Zurueck in ein [Profil] fuer die Regie. Die Dauer kommt aus dem letzten Takt plus
+     * der Taktlaenge davor; ohne Takte gibt es kein Profil.
+     */
+    fun zuProfil(): Profil? {
+        if (takte.isEmpty() || gesamt.isEmpty() || baender.size < 3) return null
+        val taktZeiten = takte.map { it.toDouble() }.toDoubleArray()
+        val letzter = taktZeiten.last()
+        val abstand = if (taktZeiten.size >= 2) letzter - taktZeiten[taktZeiten.size - 2] else 0.0
+        return Profil(
+            takte = taktZeiten,
+            baender = baender.map { reihe -> reihe.map { it.toDouble() }.toDoubleArray() }.toTypedArray(),
+            gesamt = gesamt.map { it.toDouble() }.toDoubleArray(),
+            stems = null,
+            rasterOk = BooleanArray(takte.size) { true },
+            dauer = letzter + abstand,
+            chroma = chroma.takeIf { it.isNotEmpty() }
+                ?.map { reihe -> reihe.map { it.toDouble() }.toDoubleArray() }
+                ?.toTypedArray(),
+        )
+    }
+
     companion object {
 
         const val VERSION = 1

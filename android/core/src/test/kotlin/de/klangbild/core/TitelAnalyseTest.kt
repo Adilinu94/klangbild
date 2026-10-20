@@ -57,6 +57,31 @@ class TitelAnalyseTest {
     }
 
     @Test
+    fun `zurueck in ein Profil`() {
+        val a = TitelAnalyse(
+            tonart = "Am",
+            camelot = "8A",
+            lufs = -5.2,
+            bpm = 124,
+            takte = listOf(0.5f, 2.44f, 4.38f),
+            gesamt = listOf(-10.5f, -8.25f, -9.0f),
+            baender = listOf(listOf(-20f, -18f, -19f), listOf(-25f, -24f, -24f), listOf(-30f, -29f, -29f)),
+            chroma = listOf(listOf(0.1f), listOf(0.2f), listOf(0.3f)),
+        )
+        val p = a.zuProfil()
+        assertEquals(3, p?.n)
+        assertEquals(3, p?.baender?.size)
+        assertEquals(3, p?.chroma?.size)
+        assertEquals(6.32, p!!.dauer, 1e-6)
+        assertEquals(-8.25, p.gesamt[1], 1e-6)
+    }
+
+    @Test
+    fun `ohne Takte kein Profil`() {
+        assertNull(TitelAnalyse("Am", "8A", -5.2).zuProfil())
+    }
+
+    @Test
     fun `fremde Version und kaputter Text ergeben null`() {
         assertNull(TitelAnalyse.aus("""{"version":2,"tonart":"Am","camelot":"8A","lufs":-5.2}"""))
         assertNull(TitelAnalyse.aus("""{"version":1,"tonart":"Am"}"""))
