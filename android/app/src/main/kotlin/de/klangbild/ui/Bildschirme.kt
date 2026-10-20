@@ -276,6 +276,24 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
             Knopf("NAECHST") { modell.naechster() }
             Knopf("STOPP") { modell.stoppe() }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Knopf("PLAN") { modell.planeNaechsten() }
+            Knopf("WEG") { modell.verwerfeUebergang() }
+        }
+        modell.uebergang?.let { u ->
+            Text(
+                text = String.format(
+                    Locale.US,
+                    "PLAN · %d TAKTE · %.1f PUNKTE · %s",
+                    u.plan.takte,
+                    u.punkte,
+                    u.plan.grund.ifBlank { "ohne Grund" },
+                ),
+                fontFamily = MONO,
+                fontSize = 10.sp,
+                color = Kb.TextHell,
+            )
+        }
         Text(
             text = String.format(
                 Locale.US,
