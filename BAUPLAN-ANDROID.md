@@ -1675,7 +1675,7 @@ keine Playlist.
 | Decoder-Bausteine | §4.3: PCM16/float → float, auf Stereo, lineares Resampling (ADR-014) | Tests |
 | Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke, **fortschreitend**); Wiedergabe startet nach der ersten Sekunde Cache | Gerätetest grün |
 | Taktraster | `core/Taktraster.kt`: `uebergang.regulaer`/`taktraster` (Tempo, Modus der Schlaglage, Eins aus der Downbeat-Mehrheit, ±16 s Drift, Fein-Anker) | 4 Golden-Fälle |
-| Profil-Bau | `core/ProfilBau.kt`: Bandtrennung wie scipy (Butterworth 4. Ordnung, SOS, Vorwärts-/Rückwärtsfilter), Pegel je Takt, Raster aus den Downbeats; Chroma folgt | Golden `profil_berechnen` |
+| Profil-Bau | `core/ProfilBau.kt`: Bandtrennung wie scipy (Butterworth 4. Ordnung, SOS, Vorwärts-/Rückwärtsfilter), Pegel je Takt, Chroma je Takt (FFT 8192, Hann, 65–2100 Hz), Raster aus den Downbeats | Golden `profil_berechnen` |
 | Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen, Folgedatei nahtlos (am Dateiende oder ab geplantem Frame) anschließen; Sinus als Rückfall | 6 Host-Tests |
 | Player | `engine/Player.kt`: dekodieren (einmal), Cache suchen, `startFile`, Pause/Weiter/Stopp, Zustand aus `poll` | Gerätetest grün |
 | Auto-DJ-Kette | `engine/AutoDjPlayer.kt`: gebackene Blende in den Cache schreiben, ab `abS` anhängen, B ab Blendenende nachziehen, Verwerfen (Blende ab sofort) | Gerätetest grün |
