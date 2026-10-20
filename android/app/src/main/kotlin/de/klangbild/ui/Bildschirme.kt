@@ -254,6 +254,7 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
                     val teile = mutableListOf(a.tonart, a.camelot)
                     a.bpm?.let { teile.add("$it BPM") }
                     a.lufs?.let { teile.add(String.format(Locale.US, "%.1f LUFS", it)) }
+                    if (a.takte.isNotEmpty()) teile.add("${a.takte.size} Takte")
                     teile.joinToString(" · ")
                 } ?: "TONART …",
                 fontFamily = MONO,
