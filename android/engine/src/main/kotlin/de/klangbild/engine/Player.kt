@@ -57,6 +57,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
             return false
         }
         dauer = ergebnis.frames.toLong()
+        cache.aufraeumen(behalten = listOf(ziel.name))
         if (!gestartet) return starte(ziel, spurId, 0)
         NativeEngine.quelleFertig()
         dateiWaechst = false

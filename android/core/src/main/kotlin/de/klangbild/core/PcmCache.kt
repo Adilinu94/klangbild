@@ -131,10 +131,15 @@ class PcmDatei private constructor(private val datei: File, private var zugriff:
 }
 
 /**
- * Verwaltet die PCM-Dateien im App-Speicher (`filesDir/pcm`). Höchstens [maxDateien] bleiben;
- * die ältesten fliegen zuerst raus. Dateiname: `<trackId>_<startFrame>_<frames>.pcm`.
+ * Verwaltet die PCM-Dateien im App-Speicher (`filesDir/pcm`). Höchstens [maxDateien] und
+ * höchstens [maxBytes] bleiben; die ältesten fliegen zuerst raus.
+ * Dateiname: `<trackId>_<startFrame>_<frames>.pcm`.
  */
-class PcmCache(val ordner: File, val maxDateien: Int = 4) {
+class PcmCache(
+    val ordner: File,
+    val maxDateien: Int = 4,
+    val maxBytes: Long = 800L * 1024 * 1024,
+) {
 
     fun dateiName(trackId: Int, startFrame: Int, frames: Int): String = "${trackId}_${startFrame}_${frames}.pcm"
 
@@ -165,14 +170,16 @@ class PcmCache(val ordner: File, val maxDateien: Int = 4) {
         ordner.listFiles { f -> f.isFile && f.name.startsWith("${trackId}_") && f.name.endsWith(".pcm") }
             ?.maxByOrNull { it.lastModified() }
 
-    /** Löscht die ältesten ungeschützten Dateien, bis nur noch [maxDateien] übrig sind. */
+    /** Löscht die ältesten ungeschützten Dateien, bis Anzahl und Größe passen. */
     fun aufraeumen(behalten: Collection<String> = emptyList()) {
         val geschuetzt = behalten.toSet()
         val alle = alle()   // aelteste zuerst
         var ueberzaehlig = alle.size - maxDateien
+        var bytes = alle.sumOf { it.length() }
         for (datei in alle) {
-            if (ueberzaehlig <= 0) break
+            if (ueberzaehlig <= 0 && bytes <= maxBytes) break
             if (datei.name in geschuetzt) continue
+            bytes -= datei.length()
             datei.delete()
             ueberzaehlig--
         }
