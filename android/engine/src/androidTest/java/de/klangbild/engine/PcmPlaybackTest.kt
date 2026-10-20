@@ -87,6 +87,42 @@ class PcmPlaybackTest {
     }
 
     @Test
+    fun verwirftDenTitelSofort() {
+        val kontext = InstrumentationRegistry.getInstrumentation().targetContext
+        val ordner = File(kontext.cacheDir, "pcm-playback-verwerfen").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val cache = PcmCache(ordner)
+        val ton = FloatArray(4 * 44100 * 2) { i -> if (i % 2 == 0) 0.3f else -0.3f }
+        cache.anlegen(77, 0, 4 * 44100).use { it.schreibeBlock(ton, 2) }
+        cache.anlegen(78, 0, 44100).use { it.schreibeBlock(ton.copyOf(44100 * 2), 2) }
+        val autoDj = AutoDjPlayer(Player(cache), cache)
+        val blende = FloatArray(2 * 44100) { i -> if (i % 2 == 0) 0.1f else -0.1f }
+
+        assertTrue("startFile", autoDj.spiele(cache.datei(77, 0, 4 * 44100), 77))
+        try {
+            // Blende erst nach 4 s; verworfen wird nach 300 ms.
+            assertTrue("Blende anhaengen", autoDj.haengeBlendeAn(77, 78, blende, 4 * 44100, cache.datei(78, 0, 44100)))
+            Thread.sleep(300)
+            assertTrue("verwerfen", autoDj.verwerfen())
+
+            val spurBlende = AutoDjPlayer.blendeSpur(77, 78)
+            val werte = LongArray(NativeEngine.POLL_SIZE)
+            val frist = System.currentTimeMillis() + 2000
+            while (System.currentTimeMillis() < frist && werte[NativeEngine.POLL_FEEDER_SPUR] != spurBlende) {
+                Thread.sleep(50)
+                autoDj.aktualisiere()
+                NativeEngine.poll(werte)
+            }
+            assertEquals("Blende nicht sofort: ${werte.joinToString()}", spurBlende, werte[NativeEngine.POLL_FEEDER_SPUR])
+        } finally {
+            autoDj.zuruecksetzen()
+            NativeEngine.stop()
+        }
+    }
+
+    @Test
     fun ketteAutoDjMitGebackenerBlende() {
         val kontext = InstrumentationRegistry.getInstrumentation().targetContext
         val ordner = File(kontext.cacheDir, "pcm-playback-autodj").apply {

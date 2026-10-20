@@ -15,6 +15,7 @@ import java.io.File
 class AutoDjPlayer(private val player: Player, private val cache: PcmCache) {
 
     private var blendeSpur: Long = 0
+    private var blendePfad: String? = null
     private var blendeAktiv = false
     private var bPfad: String? = null
     private var bStart: Long = 0
@@ -45,6 +46,7 @@ class AutoDjPlayer(private val player: Player, private val cache: PcmCache) {
         val spur = blendeSpur(aId, bId)
         if (!NativeEngine.queueFile(ziel.absolutePath, 0, spur, abFrame)) return false
         blendeSpur = spur
+        blendePfad = ziel.absolutePath
         blendeAktiv = true
         bPfad = bCache.absolutePath
         bStart = bStartFrame
@@ -65,9 +67,22 @@ class AutoDjPlayer(private val player: Player, private val cache: PcmCache) {
         return angehaengt
     }
 
+    /**
+     * Verwirft den laufenden Titel: die Blende beginnt sofort an der aktuellen Position statt
+     * erst bei `abS` (harter Schnitt, wie beim Wegziehen einer Platte). `false`, wenn keine
+     * Blende wartet.
+     */
+    fun verwerfen(): Boolean {
+        if (!blendeAktiv) return false
+        val pfad = blendePfad ?: return false
+        val position = player.zustand().position
+        return NativeEngine.queueFile(pfad, 0, blendeSpur, position)
+    }
+
     /** Beim Stoppen oder Verwerfen: Blende und B vergessen. */
     fun zuruecksetzen() {
         blendeAktiv = false
+        blendePfad = null
         bPfad = null
     }
 
