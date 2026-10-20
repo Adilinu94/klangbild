@@ -66,6 +66,20 @@ class PcmCacheTest {
     }
 
     @Test
+    fun `finde liefert die neueste Datei eines Titels`() {
+        val cache = PcmCache(ordner, 8)
+        cache.anlegen(5, 0, 100).close()
+        cache.datei(5, 0, 100).setLastModified(1_600_000_000_000L)
+        cache.anlegen(5, 0, 200).close()
+        cache.datei(5, 0, 200).setLastModified(1_600_000_001_000L)
+        cache.anlegen(6, 0, 100).close()
+
+        assertEquals("5_0_200.pcm", cache.finde(5)?.name)
+        assertEquals("6_0_100.pcm", cache.finde(6)?.name)
+        assertTrue(cache.finde(9) == null)
+    }
+
+    @Test
     fun `behaltene Dateien bleiben`() {
         val cache = PcmCache(ordner, 4)
         for (i in 1..6) {

@@ -145,6 +145,11 @@ class PcmCache(val ordner: File, val maxDateien: Int = 4) {
     fun alle(): List<File> =
         ordner.listFiles { f -> f.isFile && f.name.endsWith(".pcm") }?.sortedBy { it.lastModified() } ?: emptyList()
 
+    /** Findet die neueste Cache-Datei eines Titels (Dateiname beginnt mit `<trackId>_`). */
+    fun finde(trackId: Int): File? =
+        ordner.listFiles { f -> f.isFile && f.name.startsWith("${trackId}_") && f.name.endsWith(".pcm") }
+            ?.maxByOrNull { it.lastModified() }
+
     /** Löscht die ältesten ungeschützten Dateien, bis nur noch [maxDateien] übrig sind. */
     fun aufraeumen(behalten: Collection<String> = emptyList()) {
         val geschuetzt = behalten.toSet()
