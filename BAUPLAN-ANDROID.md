@@ -1653,15 +1653,16 @@ keine Playlist.
 | Einstellungen | `einstellungen.aus_dict`, `regie_einst`, `AUSWAHL`, `TAKTE`, `GRENZEN` | `einstellungen_*` (129) |
 | Profil | `profil.Profil` mit allen abgeleiteten Reihen | `profil_synthetic_*` (3) |
 | Planer | `plan.rangliste`, `naechster`, `sortiere_alle` (ohne Paarnoten) | `rangliste_*` (3), `sortiere_332` (1) |
+| Regie-Kandidaten | `laengen`, `_takt_s`, `_fenster`, `_mittelgewicht`, `_a_kandidaten`, `_b_kandidaten`, `_b_index`, `_beatlos`, `_brueckenstart`, `_werte` | Fingerabdrücke aus `profil_synthetic_0/1` |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
-`./gradlew :core:test` grün (10 Tests, 140 Golden-Fälle).
+`./gradlew :core:test` grün (11 Tests, 140 Golden-Fälle plus Fingerabdrücke).
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| M7a | `regie.planen` mit `_rangliste`, `_grundwert`, `_bewerten`, `_rezept`, `_drop_*`, `_double_drops`, `_verpasst`, `_strukturfehler`, `_intro_loops`, `_bass_takt` | `regie_synthetic_*` (6) |
+| M7a | `regie.planen` selbst (Kandidaten und Grundfunktionen sind fertig) mit `_rangliste`, `_grundwert`, `_bewerten`, `_rezept`, `_drop_*`, `_double_drops`, `_verpasst`, `_strukturfehler`, `_intro_loops`, `_bass_takt` | `regie_synthetic_*` (6) |
 | M7b | `regie._loop_guete` (braucht Audio, ruft `loop_im_original` im Baker) | `loopguete_synthetic` (1) |
 | M7c | `plan.set_planen` mit Paarnoten und Energiebogen, `paarnoten` | — |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
