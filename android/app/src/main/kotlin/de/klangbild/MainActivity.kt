@@ -79,7 +79,7 @@ private fun Oberflaeche() {
         !erlaubt -> ZugriffBildschirm { frager.launch(erlaubnis()) }
         offen -> PlayerBildschirm(modell) { offen = false }
         else -> BibliothekBildschirm(titel, modell, onOeffnen = { t ->
-            modell.spiele(t)
+            modell.spiele(t, titel)
             offen = true
         })
     }

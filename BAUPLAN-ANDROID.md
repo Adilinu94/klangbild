@@ -1387,9 +1387,10 @@ WEITER und „anderer Übergang" je 5× ohne Abbruch.
 Mini-Player.**
 
 **Stand 20.10.2026:** T9.1 (Farb-Tokens, System-Monospace statt Doto/Space), T9.2
-(Bibliothek aus MediaStore mit Covern, Mini-Player, Player mit rotierender Scheibe und
-Segment-Fortschritt), T9.3a (Tippen auf den Segment-Fortschritt sucht) und T9.6 (Suche nach
-Titel/Interpret) stehen und sind auf dem Gerät geprüft. Der Decoder schreibt jetzt
+* (Bibliothek aus MediaStore mit Covern, Mini-Player, Player mit rotierender Scheibe,
+Segment-Fortschritt), T9.3a (RMS-Wellenform aus dem Cache, Tippen sucht), T9.6 (Suche nach
+Titel/Interpret) und fortlaufende Wiedergabe (am Titelende startet der naechste Titel der
+Liste, `NAECHST` im Player) stehen und sind auf dem Gerät geprüft. Der Decoder schreibt jetzt
 fortschreitend; die Wiedergabe startet nach der ersten Sekunde statt nach dem ganzen Titel
 (vorher OutOfMemoryError bei langen Stücken). Offen: T9.3b Cover-Pager, T9.4 Auto-DJ-Konsole,
 T9.5 Queue-Sheet, T9.7 Einstellungen, T9.8 Animationen. **T9.3a Laufende Wellenform mit Play-Knopf in der Mitte und

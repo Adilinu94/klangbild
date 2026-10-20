@@ -46,6 +46,8 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
                     gestartet = NativeEngine.startFile(ziel.absolutePath, 0, spurId, true)
                     if (gestartet) {
                         dateiWaechst = true
+                        aktuelleDatei = ziel
+                        aktuelleSpur = spurId
                         NativeEngine.setPlaying(true)
                     }
                 }
@@ -58,8 +60,6 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
         if (!gestartet) return starte(ziel, spurId, 0)
         NativeEngine.quelleFertig()
         dateiWaechst = false
-        aktuelleDatei = ziel
-        aktuelleSpur = spurId
         return true
     }
 

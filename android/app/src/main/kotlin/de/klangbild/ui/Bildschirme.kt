@@ -250,7 +250,7 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
             )
         }
 
-        Segmente(anteil, onSeek = { modell.springeZu(it) })
+        Wellen(modell.wellenform, anteil, onSeek = { modell.springeZu(it) })
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(zeitText(position), fontFamily = MONO, fontSize = 13.sp, color = Kb.TextHell)
             Text(zeitText(dauer), fontFamily = MONO, fontSize = 13.sp, color = Kb.TextMittel)
@@ -260,6 +260,7 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
             Knopf(if (modell.zustand.laeuft) "PAUSE" else "PLAY") {
                 if (modell.zustand.laeuft) modell.pause() else modell.weiter()
             }
+            Knopf("NAECHST") { modell.naechster() }
             Knopf("STOPP") { modell.stoppe() }
         }
         Text(
@@ -276,33 +277,33 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
     }
 }
 
-/** Segmentierter Fortschritt (Rev. 2): gespielt weiss, offen dunkel, 48 Segmente. Tippen sucht. */
+/**
+ * Wellenform-Seek (T9.3a): RMS-Segmente aus dem Cache, gespielt weiss, offen dunkel.
+ * Ohne Profil (noch nicht dekodiert) stehen alle Balken auf voller Hoehe.
+ */
 @Composable
-private fun Segmente(anteil: Float, anzahl: Int = 48, onSeek: ((Float) -> Unit)? = null) {
+private fun Wellen(form: FloatArray?, anteil: Float, onSeek: (Float) -> Unit) {
+    val anzahl = form?.size ?: 48
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(28.dp)
-            .then(
-                if (onSeek != null) {
-                    Modifier.pointerInput(Unit) {
-                        detectTapGestures { stelle ->
-                            onSeek((stelle.x / size.width).coerceIn(0f, 1f))
-                        }
-                    }
-                } else {
-                    Modifier
-                },
-            ),
+            .height(56.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { stelle ->
+                    onSeek((stelle.x / size.width).coerceIn(0f, 1f))
+                }
+            },
         horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom,
     ) {
         for (i in 0 until anzahl) {
-            val an = i / (anzahl - 1f) <= anteil
+            val hoehe = if (form != null) (0.12f + 0.88f * form[i]).coerceIn(0.08f, 1f) else 1f
+            val gespielt = i / (anzahl - 1f) <= anteil
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .background(if (an) Kb.Weiss else Kb.Raster),
+                    .fillMaxHeight(hoehe)
+                    .background(if (gespielt) Kb.Weiss else Kb.Raster),
             )
         }
     }
@@ -319,6 +320,6 @@ private fun RowScope.Knopf(text: String, breit: Boolean = true, onKlick: () -> U
             contentColor = Kb.TextHell,
         ),
     ) {
-        Text(text, fontFamily = MONO, fontSize = 13.sp)
+        Text(text, fontFamily = MONO, fontSize = 12.sp)
     }
 }

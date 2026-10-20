@@ -36,20 +36,60 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
     var fehler by mutableStateOf<String?>(null)
         private set
 
+    /** 64 RMS-Segmente des laufenden Titels (0..1), sobald der Cache vollstaendig ist. */
+    var wellenform by mutableStateOf<FloatArray?>(null)
+        private set
+
+    private var liste: List<Titel> = emptyList()
+    private var index = -1
+    private var amEnde = false
+
     init {
         viewModelScope.launch {
             while (true) {
                 zustand = player.zustand()
+                pruefeEnde()
                 delay(250)
             }
         }
     }
 
-    fun spiele(t: Titel) {
+    /** Am Titelende automatisch den naechsten der Liste starten (fortlaufende Wiedergabe). */
+    private fun pruefeEnde() {
+        val dauer = zustand.dauer
+        if (dauer <= 0 || !zustand.laeuft || laedt) return
+        if (zustand.position < dauer - 44100) {
+            amEnde = false
+            return
+        }
+        if (amEnde) return
+        amEnde = true
+        naechster()
+    }
+
+    fun naechster() {
+        if (liste.isEmpty()) return
+        index = (index + 1) % liste.size
+        spiele(liste[index])
+    }
+
+    fun vorheriger() {
+        if (liste.isEmpty()) return
+        index = (index - 1 + liste.size) % liste.size
+        spiele(liste[index])
+    }
+
+    fun spiele(t: Titel, alle: List<Titel> = emptyList()) {
         if (laedt) return
+        if (alle.isNotEmpty()) {
+            liste = alle
+            index = alle.indexOf(t)
+        }
+        amEnde = false
         laedt = true
         fehler = null
         titel = t
+        wellenform = null
         zustand = Player.Zustand(0, 0, 0, false, 0)
         viewModelScope.launch {
             val ok = try {
@@ -62,10 +102,34 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
             }
             if (ok) {
                 zustand = player.zustand()
+                wellenform = withContext(Dispatchers.Default) { forme(t.id) }
             } else if (this@Spielmodell.fehler == null) {
                 this@Spielmodell.fehler = "Titel laesst sich nicht oeffnen"
             }
             laedt = false
+        }
+    }
+
+    /** RMS-Kurve aus dem PCM-Cache (64 Segmente, auf das Maximum normiert). */
+    private fun forme(trackId: Long, anzahl: Int = 64): FloatArray? {
+        val datei = cache.finde(trackId.toInt()) ?: return null
+        val pcm = de.klangbild.core.PcmDatei.oeffnen(datei) ?: return null
+        return pcm.use {
+            val frames = it.frames()
+            if (frames <= 0) return@use null
+            val proTeil = (frames / anzahl).coerceAtLeast(1)
+            val werte = FloatArray(anzahl)
+            var maximum = 1e-6f
+            for (i in 0 until anzahl) {
+                val teil = it.lese(i * proTeil, proTeil)
+                var summe = 0.0
+                for (wert in teil) summe += wert * wert
+                val rms = kotlin.math.sqrt(summe / teil.size.coerceAtLeast(1)).toFloat()
+                werte[i] = rms
+                if (rms > maximum) maximum = rms
+            }
+            for (i in werte.indices) werte[i] = (werte[i] / maximum).coerceIn(0f, 1f)
+            werte
         }
     }
 
