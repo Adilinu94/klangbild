@@ -88,6 +88,13 @@ gtest_discover_tests(playback_core_test)
 # (src/main/cpp/dsp); die Liste steht in dsp/sources.cmake und dient beiden Builds.
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/dsp/sources.cmake)
 if(KLANGBILD_DSP_SOURCES)
+    set(KLANGBILD_SIGNALSMITH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/third_party/signalsmith-stretch)
+    if(NOT EXISTS ${KLANGBILD_SIGNALSMITH_DIR}/stretch/signalsmith-stretch.h)
+        message(FATAL_ERROR
+            "Signalsmith Stretch fehlt unter ${KLANGBILD_SIGNALSMITH_DIR}. Holen mit: "
+            "pip download python-stretch==0.3.1 --no-deps --no-binary :all: -d <tmp>, "
+            "dann include/stretch nach ${KLANGBILD_SIGNALSMITH_DIR}/stretch kopieren.")
+    endif()
     add_library(klangbild_dsp STATIC ${KLANGBILD_DSP_SOURCES})
     target_include_directories(klangbild_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../../main/cpp/third_party/signalsmith-stretch)

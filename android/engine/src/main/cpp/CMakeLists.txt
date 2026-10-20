@@ -40,6 +40,15 @@ endif()
 add_subdirectory(${KLANGBILD_OBOE_DIR} oboe-build)
 target_link_libraries(klangbild oboe)
 
+set(KLANGBILD_SIGNALSMITH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/signalsmith-stretch)
+if(NOT EXISTS ${KLANGBILD_SIGNALSMITH_DIR}/stretch/signalsmith-stretch.h)
+    message(FATAL_ERROR
+        "Signalsmith Stretch fehlt unter ${KLANGBILD_SIGNALSMITH_DIR}. Holen mit: "
+        "pip download python-stretch==0.3.1 --no-deps --no-binary :all: -d <tmp>, "
+        "dann include/stretch nach ${KLANGBILD_SIGNALSMITH_DIR}/stretch kopieren "
+        "(dieselbe Version wie die Desktop-Referenz).")
+endif()
+
 if(NOT DEFINED KLINGBILD_TEST)
     target_compile_options(klangbild PRIVATE
         -fvisibility=hidden

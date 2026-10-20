@@ -1658,10 +1658,16 @@ keine Playlist.
 **Reihenfolge-Hinweis (Stand 20.10.2026):** M5 und M6 sind fertig, `backen` läuft
 mit und ohne Keylock. `backen` wirft nur noch bei Stem-Übergängen (M11).
 
-**Signalsmith Stretch** liegt unter
-`android/engine/src/main/cpp/third_party/signalsmith-stretch` (MIT, Quelle aus dem
-python-stretch-0.3.1-Sdist, also dieselbe Version wie die Desktop-Referenz). Die
-Header werden über die CMake-Include-Pfade von Gerät und Host-Test gefunden.
+**Signalsmith Stretch** wird wie Oboe ausgeklont (Fremd-Quelle, nicht im Repo) und
+zwar in der Version des python-stretch-0.3.1-Sdists, also exakt die Desktop-Referenz:
+
+```
+pip download python-stretch==0.3.1 --no-deps --no-binary :all: -d <tmp>
+# entpacken, dann <tmp>/python-stretch-0.3.1/include/stretch
+# nach android/engine/src/main/cpp/third_party/signalsmith-stretch/stretch kopieren
+```
+
+Fehlt der Ordner, bricht CMake mit genau diesem Hinweis ab.
 
 **Eine bewusste Abweichung (20.10.2026):**
 
