@@ -8,6 +8,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.klangbild.bibliothek.Titel
 import de.klangbild.core.PcmCache
+import de.klangbild.core.PcmDatei
+import de.klangbild.core.TonartSchaetzung
 import de.klangbild.engine.AutoDjPlayer
 import de.klangbild.engine.Player
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +40,10 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
 
     /** 64 RMS-Segmente des laufenden Titels (0..1), sobald der Cache vollstaendig ist. */
     var wellenform by mutableStateOf<FloatArray?>(null)
+        private set
+
+    /** Tonart des laufenden Titels; null, solange die Analyse laeuft. */
+    var tonart by mutableStateOf<TonartSchaetzung.Tonart?>(null)
         private set
 
     private var liste: List<Titel> = emptyList()
@@ -90,6 +96,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
         fehler = null
         titel = t
         wellenform = null
+        tonart = null
         zustand = Player.Zustand(0, 0, 0, false, 0)
         viewModelScope.launch {
             val ok = try {
@@ -103,6 +110,13 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
             if (ok) {
                 zustand = player.zustand()
                 wellenform = withContext(Dispatchers.Default) { forme(t.id) }
+                val gefunden = withContext(Dispatchers.Default) {
+                    val datei = cache.finde(t.id.toInt()) ?: return@withContext null
+                    PcmDatei.oeffnen(datei)?.use { pcm ->
+                        TonartSchaetzung.schaetzen(TonartSchaetzung.chromaAusCache(pcm))
+                    }
+                }
+                if (titel?.id == t.id) tonart = gefunden
             } else if (this@Spielmodell.fehler == null) {
                 this@Spielmodell.fehler = "Titel laesst sich nicht oeffnen"
             }

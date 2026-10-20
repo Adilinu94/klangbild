@@ -248,6 +248,13 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
                 fontSize = 13.sp,
                 color = Kb.TextMittel,
             )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = modell.tonart?.let { "${it.name} · ${it.camelot}" } ?: "TONART …",
+                fontFamily = MONO,
+                fontSize = 11.sp,
+                color = if (modell.tonart != null) Kb.TextHell else Kb.TextDunkel,
+            )
         }
 
         Wellen(modell.wellenform, anteil, onSeek = { modell.springeZu(it) })

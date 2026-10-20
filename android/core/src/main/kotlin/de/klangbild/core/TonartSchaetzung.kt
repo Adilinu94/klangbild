@@ -85,8 +85,15 @@ object TonartSchaetzung {
     }
 
     /** Tonart und Modus; Standard ist das Ensemble-Profil. */
-    fun schaetzen(signal: FloatArray, rate: Int, profil: String = "ensemble"): Tonart {
-        val chroma = chroma(signal, rate)
+    fun schaetzen(signal: FloatArray, rate: Int, profil: String = "ensemble"): Tonart =
+        schaetzen(chroma(signal, rate), profil)
+
+    /**
+     * Tonart aus einem bereits berechneten Chroma. Damit kann der Aufrufer das Chroma
+     * blockweise aus dem PCM-Cache sammeln (siehe [chromaAusCache]), ohne den ganzen
+     * Titel als float-Array zu halten.
+     */
+    fun schaetzen(chroma: DoubleArray, profil: String = "ensemble"): Tonart {
         val (dur, moll) = when (profil) {
             "krumhansl" -> KRUMHANSL_DUR to KRUMHANSL_MOLL
             "aarden" -> AARDEN_DUR to AARDEN_MOLL
@@ -114,6 +121,45 @@ object TonartSchaetzung {
             vertrauen = minOf(1.0, abstand / 0.5),
             punkte = bester.first,
         )
+    }
+
+    /**
+     * Chroma direkt aus dem PCM-Cache, Rahmen fuer Rahmen (Speicher bleibt bei einem
+     * Rahmen). Gleiche Parameter wie [chroma]; der Cache ist Stereo/44,1 kHz.
+     */
+    fun chromaAusCache(pcm: PcmDatei, rate: Int = 44100, frame: Int = 8192, hop: Int = 2048): DoubleArray {
+        val frames = pcm.frames()
+        if (frames <= 0) return DoubleArray(12) { 1.0 / 12.0 }
+        val fenster = FloatArray(frame) { (0.5 - 0.5 * kotlin.math.cos(2.0 * Math.PI * it / (frame - 1))).toFloat() }
+        val anzahl = if (frames < frame) 1 else 1 + (frames - frame) / hop
+        val summe = DoubleArray(12)
+        val rahmen = DoubleArray(frame)
+
+        for (index in 0 until anzahl) {
+            val stereo = pcm.lese(index * hop, frame)
+            for (i in 0 until frame) {
+                val mono = (stereo[2 * i] + stereo[2 * i + 1]) / 2f
+                rahmen[i] = (mono * fenster[i]).toDouble()
+            }
+            val leistung = Fft.leistung(rahmen)
+            val beitrag = DoubleArray(12)
+            for (k in 0..frame / 2) {
+                val f = k * rate.toDouble() / frame
+                if (f < 65.0 || f > 2100.0) continue
+                val midi = 69.0 + 12.0 * log2(max(f, 1e-9) / 440.0)
+                var klasse = Math.rint(midi).toInt() % 12
+                if (klasse < 0) klasse += 12
+                beitrag[klasse] += leistung[k]
+            }
+            val teiler = beitrag.sum()
+            if (teiler > 0.0) for (k in 0 until 12) beitrag[k] /= teiler
+            for (k in 0 until 12) summe[k] += beitrag[k]
+        }
+
+        val gesamt = summe.sum()
+        if (gesamt <= 0.0) return DoubleArray(12) { 1.0 / 12.0 }
+        for (k in 0 until 12) summe[k] /= gesamt
+        return summe
     }
 
     /** Nachbarn auf dem Camelot-Rad (gleiche Nummer ±1 und Moduswechsel). */
