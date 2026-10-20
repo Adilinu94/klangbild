@@ -1643,7 +1643,7 @@ keine Playlist.
 | M6.3 | `_warp_keylock` mit Signalsmith Stretch und WSOLA-Nähten | `dsp/warp_keylock.*`, `dsp/stretch.*` |
 | M6.5 | `backen` ohne Stems | `dsp/backen.*` |
 
-**Teststand 20.10.2026:** `dsp_golden_test` 51/51 grün, `playback_core_test`
+**Teststand 20.10.2026:** `dsp_golden_test` 52/52 grün, `playback_core_test`
 18/18 grün, `klangbild_hosttest` (Golden-Leser) 6/6 grün.
 
 **Kotlin `:core` (M7, Stand 20.10.2026):**
@@ -1664,7 +1664,6 @@ keine Playlist.
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| M7b | `regie._loop_guete` (braucht Audio, ruft `loop_im_original` im Baker) | `loopguete_synthetic` (1) |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
 | M7e | `paarnoten` (Cache und CLI) und `live.sortieren`-Verdrahtung | — |
 | M8 | `live._auto_backen`, `_autodj_wahl`, Energiebogen, Lernen, Dubletten | — |
@@ -1696,15 +1695,15 @@ Fehlt der Ordner, bricht CMake mit genau diesem Hinweis ab.
 
 - **362 Fälle**, 484 Dateien (mit `.f32`). Erzeugt aus dem Desktop-Stand
   `040887f` (Runden 18/19).
-- In C++ wirklich nachgerechnet werden **rund 188**: `reader_dummy`,
+- In C++ wirklich nachgerechnet werden **rund 189**: `reader_dummy`,
   `kurven_basis`, `kurven_*` (19), `band_*` (7), `mischen_*` (15),
   `huellen_*` (83), `sweep_*` (4), `nass_*` (9), `deckeln_*` (3), `limiter_*`
-  (5), `loop_*` (7), `loopwahl_*` (3), `introloop_*` (2), `eigen_*` (14),
-  `regulaer_*` (4), `ausstieg_*` (3), `einstieg_*` (2), `backen_*` (4),
-  `warp_vinyl` und `warp_keylock` (2). Der Rest, **rund 174 Fälle**, wird nur
-  geparst. Besonders betroffen: `einstellungen_*` (129), `key_*` (12),
-  `regie_*` (6), `profil_*` (4), `pruefen_*` (4), `rangliste_*` (3),
-  `energie_*`/`lufs_*`/`welle_*`/`hash_*` (12).
+  (5), `loop_*` (7), `loopwahl_*` (3), `loopguete_synthetic` (1), `introloop_*`
+  (2), `eigen_*` (14), `regulaer_*` (4), `ausstieg_*` (3), `einstieg_*` (2),
+  `backen_*` (4), `warp_vinyl` und `warp_keylock` (2). In Kotlin dazu 146
+  (Einstellungen 129, Profil 3, Planer 4, Regie 6, Selbstkontrolle 4).
+  Offen sind die Analyse-Fälle: `key_*` (12), `lufs_*` (3), `energie_*` (3),
+  `welle_*` (3), `hash_*` (3), `profil_berechnen` (1), `beatthis_synthetic` (1).
 - Die `.f32`-Referenzarrays sind per `.gitignore` ausgeschlossen (118 Dateien
   lokal, 1 im Repo). **In einem frischen Clone überspringen sich die meisten
   DSP-Tests selbst.** Vor dem Testlauf einmal exportieren:

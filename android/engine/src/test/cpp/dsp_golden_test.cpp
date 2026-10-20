@@ -1260,6 +1260,21 @@ TEST(DspLoopChoice, LoopInOriginalKnownValuesFromPrototype) {
     EXPECT_DOUBLE_EQ(gesperrt.quality, 0.0);
 }
 
+// `regie._loop_guete`: dieselbe Wahl auf A's Originalaudio (hier ohne Stems, also ohne Gesangssperre).
+TEST(DspLoopChoice, LoopGueteMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const GoldenCase c = g.case_of("loopguete_synthetic");
+    const auto audio = floatsOf(g, c.inputs.at("a_audio"));
+    const auto takte = c.inputs.at("pa").at("takte").numbers();
+    const int i = static_cast<int>(c.inputs.at("i").as_double());
+    const int L = static_cast<int>(c.inputs.at("L").as_double());
+    const int rate = static_cast<int>(c.inputs.at("rate").as_double());
+    const auto wahl = klangbild::dsp::loopInOriginal(audio, takte, i, L, std::nullopt, rate);
+    ASSERT_EQ(c.tolerance, "values");
+    EXPECT_NEAR(wahl.quality, c.expected.as_double(), 1e-6);
+}
+
 // ============================== T5.10 Intro-Loop ================================================
 
 TEST(DspIntroLoop, IntroLoopMatchesGolden) {
