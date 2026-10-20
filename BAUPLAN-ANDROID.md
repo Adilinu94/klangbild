@@ -857,6 +857,7 @@ ML-Portierung. Erst danach analysiert das Handy selbst.
 |---|---|---|---|
 | Dekodieren | `audioio.decodieren` | `Decoder` (§5.5), Mono = Mittel L/R | 22 050 mono und 44 100 stereo in einem Durchgang |
 | Mindestlänge 25 s | `config.MIN_SEKUNDEN` | sonst `status="zu_kurz"` | — |
+| Beat This! | `engine/BeatThis.kt`: Mel-Spektrogramm aus `core/Mel.kt`, ONNX (final0) aus dem Asset, Chunks 1500/6 mit Nullrand, Zusammenführung keep_first, Max-Pool 7, Schwelle 0, Downbeats auf den nächsten Beat | Gerätetest 120-BPM-Metronom |
 | Tonart | `keyestimate.tonart_schaetzen` (Ensemble-Profil) | C++-Port, Golden-Test | 22 050 |
 | LUFS, True Peak | `lufs.integrierte_lautheit`, `lufs.true_peak_dbtp` | C++-Port von `lufs.py` (Filter-Koeffizienten aus dem Python-Code) | 22 050 |
 | Energie, Abschnitte | `energy.rms_kurve`, `energy.abschnitte` | C++-Port | 22 050 |
@@ -1680,6 +1681,7 @@ keine Playlist.
 | Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke, **fortschreitend**); Wiedergabe startet nach der ersten Sekunde Cache | Gerätetest grün |
 | Taktraster | `core/Taktraster.kt`: `uebergang.regulaer`/`taktraster` (Tempo, Modus der Schlaglage, Eins aus der Downbeat-Mehrheit, ±16 s Drift, Fein-Anker) | 4 Golden-Fälle |
 | Profil-Bau | `core/ProfilBau.kt`: Bandtrennung wie scipy (Butterworth 4. Ordnung, SOS, Vorwärts-/Rückwärtsfilter), Pegel je Takt, Chroma je Takt (FFT 8192, Hann, 65–2100 Hz), Raster aus den Downbeats | Golden `profil_berechnen` |
+| Beat This! | `engine/BeatThis.kt`: Mel-Spektrogramm aus `core/Mel.kt`, ONNX (final0) aus dem Asset, Chunks 1500/6 mit Nullrand, Zusammenführung keep_first, Max-Pool 7, Schwelle 0, Downbeats auf den nächsten Beat | Gerätetest 120-BPM-Metronom |
 | Tonart | `core/TonartSchaetzung.kt`: Chroma (FFT 8192, Hop 2048, Rahmen normiert), Pearson-Korrelation mit 24 rotierten Profilen (Krumhansl/Aarden/Temperley/Ensemble), Camelot-Nachbarn; `chromaAusCache` liest blockweise aus dem PCM-Cache | 12 Golden-Fälle + Kammerton-Test |
 | Mel (Beat This!) | `core/Mel.kt`: mono 22,05 kHz, n_fft 1024, Hop 441, periodisches Hann, Betrag/√1024, 128 Slaney-Bänder 30–11 000 Hz, `log1p(1000·E)`; Python-Referenz nach `beat_this_cpp` | Golden (151×128, 1e-4) |
 | Welle | `core/Welle.kt`: STFT 1024/Hop 220, `peak` ungefenstert, r/g/b-Bänder mit gemeinsamem 99-%-Bezug | 3 Golden-Fälle |
