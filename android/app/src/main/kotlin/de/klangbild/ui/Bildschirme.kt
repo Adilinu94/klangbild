@@ -2,6 +2,7 @@ package de.klangbild.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,12 +18,20 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +55,13 @@ fun BibliothekBildschirm(
     modell: Spielmodell,
     onOeffnen: (Titel) -> Unit,
 ) {
+    var suche by remember { mutableStateOf("") }
+    val gefiltert = remember(titel, suche) {
+        if (suche.isBlank()) titel
+        else titel.filter {
+            it.titel.contains(suche, ignoreCase = true) || it.kuenstler.contains(suche, ignoreCase = true)
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -57,16 +73,32 @@ fun BibliothekBildschirm(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("ALLE TITEL", fontFamily = MONO, fontSize = 11.sp, color = Kb.TextMittel)
                 Text(
-                    text = String.format(Locale.US, "%d", titel.size),
+                    text = String.format(Locale.US, "%d", gefiltert.size),
                     fontFamily = MONO,
                     fontSize = 11.sp,
                     color = Kb.TextMittel,
                 )
             }
+            BasicTextField(
+                value = suche,
+                onValueChange = { suche = it },
+                singleLine = true,
+                textStyle = TextStyle(color = Kb.TextHell, fontFamily = MONO, fontSize = 14.sp),
+                cursorBrush = SolidColor(Kb.Rot),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                decorationBox = { innen ->
+                    if (suche.isEmpty()) {
+                        Text("SUCHE", fontFamily = MONO, fontSize = 12.sp, color = Kb.TextDunkel)
+                    }
+                    innen()
+                },
+            )
         }
         Kopfzeile()
         LazyColumn(modifier = Modifier.weight(1f)) {
-            itemsIndexed(titel) { index, t ->
+            itemsIndexed(gefiltert) { index, t ->
                 Zeile(index + 1, t) { onOeffnen(t) }
             }
         }
@@ -148,6 +180,7 @@ private fun MiniPlayer(modell: Spielmodell, onOeffnen: (Titel) -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            CoverBild(t, 36.dp, modifier = Modifier.padding(end = 12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(t.titel, fontFamily = MONO, fontSize = 13.sp, color = Kb.TextHell, maxLines = 1)
                 Text(t.kuenstler, fontFamily = MONO, fontSize = 10.sp, color = Kb.TextMittel, maxLines = 1)
@@ -205,6 +238,8 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
                 fontFamily = MONO,
                 fontSize = 30.sp,
                 color = Kb.Weiss,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(6.dp))
             Text(
@@ -215,7 +250,7 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
             )
         }
 
-        Segmente(anteil)
+        Segmente(anteil, onSeek = { modell.springeZu(it) })
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(zeitText(position), fontFamily = MONO, fontSize = 13.sp, color = Kb.TextHell)
             Text(zeitText(dauer), fontFamily = MONO, fontSize = 13.sp, color = Kb.TextMittel)
@@ -241,11 +276,24 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
     }
 }
 
-/** Segmentierter Fortschritt (Rev. 2): gespielt weiss, offen dunkel, 48 Segmente. */
+/** Segmentierter Fortschritt (Rev. 2): gespielt weiss, offen dunkel, 48 Segmente. Tippen sucht. */
 @Composable
-private fun Segmente(anteil: Float, anzahl: Int = 48) {
+private fun Segmente(anteil: Float, anzahl: Int = 48, onSeek: ((Float) -> Unit)? = null) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(28.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .then(
+                if (onSeek != null) {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures { stelle ->
+                            onSeek((stelle.x / size.width).coerceIn(0f, 1f))
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         for (i in 0 until anzahl) {

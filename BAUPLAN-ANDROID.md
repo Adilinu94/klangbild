@@ -1386,12 +1386,13 @@ WEITER und „anderer Übergang" je 5× ohne Abbruch.
 **T9.1 Theme, Fonts, Tokens** (DIRECTION.md). **T9.2 Bibliothek + Alle Titel +
 Mini-Player.**
 
-**Stand 20.10.2026:** T9.1 (Farb-Tokens, System-Monospace statt Doto/Space) und T9.2
+**Stand 20.10.2026:** T9.1 (Farb-Tokens, System-Monospace statt Doto/Space), T9.2
 (Bibliothek aus MediaStore mit Covern, Mini-Player, Player mit rotierender Scheibe und
-Segment-Fortschritt) stehen und sind auf dem Gerät geprüft. Der Decoder schreibt jetzt
+Segment-Fortschritt), T9.3a (Tippen auf den Segment-Fortschritt sucht) und T9.6 (Suche nach
+Titel/Interpret) stehen und sind auf dem Gerät geprüft. Der Decoder schreibt jetzt
 fortschreitend; die Wiedergabe startet nach der ersten Sekunde statt nach dem ganzen Titel
 (vorher OutOfMemoryError bei langen Stücken). Offen: T9.3b Cover-Pager, T9.4 Auto-DJ-Konsole,
-T9.5 Queue-Sheet, T9.6 Suche, T9.7 Einstellungen, T9.8 Animationen. **T9.3a Laufende Wellenform mit Play-Knopf in der Mitte und
+T9.5 Queue-Sheet, T9.7 Einstellungen, T9.8 Animationen. **T9.3a Laufende Wellenform mit Play-Knopf in der Mitte und
 Wisch-Seek** (§8.4 A). **T9.3b Cover-Pager mit 3D-Ausblendung** (§8.4 B,
 inkl. Rückkopplungs-Regeln). **T9.4 Auto-DJ-Konsole mit
 Deck-Ansicht und Kurven.** **T9.5 Queue-Sheet.** **T9.6 Suche.** **T9.7

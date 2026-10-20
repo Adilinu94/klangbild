@@ -80,9 +80,13 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
 
     /** Springt an die Stelle [anteil] (0..1) des laufenden Titels. */
     fun springeZu(anteil: Float) {
-        if (zustand.dauer <= 0) return
-        val ziel = (zustand.dauer * anteil.coerceIn(0f, 1f)).toLong()
-        player.springeZu(ziel)
+        val dauer = if (zustand.dauer > 0) {
+            zustand.dauer
+        } else {
+            (titel?.dauerMs ?: 0L) * 44100L / 1000L
+        }
+        if (dauer <= 0) return
+        player.springeZu((dauer * anteil.coerceIn(0f, 1f)).toLong())
     }
 
     /** Position und Dauer in Sekunden; vor dem ersten Block zaehlt die MediaStore-Dauer. */

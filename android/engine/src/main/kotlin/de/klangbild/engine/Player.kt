@@ -24,6 +24,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
     private var dauer: Long = 0
     private var aktuelleDatei: File? = null
     private var aktuelleSpur: Long = 0
+    private var dateiWaechst = false
 
     /**
      * Spielt [datei] ab [startFrame]. Beim ersten Mal wird dekodiert; die Wiedergabe startet
@@ -43,7 +44,10 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
             decoder.dekodiere(datei, cache, spurId.toInt(), beiBlock = { frames ->
                 if (!gestartet && frames >= 44100) {
                     gestartet = NativeEngine.startFile(ziel.absolutePath, 0, spurId, true)
-                    if (gestartet) NativeEngine.setPlaying(true)
+                    if (gestartet) {
+                        dateiWaechst = true
+                        NativeEngine.setPlaying(true)
+                    }
                 }
             })
         } catch (_: Throwable) {
@@ -53,6 +57,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
         dauer = ergebnis.frames.toLong()
         if (!gestartet) return starte(ziel, spurId, 0)
         NativeEngine.quelleFertig()
+        dateiWaechst = false
         aktuelleDatei = ziel
         aktuelleSpur = spurId
         return true
@@ -62,6 +67,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
     private fun starte(datei: File, spurId: Long, startFrame: Long): Boolean {
         if (!NativeEngine.startFile(datei.absolutePath, startFrame, spurId, false)) return false
         NativeEngine.setPlaying(true)
+        dateiWaechst = false
         aktuelleDatei = datei
         aktuelleSpur = spurId
         return true
@@ -70,7 +76,9 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
     /** Springt im laufenden Titel an [frame] (Flush, Warteschlange wird verworfen). */
     fun springeZu(frame: Long): Boolean {
         val datei = aktuelleDatei ?: return false
-        if (!NativeEngine.startFile(datei.absolutePath, frame.coerceAtLeast(0), aktuelleSpur, false)) return false
+        if (!NativeEngine.startFile(datei.absolutePath, frame.coerceAtLeast(0), aktuelleSpur, dateiWaechst)) {
+            return false
+        }
         NativeEngine.setPlaying(true)
         return true
     }
