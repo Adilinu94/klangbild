@@ -1664,6 +1664,7 @@ keine Playlist.
 | JNI-Bäcker | `BakePlan` (§4.5-JSON), `NativeBaker`, `NativeEngine.bake/bakeAudio/bakeInfo/releaseBake` | Plan-JSON und Info-Felder |
 | PCM-Cache | §4.3: Kopf `KBPC`, int16, fortschreitendes Schreiben, LRU (4 Dateien) | Rundlauf, LRU |
 | Decoder-Bausteine | §4.3: PCM16/float → float, auf Stereo, lineares Resampling (ADR-014) | Tests |
+| Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke) | baut für beide ABIs, Gerätetest offen |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
 `./gradlew :core:test` grün (37 Tests, 146 Golden-Fälle plus Fingerabdrücke).
@@ -1672,7 +1673,7 @@ keine Playlist.
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| M2 | Decoder (MediaCodec) und Timeline/Feeder; PCM-Cache und Konverter (PCM16/float, Stereo, Resampling) stehen | — |
+| M2 | Timeline/Feeder und Limiter im Decoder; MediaCodec-Decoder, PCM-Cache und Konverter stehen | — |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
 | M8c | Vorschau, `weiter` im Auto-DJ und Verwerfen im Player (Warteschlange und Lernen sind fertig) | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |
