@@ -1671,13 +1671,13 @@ keine Playlist.
 `./gradlew :core:test` grün (37 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 **Gerätetests (20.10.2026, Xiaomi 21081111RG, Android 14):**
-`./gradlew :engine:connectedDebugAndroidTest --no-configuration-cache` grün (2/2):
+`am instrument` grün (3/3):
 - `DecoderTest.dekodiertWavInDenCache`: WAV mit bekanntem Inhalt → PCM-Cache, Werte stimmen.
 - `JniBakeTest.backtUeberJni`: synthetischer Übergang über `NativeEngine.bake`, Info `sync:true`,
   Audio kommt zurück. Die .so lädt auf dem Gerät, der Vertrag hält.
-- `PcmPlaybackTest.spieltPcmCacheUeberOboe` (vorbereitet): PCM-Cache → `startFile` → Callback liest,
-  `poll` meldet Spur und Feeder-Position. Das Handy verweigert gerade die Neuinstallation
-  (`INSTALL_FAILED_USER_RESTRICTED`); Test liegt bereit.
+- `PcmPlaybackTest.spieltPcmCacheUeberOboe`: PCM-Cache → `NativeEngine.startFile` → Oboe-Callback
+  liest Frames, `poll` meldet Spur 77 und eine Feeder-Position > 0. Die Wiedergabekette steht
+  damit auf echter Hardware.
 
 Fällt die Installation mit `INSTALL_FAILED_USER_RESTRICTED` aus (MIUI), in den Entwickleroptionen
 „Installieren über USB“ einschalten und den Dialog am Handy bestätigen; zusätzlich hilft
