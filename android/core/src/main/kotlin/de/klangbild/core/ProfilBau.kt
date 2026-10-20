@@ -155,60 +155,6 @@ object ProfilBau {
         }
     }
 
-    /** Iterative Radix-2-FFT; liefert das Betragsquadrat der positiven Frequenzen. */
-    private object Fft {
-        fun leistung(rahmen: DoubleArray): DoubleArray {
-            val n = rahmen.size
-            val re = rahmen.copyOf()
-            val im = DoubleArray(n)
-
-            var j = 0
-            for (i in 1 until n) {
-                var bit = n shr 1
-                while (j and bit != 0) {
-                    j = j xor bit
-                    bit = bit shr 1
-                }
-                j = j xor bit
-                if (i < j) {
-                    val tr = re[i]; re[i] = re[j]; re[j] = tr
-                    val ti = im[i]; im[i] = im[j]; im[j] = ti
-                }
-            }
-
-            var laenge = 2
-            while (laenge <= n) {
-                val winkel = -2.0 * Math.PI / laenge
-                val wr = kotlin.math.cos(winkel)
-                val wi = kotlin.math.sin(winkel)
-                var i = 0
-                while (i < n) {
-                    var cr = 1.0
-                    var ci = 0.0
-                    for (k in 0 until laenge / 2) {
-                        val aR = re[i + k]
-                        val aI = im[i + k]
-                        val bR = re[i + k + laenge / 2]
-                        val bI = im[i + k + laenge / 2]
-                        val vR = bR * cr - bI * ci
-                        val vI = bR * ci + bI * cr
-                        re[i + k] = aR + vR
-                        im[i + k] = aI + vI
-                        re[i + k + laenge / 2] = aR - vR
-                        im[i + k + laenge / 2] = aI - vI
-                        val nr = cr * wr - ci * wi
-                        ci = cr * wi + ci * wr
-                        cr = nr
-                    }
-                    i += laenge
-                }
-                laenge = laenge shl 1
-            }
-
-            return DoubleArray(n / 2 + 1) { k -> re[k] * re[k] + im[k] * im[k] }
-        }
-    }
-
     // --- scipy-Nachbau: sosfiltfilt ------------------------------------------------
 
     private fun filtfilt(sos: Array<DoubleArray>, x: FloatArray): FloatArray {
@@ -216,8 +162,8 @@ object ProfilBau {
         if (x.size <= rand) return kausal(sos, x)
 
         val ext = DoubleArray(x.size + 2 * rand)
-        var erster = x[0].toDouble()
-        var letzter = x[x.size - 1].toDouble()
+        val erster = x[0].toDouble()
+        val letzter = x[x.size - 1].toDouble()
         for (i in 0 until rand) {
             ext[i] = 2.0 * erster - x[rand - i].toDouble()
             ext[rand + x.size + i] = 2.0 * letzter - x[x.size - 2 - i].toDouble()
@@ -291,4 +237,5 @@ object ProfilBau {
         }
         return zi
     }
+
 }
