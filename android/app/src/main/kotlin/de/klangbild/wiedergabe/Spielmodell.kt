@@ -67,6 +67,10 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
     var uebergang by mutableStateOf<Uebergang?>(null)
         private set
 
+    /** Laeuft gerade die Vorbereitung des Zieltitels (Dekodieren und Analysieren)? */
+    var bereitetVor by mutableStateOf(false)
+        private set
+
     private var liste: List<Titel> = emptyList()
     private var index = -1
     private var amEnde = false
@@ -249,7 +253,14 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
         if (liste.isEmpty() || index < 0) return
         val ziel = liste[(index + 1) % liste.size]
         if (ziel.id == titel?.id) return
-        viewModelScope.launch { plane(ziel) }
+        bereitetVor = true
+        viewModelScope.launch {
+            try {
+                plane(ziel)
+            } finally {
+                bereitetVor = false
+            }
+        }
     }
 
     /**

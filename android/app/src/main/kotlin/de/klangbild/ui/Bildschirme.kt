@@ -280,6 +280,14 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
             Knopf("PLAN") { modell.planeNaechsten() }
             Knopf("WEG") { modell.verwerfeUebergang() }
         }
+        if (modell.bereitetVor) {
+            Text(
+                text = "ZIEL WIRD ANALYSIERT …",
+                fontFamily = MONO,
+                fontSize = 10.sp,
+                color = Kb.TextMittel,
+            )
+        }
         modell.uebergang?.let { u ->
             Text(
                 text = String.format(
