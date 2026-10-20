@@ -1610,10 +1610,11 @@ Zahlen liefert und 1 h ohne Aussetzer läuft.
 
 ### 17.1 Kurzfassung
 
-Android kann noch **keinen Auto-DJ**. Fertig sind der Abspielkern (T1.1/T1.2) und
-alle DSP-Bausteine aus M5 (T5.1 bis T5.12) sowie `warp` ohne Keylock (T6.2), alle
-gegen Python-Golden geprüft. Es fehlen noch `backen`, die Regie, die Titelwahl,
-die Oberfläche, die Analyse und die Stems.
+Android kann noch **keinen Auto-DJ**. Fertig sind der Abspielkern (T1.1/T1.2), alle
+DSP-Bausteine aus M5 (T5.1 bis T5.12), `warp` ohne Keylock (T6.2), Raster/Ausstieg/
+Einstieg (M6.4), der Limiter und `backen` ohne Stems und ohne Keylock (M6.5), alle
+gegen Python-Golden geprüft. Es fehlen noch Keylock (M6.3), die Regie, die
+Titelwahl, die Oberfläche, die Analyse und die Stems.
 
 Die App selbst ist weiterhin der Diagnose-Screen „GERÜST · M0" und spielt einen
 440-Hz-Testsinus. Es gibt fünf Kotlin-Dateien, keine Bibliothek, keinen Service,
@@ -1637,26 +1638,28 @@ keine Playlist.
 | T5.11 | `mischen_eigen` und alle Trick-Audio-Pfade | `dsp/mischen_eigen.*`, `dsp/tricks.*` |
 | T5.12 | `kurven`, `kurven_eigen`, `_loop_plan` | `dsp/automation.*` |
 | T6.2 | `warp` ohne Keylock (lineares Resampling je Takt) | `dsp/warp.*`, `dsp/resample.*` |
+| T5.7b | `_begrenzen` (Limiter) | `dsp/limiter.*`, `dsp/filter1d.h` |
+| M6.4 | `_ext`, `raster`, `regulaer`, `taktraster`, `_periode`, `ausstieg`, `einstieg`, `Spur` | `dsp/raster.*` |
+| M6.5 | `backen` ohne Stems und ohne Keylock | `dsp/backen.*` |
 
-**Teststand 20.10.2026:** `dsp_golden_test` 44/44 grün, `playback_core_test`
+**Teststand 20.10.2026:** `dsp_golden_test` 50/50 grün, `playback_core_test`
 18/18 grün, `klangbild_hosttest` (Golden-Leser) 6/6 grün.
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| M6.3 | `_warp_keylock`, Signalsmith Stretch | `warp_keylock` |
-| M6.4 | `regulaer`, `raster`, `_periode`, `ausstieg`, `einstieg`, `Spur` | `regulaer_*`, `ausstieg_*`, `einstieg_*` |
-| M6.5 | `backen` komplett | `backen_*` |
+| M6.3 | `_warp_keylock`, Signalsmith Stretch | `warp_keylock`, `backen_keylock` |
 | M7 | `regie.planen`, `_rezept`, `_rangliste`, `pruefen`, `plan.sortiere_alle`, `paarnoten` | `regie_*`, `pruefen_*`, `rangliste_*`, `sortiere_332` |
 | M8 | `live._auto_backen`, `_autodj_wahl`, Energiebogen, Lernen, Dubletten | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_*`, `beatthis_synthetic` |
 | M11 | Stems | — |
 
-**Reihenfolge-Hinweis (Stand 20.10.2026):** M5 ist vollständig. `_loopen` ruft bei
-Tempo-Rampe `warp` auf; der lineare Warp-Zweig (T6.2) liegt vor, der
-Keylock-Zweig fehlt noch. Deshalb sind `warp_keylock` und `backen_keylock`
-noch nicht prüfbar.
+**Reihenfolge-Hinweis (Stand 20.10.2026):** M5 und M6.4/M6.5 sind fertig.
+`_loopen` und `backen` rufen bei Tempo-Rampe `warp` auf; der lineare Zweig (T6.2)
+liegt vor, der Keylock-Zweig fehlt noch. Deshalb sind `warp_keylock` und
+`backen_keylock` noch nicht prüfbar. `backen` wirft ausserdem bei
+Stem-Übergängen (M11).
 
 **Zwei bewusste Abweichungen (20.10.2026):**
 
@@ -1672,14 +1675,15 @@ noch nicht prüfbar.
 
 - **362 Fälle**, 484 Dateien (mit `.f32`). Erzeugt aus dem Desktop-Stand
   `040887f` (Runden 18/19).
-- In C++ wirklich nachgerechnet werden **rund 169**: `reader_dummy`,
+- In C++ wirklich nachgerechnet werden **rund 186**: `reader_dummy`,
   `kurven_basis`, `kurven_*` (19), `band_*` (7), `mischen_*` (15),
-  `huellen_*` (83), `sweep_*` (4), `nass_*` (9), `deckeln_*` (3), `loop_*` (7),
-  `loopwahl_*` (3), `introloop_*` (2), `eigen_*` (14), `warp_vinyl` (1). Der
-  Rest, **rund 193 Fälle**, wird nur geparst.
+  `huellen_*` (83), `sweep_*` (4), `nass_*` (9), `deckeln_*` (3), `limiter_*`
+  (5), `loop_*` (7), `loopwahl_*` (3), `introloop_*` (2), `eigen_*` (14),
+  `regulaer_*` (4), `ausstieg_*` (3), `einstieg_*` (2), `backen_*` (3),
+  `warp_vinyl` (1). Der Rest, **rund 176 Fälle**, wird nur geparst.
   Besonders betroffen: `einstellungen_*` (129), `key_*` (12), `regie_*` (6),
-  `limiter_*` (5), `regulaer_*`/`ausstieg_*`/`einstieg_*` (9), `backen_*` (4),
-  `warp_keylock` (1).
+  `profil_*` (4), `pruefen_*` (4), `rangliste_*` (3), `energie_*`/`lufs_*`/
+  `welle_*`/`hash_*` (12), `warp_keylock` und `backen_keylock` (2).
 - Die `.f32`-Referenzarrays sind per `.gitignore` ausgeschlossen (118 Dateien
   lokal, 1 im Repo). **In einem frischen Clone überspringen sich die meisten
   DSP-Tests selbst.** Vor dem Testlauf einmal exportieren:

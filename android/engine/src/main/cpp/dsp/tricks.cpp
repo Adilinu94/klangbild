@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "dsp/effects.h"
+#include "dsp/filter1d.h"
 #include "dsp/filters.h"   // Sos, sosfiltBlock
 #include "dsp/mixing.h"    // kChannels, kRate
 #include "dsp/sweep.h"
@@ -20,28 +21,6 @@ constexpr std::size_t ch = static_cast<std::size_t>(kChannels);
 long long runde(double v) { return static_cast<long long>(std::nearbyint(v)); }
 
 std::vector<float> kopie(std::span<const float> a) { return std::vector<float>(a.begin(), a.end()); }
-
-/// `scipy.ndimage.uniform_filter1d(g, size)` mit mode="reflect" (Halb-Sample-Symmetrie: der Rand
-/// wird gespiegelt und dabei wiederholt).
-std::vector<float> uniformFilter1d(std::vector<float> g, int size) {
-    const int n = static_cast<int>(g.size());
-    std::vector<float> aus(g.size());
-    if (n == 0) return aus;
-    const int halb = size / 2;
-    const int periode = 2 * n;
-    const auto index = [n, periode](int i) {
-        if (n == 1) return 0;
-        int k = i % periode;
-        if (k < 0) k += periode;
-        return k < n ? k : periode - 1 - k;
-    };
-    for (int i = 0; i < n; ++i) {
-        double summe = 0.0;
-        for (int j = -halb; j <= halb; ++j) summe += static_cast<double>(g[static_cast<std::size_t>(index(i + j))]);
-        aus[static_cast<std::size_t>(i)] = static_cast<float>(summe / static_cast<double>(size));
-    }
-    return aus;
-}
 
 }  // namespace
 
@@ -211,7 +190,7 @@ std::vector<float> gate(std::span<const float> a, std::span<const double> taktN)
         }
     }
     const int fenster = static_cast<int>(0.002 * static_cast<double>(kRate)) | 1;
-    g = uniformFilter1d(std::move(g), fenster);
+    g = uniformFilter1d(g, fenster);
     for (long long i = 0; i < frames; ++i) {
         for (std::size_t c = 0; c < ch; ++c) {
             const std::size_t idx = static_cast<std::size_t>(i) * ch + c;

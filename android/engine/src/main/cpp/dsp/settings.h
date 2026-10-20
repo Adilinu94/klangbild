@@ -25,6 +25,16 @@ struct Settings {
     int loopIn = 0;                   // loop_ein: B-Intro-Schleife, Takte
     int loopInTimes = 0;              // loop_ein_mal: Wiederholungen
     bool keylock = true;              // keylock: Tonhoehe halten beim Dehnen (Warp/Loop)
+    std::string ausstieg = "outro";   // ausstieg: outro, phrase, vor_ende
+    int vorEndeTakte = 16;            // vor_ende_takte
+    std::string einstieg = "intro";   // einstieg: intro, drop
+    std::string weiterAb = "phrase";  // weiter_ab: takt, phrase
+    int takte = 16;                   // takte: Laenge der Blende
+    int weiterTakte = 8;              // weiter_takte: Laenge bei WEITER
+    double maxBpm = 5.0;              // max_bpm: erlaubter Tempo-Abstand
+    std::string tempoModus = "rampe"; // tempo_modus: b_an_a, a_an_b, rampe, vorlauf
+    bool stems = true;                // stems: Stem-Uebergaenge erlaubt
+    std::string modus = "ausgewogen"; // modus: manuell, kurz, ausgewogen, lang (Regie)
 };
 
 }  // namespace klangbild::dsp

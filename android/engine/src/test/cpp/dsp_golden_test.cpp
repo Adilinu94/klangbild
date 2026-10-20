@@ -17,16 +17,19 @@
 
 #include "dsp/curves.h"
 #include "dsp/automation.h"
+#include "dsp/backen.h"
 #include "dsp/effects.h"
 #include "dsp/fft.h"
 #include "dsp/envelopes.h"
 #include "dsp/filters.h"
 #include "dsp/introloop.h"
 #include "dsp/level.h"
+#include "dsp/limiter.h"
 #include "dsp/loop.h"
 #include "dsp/loopchoice.h"
 #include "dsp/mischen_eigen.h"
 #include "dsp/mixing.h"
+#include "dsp/raster.h"
 #include "dsp/resample.h"
 #include "dsp/sweep.h"
 #include "dsp/warp.h"
@@ -341,6 +344,18 @@ Settings settingsFromJson(const Json& e) {
     s.loopStart = static_cast<int>(e.at("loop_start").as_double());
     s.loopIn = static_cast<int>(e.at("loop_ein").as_double());
     s.loopInTimes = static_cast<int>(e.at("loop_ein_mal").as_double());
+    if (e.has("keylock")) s.keylock = e.at("keylock").as_bool();
+    if (e.has("ausstieg")) s.ausstieg = e.at("ausstieg").as_string();
+    if (e.has("vor_ende_takte")) s.vorEndeTakte = static_cast<int>(e.at("vor_ende_takte").as_double());
+    if (e.has("einstieg")) s.einstieg = e.at("einstieg").as_string();
+    if (e.has("weiter_ab")) s.weiterAb = e.at("weiter_ab").as_string();
+    if (e.has("takte")) s.takte = static_cast<int>(e.at("takte").as_double());
+    if (e.has("weiter_takte")) s.weiterTakte = static_cast<int>(e.at("weiter_takte").as_double());
+    if (e.has("max_bpm")) s.maxBpm = e.at("max_bpm").as_double();
+    if (e.has("tempo_modus")) s.tempoModus = e.at("tempo_modus").as_string();
+    if (e.has("stems")) s.stems = e.at("stems").as_bool();
+    if (e.has("art")) s.art = e.at("art").as_string();
+    if (e.has("modus")) s.modus = e.at("modus").as_string();
     return s;
 }
 
@@ -1300,4 +1315,159 @@ TEST(DspEigen, RueckhallKnownValuesFromPrototype) {
     }
     EXPECT_NEAR(std::sqrt(quadrat / static_cast<double>(out.blende.size())), 0.12655517347961429, 1e-5);
     EXPECT_NEAR(spitze, 0.7355132699012756, 1e-5);
+}
+
+// ============================== T5.7b Limiter ===================================================
+
+TEST(DspLimiter, BegrenzenMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    for (const char* name : {"limiter_stille", "limiter_leise", "limiter_spitzen", "limiter_teil", "limiter_leer"}) {
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        auto x = floatsOf(g, c.inputs.at("x"));
+        const long long bis = static_cast<long long>(c.inputs.at("bis").as_double());
+        const double decke = c.inputs.at("decke").as_double();
+        klangbild::dsp::begrenzen(x, bis, decke);
+        ASSERT_EQ(c.tolerance, "dsp");
+        g.expect_dsp(name, c.expected, std::vector<double>(x.begin(), x.end()));
+    }
+}
+
+// ============================== M6.4 Raster, Ausstieg, Einstieg =================================
+
+namespace {
+
+klangbild::dsp::Eintrag eintragFromJson(const Json& j) {
+    klangbild::dsp::Eintrag e;
+    e.id = static_cast<int>(j.at("id").as_double());
+    e.pfad = j.at("pfad").as_string();
+    e.bpm = j.at("bpm").as_double();
+    if (j.has("camelot") && !j.at("camelot").is_null()) e.camelot = j.at("camelot").as_string();
+    for (double d : j.at("downbeats").numbers()) e.downbeats.push_back(d);
+    if (j.has("abschnitte")) {
+        for (double d : j.at("abschnitte").numbers()) e.abschnitte.push_back(d);
+    }
+    if (j.has("fein")) {
+        for (const Json& p : j.at("fein").items) {
+            const auto werte = p.numbers();
+            if (werte.size() == 2) e.fein.push_back({werte[0], werte[1]});
+        }
+    }
+    return e;
+}
+
+}  // namespace
+
+TEST(DspRaster, RegulaerMatchesGolden) {
+    Golden& g = golden();
+    for (const char* name : {"regulaer_leer", "regulaer_normal", "regulaer_versatz", "regulaer_ausreisser"}) {
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const auto downbeats = c.inputs.at("downbeats").numbers();
+        const double bpm = c.inputs.at("bpm").as_double();
+        const double bis = c.inputs.at("bis_s").as_double();
+        const auto out = klangbild::dsp::regulaer(downbeats, bpm, bis);
+        ASSERT_EQ(c.tolerance, "values");
+        g.expect_values(name, c.expected, out);
+    }
+}
+
+TEST(DspRaster, AusstiegMatchesGolden) {
+    Golden& g = golden();
+    for (const char* name : {"ausstieg_outro", "ausstieg_phrase", "ausstieg_vor_ende"}) {
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        klangbild::dsp::Spur spur;
+        spur.eintrag = eintragFromJson(c.inputs.at("eintrag"));
+        spur.frames = static_cast<long long>(c.inputs.at("frames").as_double());
+        for (double d : c.inputs.at("orig").numbers()) spur.orig.push_back(d);
+        for (double d : c.inputs.at("buf").numbers()) spur.buf.push_back(d);
+        const klangbild::dsp::Settings s = settingsFromJson(c.inputs.at("e"));
+        const int takte = static_cast<int>(c.inputs.at("takte").as_double());
+        const double abS = c.inputs.at("ab_s").as_double();
+        const auto out = klangbild::dsp::ausstieg(spur, s, takte, abS);
+        ASSERT_EQ(c.tolerance, "values");
+        g.expect_values(std::string(name) + "/raster", c.expected.items.at(0), out.raster);
+        EXPECT_EQ(out.index, static_cast<int>(c.expected.items.at(1).as_double()));
+    }
+}
+
+TEST(DspRaster, EinstiegMatchesGolden) {
+    Golden& g = golden();
+    for (const char* name : {"einstieg_intro", "einstieg_drop"}) {
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const klangbild::dsp::Eintrag b = eintragFromJson(c.inputs.at("b"));
+        const long long samples = static_cast<long long>(c.inputs.at("b_samples").as_double());
+        const klangbild::dsp::Settings s = settingsFromJson(c.inputs.at("e"));
+        const auto out = klangbild::dsp::einstieg(b, samples, s);
+        ASSERT_EQ(c.tolerance, "values");
+        g.expect_values(std::string(name) + "/raster", c.expected.items.at(0), out.raster);
+        EXPECT_EQ(out.index, static_cast<int>(c.expected.items.at(1).as_double()));
+    }
+}
+
+// Referenz: uebergang.taktraster mit Fein-Anker, raster, _periode und _ext.
+TEST(DspRaster, TaktrasterUndHilfenKnownValuesFromPrototype) {
+    klangbild::dsp::Eintrag e;
+    e.bpm = 120;
+    e.downbeats = {0, 2, 4, 6};
+    e.fein = {{0.0, 0.02}, {4.0, -0.01}};
+    const auto t = klangbild::dsp::taktraster(e, 8.0);
+    const double want[6] = {0.02, 2.005, 3.99, 5.99, 7.99, 9.99};
+    ASSERT_EQ(t.size(), 6u);
+    for (std::size_t i = 0; i < 6; ++i) EXPECT_NEAR(t[i], want[i], 1e-6) << i;
+
+    const std::vector<double> takte = {0, 2, 4, 6};
+    EXPECT_EQ(klangbild::dsp::raster(takte, 9.0), (std::vector<double>{0, 2, 4, 6, 8, 10}));
+    const std::vector<double> t6 = {0, 2, 4, 6, 8, 10};
+    EXPECT_DOUBLE_EQ(klangbild::dsp::periode(t6, 3), 2.0);
+    EXPECT_DOUBLE_EQ(klangbild::dsp::ext(1.5, {0, 2, 4}, {0, 2.5, 4.0}), 1.875);
+    EXPECT_DOUBLE_EQ(klangbild::dsp::ext(5.0, {0, 2, 4}, {0, 2.5, 4.0}), 4.75);
+}
+
+// ============================== M6.5 backen =====================================================
+
+TEST(DspBacken, BackenMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const auto ir = floatsOf(g, g.raw("hall_ir").at("expected"));
+    for (const char* eintrag : {"backen_vinyl", "backen_echo", "backen_introloop"}) {
+        const std::string name = eintrag;
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const klangbild::dsp::Eintrag a = eintragFromJson(c.inputs.at("a"));
+        const auto aAudio = floatsOf(g, c.inputs.at("a_audio"));
+        const klangbild::dsp::Eintrag b = eintragFromJson(c.inputs.at("b"));
+        const auto bAudio = floatsOf(g, c.inputs.at("b_audio"));
+        const auto s = settingsFromJson(c.inputs.at("e"));
+        const double abS = c.inputs.at("ab_s").as_double();
+        std::optional<double> ausS, einS;
+        if (!c.inputs.at("aus_s").is_null()) ausS = c.inputs.at("aus_s").as_double();
+        if (!c.inputs.at("ein_s").is_null()) einS = c.inputs.at("ein_s").as_double();
+        const klangbild::dsp::Spur spur = klangbild::dsp::rohSpur(a, aAudio);
+        const auto out = klangbild::dsp::backen(spur, b, bAudio, s, abS, false, ausS, einS, ir);
+
+        const Json& want = c.expected;
+        EXPECT_EQ(out.startN, static_cast<long long>(want.at("start_n").as_double()));
+        g.expect_dsp(name + "/audio", want.at("audio"),
+                     std::vector<double>(out.spur.puffer.begin(), out.spur.puffer.end()));
+        g.expect_values(name + "/orig", want.at("orig"), out.spur.orig);
+        g.expect_values(name + "/buf", want.at("buf"), out.spur.buf);
+
+        const Json& wi = want.at("info");
+        EXPECT_EQ(out.info.art, wi.at("art").as_string());
+        EXPECT_EQ(out.info.takte, static_cast<int>(wi.at("takte").as_double()));
+        EXPECT_EQ(out.info.sync, wi.at("sync").as_bool());
+        EXPECT_DOUBLE_EQ(out.info.bpmA, wi.at("bpm_a").as_double());
+        EXPECT_DOUBLE_EQ(out.info.bpmB, wi.at("bpm_b").as_double());
+        EXPECT_EQ(out.info.modus, wi.at("modus").as_string());
+        EXPECT_EQ(out.info.stems, wi.at("stems").as_bool());
+        EXPECT_DOUBLE_EQ(out.info.blendeS, wi.at("blende_s").as_double());
+        EXPECT_DOUBLE_EQ(out.info.aOrigStart, wi.at("a_orig_start").as_double());
+        EXPECT_DOUBLE_EQ(out.info.bOrigStart, wi.at("b_orig_start").as_double());
+        EXPECT_DOUBLE_EQ(out.info.aOrigProS, wi.at("a_orig_pro_s").as_double());
+        g.expect_values(name + "/raster_s", wi.at("raster_s"), out.info.rasterS);
+    }
 }
