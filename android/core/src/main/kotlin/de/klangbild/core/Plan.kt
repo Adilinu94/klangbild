@@ -14,6 +14,7 @@ data class Track(
     val vektor: List<Double>? = null,
     val energie: Double? = null,
     val genre: String? = null,
+    val gainDb: Double = 0.0,
 )
 
 /**

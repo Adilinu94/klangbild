@@ -1657,21 +1657,26 @@ keine Playlist.
 | Regie | `planen`, `_rangliste`, `_grundwert`, `_bewerten`, `_rezept` (alle Rezepte und Drop-Tricks), `_harmonie`, `_gesang_uebergabe`, `_strukturfehler`, `_verpasst`, `_double_drops`, `_drop_*`, `_intro_loops`, `_bass_takt`, `_chill` | `regie_synthetic_*` (6) |
 | Reihenfolge mit Paarnoten | `plan.set_planen`, `_set_schritt`, `_set_kosten`, `_zwei_opt`, `bogen_ziel` | Fingerabdrücke |
 | Paarnoten | `paarnoten.Paarnoten`, `im_tempo`, `rechnen` (ohne Kritiker) | Cache-Rundlauf, Rundung wie Python |
+| Titelwahl (Auto-DJ) | `live._autodj_wahl`, `_plan_track`, `_gleicher_titel` mit Energiebogen und Stimmung | Fingerabdruck |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
-`./gradlew :core:test` grün (17 Tests, 146 Golden-Fälle plus Fingerabdrücke).
+`./gradlew :core:test` grün (20 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
-| M8 | `live._auto_backen`, `_autodj_wahl`, Energiebogen, Lernen, Dubletten, `live.sortieren`-Verdrahtung | — |
+| M8a | Controller: `live._auto_backen`-Ablauf (Versuche, Selbstkontrolle, Sicherheits-Blend), Warteschlange, Lernen, Dubletten | — |
+| M8b | JNI-Bäcker: Übergangsplan (§4.5) an `dsp/backen.*` reichen, PCM zurück | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |
 | M11 | Stems | — |
 
-**Reihenfolge-Hinweis (Stand 20.10.2026):** M5 und M6 sind fertig, `backen` läuft
-mit und ohne Keylock. `backen` wirft nur noch bei Stem-Übergängen (M11).
+**Reihenfolge-Hinweis (Stand 20.10.2026):** M5, M6 und M7 sind fertig: DSP,
+Warp/Backen und die komplette Regie (Planung, Reihenfolge, Paarnoten,
+Selbstkontrolle, Titelwahl) laufen in C++ und Kotlin. Offen sind M8 (Controller
+und JNI-Bäcker), M9 (Oberfläche), M10 (Analyse) und M11 (Stems). `backen` wirft
+nur noch bei Stem-Übergängen (M11).
 
 **Signalsmith Stretch** wird wie Oboe ausgeklont (Fremd-Quelle, nicht im Repo) und
 zwar in der Version des python-stretch-0.3.1-Sdists, also exakt die Desktop-Referenz:
@@ -1759,6 +1764,4 @@ Raster, zweite Hälfte 30 ms später.
 Es gibt **keinen einzigen Golden-Fall mit einer echten Musikdatei**
 (`manifest.json`: `"real_tracks": []`). Parität lässt sich damit nur für
 Bausteine belegen, nicht für den ganzen Übergang. Für den Beweis „klingt wie der
-Desktop" fehlen Aufnahmen mindestens je einer pro Übergangsart und pro Trick,
-erzeugt über `python -m klangbild golden <ziel> --mit-echten-titeln` in den
-separaten, ignorierten Ordner `<ziel>-real`.
+Desktop" fehl
