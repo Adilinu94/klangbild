@@ -28,6 +28,14 @@ class TitelAnalyseTest {
     }
 
     @Test
+    fun `Downbeats ueberstehen den Rueckweg`() {
+        val a = TitelAnalyse("Am", "8A", -5.2, 124, listOf(0.5f, 0.98f, 1.47f, 1.96f), listOf(0.5f, 1.96f))
+        val gelesen = TitelAnalyse.aus(a.json())
+        assertEquals(a, gelesen)
+        assertEquals(listOf(0.5f, 1.96f), gelesen?.downbeats)
+    }
+
+    @Test
     fun `fremde Version und kaputter Text ergeben null`() {
         assertNull(TitelAnalyse.aus("""{"version":2,"tonart":"Am","camelot":"8A","lufs":-5.2}"""))
         assertNull(TitelAnalyse.aus("""{"version":1,"tonart":"Am"}"""))

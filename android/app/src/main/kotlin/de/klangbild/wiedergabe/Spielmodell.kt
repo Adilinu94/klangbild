@@ -116,7 +116,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
             if (ok) {
                 zustand = player.zustand()
                 wellenform = withContext(Dispatchers.Default) { forme(t.id) }
-                if (analyse == null || analyse?.beats.isNullOrEmpty()) {
+                if (analyse == null || analyse?.beats.isNullOrEmpty() || analyse?.downbeats.isNullOrEmpty()) {
                     val gefunden = withContext(Dispatchers.Default) {
                         val datei = cache.finde(t.id.toInt()) ?: return@withContext null
                         PcmDatei.oeffnen(datei)?.use { pcm ->
@@ -132,6 +132,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                                 lufs.takeIf { it.isFinite() },
                                 bpm,
                                 schlaege.beats.toList(),
+                                schlaege.downbeats.toList(),
                             )
                         }
                     }

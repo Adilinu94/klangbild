@@ -24,6 +24,7 @@ data class TitelAnalyse(
     val lufs: Double?,
     val bpm: Int? = null,
     val beats: List<Float> = emptyList(),
+    val downbeats: List<Float> = emptyList(),
     val version: Int = VERSION,
 ) {
 
@@ -34,6 +35,7 @@ data class TitelAnalyse(
         put("lufs", lufs)
         put("bpm", bpm)
         put("beats", buildJsonArray { beats.forEach { add(JsonPrimitive(it)) } })
+        put("downbeats", buildJsonArray { downbeats.forEach { add(JsonPrimitive(it)) } })
     }.toString()
 
     companion object {
@@ -55,6 +57,9 @@ data class TitelAnalyse(
                     lufs = (o["lufs"] as? JsonPrimitive)?.doubleOrNull,
                     bpm = (o["bpm"] as? JsonPrimitive)?.intOrNull,
                     beats = (o["beats"] as? JsonArray)
+                        ?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }
+                        ?: emptyList(),
+                    downbeats = (o["downbeats"] as? JsonArray)
                         ?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }
                         ?: emptyList(),
                 )

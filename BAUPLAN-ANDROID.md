@@ -1693,7 +1693,7 @@ keine Playlist.
 | Oberfläche | `:app` Compose: Bibliothek aus MediaStore (Timetable, Cover), Mini-Player, Player mit rotierender Scheibe, Wellenform, Tonart und Lautheit (`Am · 8A · −5.2 LUFS`); Analyse je Titel in `filesDir/analyse/<id>.json` | auf Gerät geprüft |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
-`./gradlew :core:test` grün (54 Tests, 146 Golden-Fälle plus Fingerabdrücke).
+`./gradlew :core:test` grün (55 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 **Gerätetests (20.10.2026, Xiaomi 21081111RG, Android 14):**
 `am instrument` grün (5/5):
