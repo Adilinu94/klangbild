@@ -8,11 +8,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.klangbild.bibliothek.Titel
 import de.klangbild.core.Abtastung
+import de.klangbild.core.Einstellungen
 import de.klangbild.core.Lautheit
 import de.klangbild.core.PcmCache
 import de.klangbild.core.PcmDatei
 import de.klangbild.core.Profil
 import de.klangbild.core.ProfilBau
+import de.klangbild.core.RegiePlanung
 import de.klangbild.core.Taktraster
 import de.klangbild.core.TitelAnalyse
 import de.klangbild.core.TonartSchaetzung
@@ -57,6 +59,12 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
 
     /** Profil des laufenden Titels fuer die Regie (aus [analyse]); null ohne Takte. */
     var profil by mutableStateOf<Profil?>(null)
+        private set
+
+    /** Zuletzt geplanter Uebergang (Konsole zeigt ihn an, Start erfolgt getrennt). */
+    data class Uebergang(val plan: RegiePlanung.Plan, val ziel: Titel, val punkte: Double)
+
+    var uebergang by mutableStateOf<Uebergang?>(null)
         private set
 
     private var liste: List<Titel> = emptyList()
@@ -189,6 +197,51 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
         }
         if (ergebnis != null) analysen.sichere(t.id, ergebnis)
         ergebnis
+    }
+
+    /**
+     * Plant die Ueberblendung vom laufenden Titel auf [naechster]: bewertet alle Takte des
+     * Zieltitels gegen den naechsten Takt des laufenden Titels, in Laengen von 8 und 16 Takten.
+     * Das Zielprofil wird bei Bedarf frisch gerechnet (Titel muss im Cache liegen).
+     */
+    suspend fun plane(naechster: Titel): Uebergang? = withContext(Dispatchers.Default) {
+        val a = analyse ?: return@withContext null
+        val pa = profil ?: return@withContext null
+        val analyseB = analysen.lade(naechster.id) ?: analysiere(naechster) ?: return@withContext null
+        val pb = analyseB.zuProfil() ?: return@withContext null
+        val e = Einstellungen()
+
+        val tonartOk = a.camelot == analyseB.camelot ||
+            a.camelot in TonartSchaetzung.camelotNachbarn(analyseB.camelot)
+        val jetztS = zustand.position.toDouble() / 44100.0
+        val i = pa.takte.indexOfLast { it <= jetztS }.coerceAtLeast(0).coerceAtMost(maxOf(0, pa.n - 2))
+
+        var bester: Uebergang? = null
+        for (laenge in intArrayOf(8, 16)) {
+            if (i + laenge > pa.n) continue
+            for (j in 0..maxOf(0, pb.n - laenge)) {
+                val (punkte, teile, _) = RegiePlanung.bewerten(
+                    pa, pb, i, j, laenge, e, tonartOk = tonartOk,
+                )
+                if (bester == null || punkte > bester.punkte) {
+                    val plan = RegiePlanung.Plan(
+                        ausS = pa.takte[i],
+                        einS = pb.takte[j],
+                        takte = laenge,
+                        einst = e,
+                        rezept = "blende",
+                        grund = teile.joinToString(" "),
+                        punkte = punkte,
+                    )
+                    bester = Uebergang(plan, naechster, punkte)
+                }
+            }
+        }
+        bester?.also { uebergang = it }
+    }
+
+    fun verwerfeUebergang() {
+        uebergang = null
     }
 
     /** RMS-Kurve aus dem PCM-Cache (64 Segmente, auf das Maximum normiert). */
