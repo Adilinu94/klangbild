@@ -123,6 +123,38 @@ class PcmPlaybackTest {
     }
 
     @Test
+    fun vorschauLaeuftNebenDerWiedergabe() {
+        val kontext = InstrumentationRegistry.getInstrumentation().targetContext
+        val ordner = File(kontext.cacheDir, "pcm-playback-vorschau").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val cache = PcmCache(ordner)
+        val ton = FloatArray(4 * 44100 * 2) { i -> if (i % 2 == 0) 0.3f else -0.3f }
+        cache.anlegen(77, 0, 4 * 44100).use { it.schreibeBlock(ton, 2) }
+        cache.anlegen(78, 0, 2 * 44100).use { it.schreibeBlock(ton.copyOf(2 * 44100 * 2), 2) }
+        val player = Player(cache)
+
+        assertTrue("startFile", player.spiele(cache.datei(77, 0, 4 * 44100), 77))
+        try {
+            assertTrue("Vorschau", player.vorschau(cache.datei(78, 0, 2 * 44100), 78))
+            val werte = LongArray(NativeEngine.VORSCHAU_FELDER)
+            val frist = System.currentTimeMillis() + 2000
+            while (System.currentTimeMillis() < frist && werte[NativeEngine.VORSCHAU_POS] == 0L) {
+                Thread.sleep(50)
+                NativeEngine.vorschauPoll(werte)
+            }
+            assertEquals("Vorschau-Spur", 78L, werte[NativeEngine.VORSCHAU_SPUR])
+            assertTrue("Vorschau liest nicht", werte[NativeEngine.VORSCHAU_POS] > 0)
+            assertEquals("Hauptspur veraendert", 77L, player.zustand().spur)
+        } finally {
+            player.vorschauStoppe()
+            NativeEngine.stop()
+        }
+        assertEquals("Vorschau laeuft noch", false, NativeEngine.vorschauPoll(LongArray(NativeEngine.VORSCHAU_FELDER)))
+    }
+
+    @Test
     fun ketteAutoDjMitGebackenerBlende() {
         val kontext = InstrumentationRegistry.getInstrumentation().targetContext
         val ordner = File(kontext.cacheDir, "pcm-playback-autodj").apply {

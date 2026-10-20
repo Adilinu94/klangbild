@@ -32,7 +32,8 @@ namespace {
 // 4: startFile und belegte Feeder-Felder in poll (M2).
 // 5: queueFile (nahtlose Folgedatei).
 // 6: queueFile mit geplantem Wechsel ab Frame.
-constexpr int kAbiVersion = 6;
+// 7: Vorschau auf einem zweiten Stream.
+constexpr int kAbiVersion = 7;
 
 // Anzahl der Felder von poll() (BAUPLAN §5.4); steht gleich in NativeEngine.POLL_SIZE.
 constexpr jsize kPollSize = 7;
@@ -149,6 +150,64 @@ Java_de_klangbild_engine_NativeEngine_poll(JNIEnv* env, jclass /*typ*/, jlongArr
         }
     }
     env->SetLongArrayRegion(out, 0, kPollSize, werte);
+}
+
+// --- Vorschau (M8c): zweiter, unabhaengiger Stream neben der Wiedergabe ------------
+
+namespace {
+std::unique_ptr<Engine> gVorschau;
+}
+
+// Spielt eine Datei auf dem Vorschau-Stream; die Wiedergabe laeuft unberuehrt weiter.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_de_klangbild_engine_NativeEngine_vorschauStarte(JNIEnv* env, jclass /*typ*/, jstring pfad, jlong startFrame,
+                                                     jlong spur) {
+    if (pfad == nullptr) return JNI_FALSE;
+    const char* text = env->GetStringUTFChars(pfad, nullptr);
+    const std::string pfadText = text != nullptr ? std::string(text) : std::string();
+    if (text != nullptr) env->ReleaseStringUTFChars(pfad, text);
+    if (pfadText.empty()) return JNI_FALSE;
+
+    std::lock_guard<std::mutex> lock(gMutex);
+    if (!gVorschau) {
+        auto engine = std::make_unique<Engine>();
+        engine->output = std::make_shared<klangbild::OboeOutput>(engine->core);
+        if (!engine->output->start()) return JNI_FALSE;
+        gVorschau = std::move(engine);
+    }
+    if (!gVorschau->feeder.oeffne(pfadText, startFrame, spur)) return JNI_FALSE;
+    gVorschau->core.setPlaying(true);
+    gVorschau->feeder.start();
+    return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_de_klangbild_engine_NativeEngine_vorschauStoppe(JNIEnv* /*env*/, jclass /*typ*/) {
+    std::lock_guard<std::mutex> lock(gMutex);
+    if (!gVorschau) return;
+    if (gVorschau->output) gVorschau->output->stop();
+    gVorschau->feeder.stop();
+    gVorschau.reset();
+}
+
+// Felder: [0] playing, [1] Spur, [2] Position, [3] underflows. false, wenn keine Vorschau laeuft.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_de_klangbild_engine_NativeEngine_vorschauPoll(JNIEnv* env, jclass /*typ*/, jlongArray aus) {
+    if (aus == nullptr || env->GetArrayLength(aus) < 4) return JNI_FALSE;
+    jlong werte[4] = {0, -1, 0, 0};
+    jboolean laeuft = JNI_FALSE;
+    {
+        std::lock_guard<std::mutex> lock(gMutex);
+        if (gVorschau) {
+            werte[0] = gVorschau->core.playing() ? 1 : 0;
+            werte[1] = static_cast<jlong>(gVorschau->feeder.spur());
+            werte[2] = static_cast<jlong>(gVorschau->feeder.position());
+            werte[3] = static_cast<jlong>(gVorschau->core.underflows());
+            laeuft = JNI_TRUE;
+        }
+    }
+    env->SetLongArrayRegion(aus, 0, 4, werte);
+    return laeuft;
 }
 
 // --- Bäcker (M8b) ------------------------------------------------------------

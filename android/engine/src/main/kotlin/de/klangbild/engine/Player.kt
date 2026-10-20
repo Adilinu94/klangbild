@@ -35,6 +35,20 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
     fun weiter() = NativeEngine.setPlaying(true)
     fun stoppe() = NativeEngine.stop()
 
+    /**
+     * Vorschau eines Titels auf einem zweiten Stream, während die Wiedergabe weiterläuft.
+     * Blockiert beim ersten Mal (Dekodieren); [dauer] der laufenden Wiedergabe bleibt erhalten.
+     */
+    fun vorschau(datei: File, spurId: Long): Boolean {
+        val alt = dauer
+        val ziel = vorbereiten(datei, spurId)
+        dauer = alt
+        if (ziel == null) return false
+        return NativeEngine.vorschauStarte(ziel.absolutePath, 0, spurId)
+    }
+
+    fun vorschauStoppe() = NativeEngine.vorschauStoppe()
+
     /** Aktueller Stand aus `poll` (BAUPLAN §5.4). */
     fun zustand(): Zustand {
         val werte = LongArray(NativeEngine.POLL_SIZE)

@@ -46,6 +46,18 @@ object NativeEngine {
     external fun queueFile(pfad: String, startFrame: Long, spur: Long, abFrame: Long): Boolean
 
     /**
+     * Vorschau auf einem zweiten, unabhängigen Stream (M8c): spielt [pfad] ab [startFrame],
+     * während die normale Wiedergabe weiterläuft. Beide Streams mischt Android.
+     */
+    external fun vorschauStarte(pfad: String, startFrame: Long, spur: Long): Boolean
+
+    /** Stoppt die Vorschau; die normale Wiedergabe bleibt unberührt. */
+    external fun vorschauStoppe()
+
+    /** Felder wie [VORSCHAU_FELDER]; `false`, wenn keine Vorschau läuft. */
+    external fun vorschauPoll(out: LongArray): Boolean
+
+    /**
      * Schreibt die Diagnosewerte in [out] (mindestens [POLL_SIZE] Felder), Reihenfolge wie BAUPLAN §5.4.
      * Billig und nicht blockierend; 10-mal pro Sekunde aufrufen, nicht je Frame. Im Spike belegt:
      * [POLL_HEARD_FRAME] (Frames, die der Callback gelesen hat), [POLL_PLAYING], [POLL_UNDERFLOWS].
@@ -78,5 +90,11 @@ object NativeEngine {
     const val POLL_FEEDER_POS = 3
     const val POLL_PLAYING = 4
     const val POLL_UNDERFLOWS = 5
+
+    /** Felder von [vorschauPoll]: playing, Spur, Position, Underflows. */
+    const val VORSCHAU_FELDER = 4
+    const val VORSCHAU_PLAYING = 0
+    const val VORSCHAU_SPUR = 1
+    const val VORSCHAU_POS = 2
     const val POLL_LATENCY_FRAMES = 6
 }

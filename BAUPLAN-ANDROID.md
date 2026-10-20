@@ -1668,6 +1668,7 @@ keine Playlist.
 | Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen, Folgedatei nahtlos (am Dateiende oder ab geplantem Frame) anschließen; Sinus als Rückfall | 6 Host-Tests |
 | Player | `engine/Player.kt`: dekodieren (einmal), Cache suchen, `startFile`, Pause/Weiter/Stopp, Zustand aus `poll` | Gerätetest grün |
 | Auto-DJ-Kette | `engine/AutoDjPlayer.kt`: gebackene Blende in den Cache schreiben, ab `abS` anhängen, B ab Blendenende nachziehen, Verwerfen (Blende ab sofort) | Gerätetest grün |
+| Vorschau | `Player.vorschau`: eigener Oboe-Stream neben der Wiedergabe (JNI `vorschauStarte/Stoppe/Poll`) | Gerätetest grün |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
 `./gradlew :core:test` grün (38 Tests, 146 Golden-Fälle plus Fingerabdrücke).
@@ -1696,7 +1697,7 @@ verschluckt sich am AndroidTest-Kotlin-Task; mit `--no-configuration-cache` läu
 |---|---|---|
 | M2 | Timeline mit Mischung/Übergabekurve aus mehreren Quellen und Limiter im Decoder; `PcmFeeder` (Datei + Folgedatei, auch ab geplantem Frame) steht | — |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
-| M8c | Kette A → Blende → B und Verwerfen stehen (`AutoDjPlayer`); Vorschau fehlt | — |
+| M8c | Kette A → Blende → B, Verwerfen und Vorschau (zweiter Stream) stehen | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |
 | M11 | Stems | — |
 
