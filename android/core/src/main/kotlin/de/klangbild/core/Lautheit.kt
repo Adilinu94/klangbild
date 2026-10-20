@@ -53,6 +53,9 @@ object Lautheit {
         return b to a
     }
 
+    internal fun shelfOeffentlich(rate: Int): Pair<DoubleArray, DoubleArray> = shelf(rate)
+    internal fun highpassOeffentlich(rate: Int): Pair<DoubleArray, DoubleArray> = highpass(rate)
+
     /** Kausales Biquad (Direct Form I) wie `lfilter` im Prototyp. */
     private fun filter(x: DoubleArray, b: DoubleArray, a: DoubleArray): DoubleArray {
         val y = DoubleArray(x.size)
@@ -141,5 +144,100 @@ object Lautheit {
             }
         }
         return if (anzahl2 == 0) Double.NEGATIVE_INFINITY else lufs(summe2 / anzahl2)
+    }
+
+    /** Gating der Blockmittelwerte (oeffentlich fuer den Sammler und Tests). */
+    fun ausBlockwerten(bloecke: DoubleArray): Double = ausBloecken(bloecke)
+
+    /**
+     * Integrierte Lautheit direkt aus dem PCM-Cache (Stereo, 44,1 kHz), blockweise gelesen:
+     * der Speicher bleibt bei einem Block, der Filterzustand laeuft mit.
+     */
+    fun ausCache(pcm: PcmDatei, rate: Int = 44100, blockFrames: Int = 44100): Double {
+        val links = LautheitSammler(rate)
+        val rechts = LautheitSammler(rate)
+        val gesamt = pcm.frames()
+        var start = 0
+        while (start < gesamt) {
+            val anzahl = minOf(blockFrames, gesamt - start)
+            val stereo = pcm.lese(start, anzahl)
+            links.hinzuBlock(stereo, 0)
+            rechts.hinzuBlock(stereo, 1)
+            start += anzahl
+        }
+        val bl = links.blockwerte()
+        val br = rechts.blockwerte()
+        val summe = DoubleArray(minOf(bl.size, br.size))
+        for (i in summe.indices) summe[i] = bl[i] + br[i]
+        return ausBloecken(summe)
+    }
+}
+
+/**
+ * K-Gewichtung und 400-ms-Bloecke fuer ein Signal, das stueckweise ankommt. Haelt den
+ * Filterzustand und einen Ringpuffer der letzten Blocklaenge; nach dem ersten vollen Block
+ * kommt alle 100 ms ein Mittelwert dazu. Damit laesst sich die Lautheit ohne das ganze
+ * Signal im Speicher rechnen.
+ */
+class LautheitSammler(rate: Int) {
+
+    private val blockLaenge = max(1, (0.400 * rate).toInt())
+    private val schritt = max(1, (0.100 * rate).toInt())
+    private val ring = DoubleArray(blockLaenge)
+    private var position = 0
+    private var summe = 0.0
+    private var anzahl = 0
+    private val bloecke = ArrayList<Double>()
+
+    private val b1: DoubleArray
+    private val a1: DoubleArray
+    private val b2: DoubleArray
+    private val a2: DoubleArray
+
+    private val zustand1 = DoubleArray(4)
+    private val zustand2 = DoubleArray(4)
+
+    init {
+        val shelf = Lautheit.shelfOeffentlich(rate)
+        b1 = shelf.first
+        a1 = shelf.second
+        val hoch = Lautheit.highpassOeffentlich(rate)
+        b2 = hoch.first
+        a2 = hoch.second
+    }
+
+    /** Ein Block Stereo (interleaved) fuer Kanal [kanal]. */
+    fun hinzuBlock(stereo: FloatArray, kanal: Int) {
+        var i = kanal
+        while (i < stereo.size) {
+            hinzu(stereo[i].toDouble())
+            i += 2
+        }
+    }
+
+    fun hinzu(wert: Double) {
+        val gefiltert = filtere(b2, a2, filtere(b1, a1, wert, zustand1), zustand2)
+        val quadrat = gefiltert * gefiltert
+        summe += quadrat - ring[position]
+        ring[position] = quadrat
+        position++
+        if (position == blockLaenge) position = 0
+        anzahl++
+        if (anzahl >= blockLaenge && (anzahl - blockLaenge) % schritt == 0) {
+            bloecke.add(summe / blockLaenge)
+        }
+    }
+
+    fun blockwerte(): DoubleArray = bloecke.toDoubleArray()
+
+    fun ergebnis(): Double = Lautheit.ausBlockwerten(blockwerte())
+
+    private fun filtere(b: DoubleArray, a: DoubleArray, x0: Double, s: DoubleArray): Double {
+        val y0 = b[0] * x0 + b[1] * s[0] + b[2] * s[1] - a[1] * s[2] - a[2] * s[3]
+        s[1] = s[0]
+        s[0] = x0
+        s[3] = s[2]
+        s[2] = y0
+        return y0
     }
 }

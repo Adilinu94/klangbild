@@ -250,7 +250,14 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                text = modell.tonart?.let { "${it.name} · ${it.camelot}" } ?: "TONART …",
+                text = modell.tonart?.let { t2 ->
+                    val l = modell.lufs
+                    if (l != null) {
+                        String.format(Locale.US, "%s · %s · %.1f LUFS", t2.name, t2.camelot, l)
+                    } else {
+                        "${t2.name} · ${t2.camelot}"
+                    }
+                } ?: "TONART …",
                 fontFamily = MONO,
                 fontSize = 11.sp,
                 color = if (modell.tonart != null) Kb.TextHell else Kb.TextDunkel,

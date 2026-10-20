@@ -1678,15 +1678,15 @@ keine Playlist.
 | Profil-Bau | `core/ProfilBau.kt`: Bandtrennung wie scipy (Butterworth 4. Ordnung, SOS, Vorwärts-/Rückwärtsfilter), Pegel je Takt, Chroma je Takt (FFT 8192, Hann, 65–2100 Hz), Raster aus den Downbeats | Golden `profil_berechnen` |
 | Tonart | `core/TonartSchaetzung.kt`: Chroma (FFT 8192, Hop 2048, Rahmen normiert), Pearson-Korrelation mit 24 rotierten Profilen (Krumhansl/Aarden/Temperley/Ensemble), Camelot-Nachbarn; `chromaAusCache` liest blockweise aus dem PCM-Cache | 12 Golden-Fälle + Kammerton-Test |
 | Welle | `core/Welle.kt`: STFT 1024/Hop 220, `peak` ungefenstert, r/g/b-Bänder mit gemeinsamem 99-%-Bezug | 3 Golden-Fälle |
-| Lautheit | `core/Lautheit.kt`: BS.1770-4, K-Gewichtung (Shelf + Hochpass je Abtastrate), 400-ms-Blöcke/100-ms-Schritt, absolute und relative Tore; True Peak folgt | 3 Golden-Fälle |
+| Lautheit | `core/Lautheit.kt`: BS.1770-4, K-Gewichtung (Shelf + Hochpass je Abtastrate), 400-ms-Blöcke/100-ms-Schritt, absolute und relative Tore; `ausCache` liest blockweise mit laufendem Filterzustand; True Peak folgt | 3 Golden-Fälle + Cache-Test |
 | Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen, Folgedatei nahtlos (am Dateiende oder ab geplantem Frame) anschließen; Sinus als Rückfall | 6 Host-Tests |
 | Player | `engine/Player.kt`: dekodieren (einmal), Cache suchen, `startFile`, Pause/Weiter/Stopp, Zustand aus `poll` | Gerätetest grün |
 | Auto-DJ-Kette | `engine/AutoDjPlayer.kt`: gebackene Blende in den Cache schreiben, ab `abS` anhängen, B ab Blendenende nachziehen, Verwerfen (Blende ab sofort) | Gerätetest grün |
 | Vorschau | `Player.vorschau`: eigener Oboe-Stream neben der Wiedergabe (JNI `vorschauStarte/Stoppe/Poll`) | Gerätetest grün |
-| Oberfläche | `:app` Compose: Bibliothek aus MediaStore (Timetable, Cover), Mini-Player, Player mit rotierender Scheibe, Wellenform und Tonart (`Am · 8A`) | auf Gerät geprüft |
+| Oberfläche | `:app` Compose: Bibliothek aus MediaStore (Timetable, Cover), Mini-Player, Player mit rotierender Scheibe, Wellenform, Tonart und Lautheit (`Am · 8A · −5.2 LUFS`) | auf Gerät geprüft |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
-`./gradlew :core:test` grün (44 Tests, 146 Golden-Fälle plus Fingerabdrücke).
+`./gradlew :core:test` grün (45 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 **Gerätetests (20.10.2026, Xiaomi 21081111RG, Android 14):**
 `am instrument` grün (5/5):
