@@ -162,4 +162,152 @@ object Planer {
         }
         return folge
     }
+
+    // --- Set planen mit Paarnoten (BAUPLAN-UEBERGAENGE §8) ---------------------
+
+    const val BOGEN = 0.25
+    const val ENERGIE_SPRUNG = 4.0
+    const val GENRE_STRAFE = 1.5
+    const val REZEPT_STRAFE = 1.0
+    const val VARIANTE = 1.0
+
+    /** `plan.bogen_ziel`: Energie-Ziel je Position (aufbauen, welle, sonst keins). */
+    fun bogenZiel(energien: List<Double>, n: Int, bogen: String): List<Double?> {
+        if (energien.isEmpty() || bogen == "gleichmaessig") return List(n) { null }
+        val array = energien.toDoubleArray()
+        val lo = Profil.percentile(array, 10.0)
+        val mitte = Profil.percentile(array, 50.0)
+        val hi = Profil.percentile(array, 90.0)
+        return when (bogen) {
+            "aufbauen" -> List(n) { lo + (hi - lo) * it / maxOf(1, n - 1) }
+            "welle" -> List(n) { mitte + 0.5 * (hi - lo) * kotlin.math.sin(2 * Math.PI * it / 8.0) }
+            else -> List(n) { mitte }
+        }
+    }
+
+    /** `plan._set_schritt`: Kosten von a -> b an Position pos. */
+    private fun setSchritt(
+        index: Map<Int, Track>,
+        a: Int,
+        b: Int,
+        vor: Int?,
+        pos: Int,
+        ziel: List<Double?>,
+        note: (Int, Int) -> Double,
+        rezept: ((Int, Int) -> String?)?,
+    ): Double {
+        var k = -note(a, b)
+        val ta = index.getValue(a)
+        val tb = index.getValue(b)
+        if (ta.energie != null && tb.energie != null) k += ENERGIE_SPRUNG * abs(ta.energie - tb.energie)
+        if (!ta.genre.isNullOrEmpty() && !tb.genre.isNullOrEmpty() && ta.genre != tb.genre) k += GENRE_STRAFE
+        if (tb.energie != null && ziel[pos] != null) k += abs(tb.energie - ziel[pos]!!) / BOGEN
+        if (rezept != null && vor != null) {
+            val r = rezept(a, b)
+            if (r != null && r == rezept(vor, a)) k += REZEPT_STRAFE
+        }
+        return k
+    }
+
+    /** `plan._set_kosten` ueber einen Abschnitt der Reihenfolge. */
+    private fun setKosten(
+        folge: List<Int>,
+        index: Map<Int, Track>,
+        ziel: List<Double?>,
+        note: (Int, Int) -> Double,
+        rezept: ((Int, Int) -> String?)?,
+        von: Int = 1,
+        bisIn: Int? = null,
+    ): Double {
+        val bis = minOf(bisIn ?: (folge.size - 1), folge.size - 1)
+        var summe = 0.0
+        for (k in maxOf(1, von)..bis) {
+            summe += setSchritt(
+                index, folge[k - 1], folge[k], if (k >= 2) folge[k - 2] else null, k, ziel, note, rezept,
+            )
+        }
+        return summe
+    }
+
+    /** `plan._zwei_opt`: Umkehrungen auf kurzen Abschnitten, bis keine Verbesserung oder Zeit vorbei. */
+    private fun zweiOpt(
+        start: List<Int>,
+        index: Map<Int, Track>,
+        ziel: List<Double?>,
+        note: (Int, Int) -> Double,
+        rezept: ((Int, Int) -> String?)?,
+        fenster: Int = 8,
+        zeitS: Double = 3.0,
+    ): List<Int> {
+        var folge = start.toMutableList()
+        val beginn = System.nanoTime()
+        var besser = true
+        while (besser && (System.nanoTime() - beginn) / 1e9 < zeitS) {
+            besser = false
+            for (i in 1 until folge.size - 1) {
+                for (j in i + 1 until minOf(folge.size, i + fenster)) {
+                    val neu = folge.subList(0, i) + folge.subList(i, j + 1).reversed() + folge.subList(j + 1, folge.size)
+                    if (setKosten(neu, index, ziel, note, rezept, i, j + 2) <
+                        setKosten(folge, index, ziel, note, rezept, i, j + 2) - 1e-9
+                    ) {
+                        folge = neu.toMutableList()
+                        besser = true
+                    }
+                }
+            }
+        }
+        return folge
+    }
+
+    /**
+     * `plan.set_planen`: Reihenfolge nach erwarteten Uebergangsnoten (gierig, dann 2-opt).
+     * Fehlt eine Paarnote, schaetzt sie Tempo, Tonart und Energie.
+     */
+    fun setPlanen(
+        tracks: List<Track>,
+        startId: Int,
+        maxBpm: Double,
+        harmonie: String,
+        paarnote: (Int, Int) -> Double?,
+        rezept: ((Int, Int) -> String?)? = null,
+        bogen: String = "gleichmaessig",
+        zufall: kotlin.random.Random? = null,
+        zeitS: Double = 3.0,
+    ): List<Int> {
+        val index = tracks.associateBy { it.id }
+        val ziel = bogenZiel(tracks.mapNotNull { it.energie }, tracks.size, bogen)
+
+        fun note(a: Int, b: Int): Double {
+            val x = paarnote(a, b)
+            if (x != null) return x
+            val ta = index.getValue(a)
+            val tb = index.getValue(b)
+            val tempoAbstand = listOf(1.0, 2.0, 0.5).minOf {
+                abs((tb.bpm ?: 0.0) * it - (ta.bpm ?: 0.0))
+            }
+            if (tempoAbstand > maxBpm + 1e-9) return 0.5
+            val harm = if (harmonie != "aus") harmonieNote(ta.camelot, tb.camelot).first else 0.5
+            val energie = energieNote(ta.energieDb, tb.energieDb).first
+            return 1.0 + 4.0 * (0.6 * harm + 0.4 * energie) * 0.75
+        }
+
+        val folge = mutableListOf(startId)
+        val uebrig = index.keys.filter { it != startId }.toMutableSet()
+        while (uebrig.isNotEmpty()) {
+            val vor = if (folge.size >= 2) folge[folge.size - 2] else null
+            var best: Int? = null
+            var bestKosten = Double.MAX_VALUE
+            for (x in uebrig.sorted()) {
+                val k = setSchritt(index, folge.last(), x, vor, folge.size, ziel, ::note, rezept) +
+                    (if (zufall != null) zufall.nextDouble(0.0, VARIANTE) else 0.0)
+                if (k < bestKosten) {
+                    bestKosten = k
+                    best = x
+                }
+            }
+            folge.add(best!!)
+            uebrig.remove(best)
+        }
+        return zweiOpt(folge, index, ziel, ::note, rezept, zeitS = zeitS)
+    }
 }

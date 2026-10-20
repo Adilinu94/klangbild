@@ -1655,17 +1655,18 @@ keine Playlist.
 | Planer | `plan.rangliste`, `naechster`, `sortiere_alle` (ohne Paarnoten) | `rangliste_*` (3), `sortiere_332` (1) |
 | Regie-Kandidaten | `laengen`, `_takt_s`, `_fenster`, `_mittelgewicht`, `_a_kandidaten`, `_b_kandidaten`, `_b_index`, `_beatlos`, `_brueckenstart`, `_werte` | Fingerabdrücke aus `profil_synthetic_0/1` |
 | Regie | `planen`, `_rangliste`, `_grundwert`, `_bewerten`, `_rezept` (alle Rezepte und Drop-Tricks), `_harmonie`, `_gesang_uebergabe`, `_strukturfehler`, `_verpasst`, `_double_drops`, `_drop_*`, `_intro_loops`, `_bass_takt`, `_chill` | `regie_synthetic_*` (6) |
+| Reihenfolge mit Paarnoten | `plan.set_planen`, `_set_schritt`, `_set_kosten`, `_zwei_opt`, `bogen_ziel` | Fingerabdrücke |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
-`./gradlew :core:test` grün (12 Tests, 146 Golden-Fälle plus Fingerabdrücke).
+`./gradlew :core:test` grün (14 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
 | M7b | `regie._loop_guete` (braucht Audio, ruft `loop_im_original` im Baker) | `loopguete_synthetic` (1) |
-| M7c | `plan.set_planen` mit Paarnoten und Energiebogen, `paarnoten` | — |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
+| M7e | `paarnoten` (Cache und CLI) und `live.sortieren`-Verdrahtung | — |
 | M8 | `live._auto_backen`, `_autodj_wahl`, Energiebogen, Lernen, Dubletten | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |
 | M11 | Stems | — |
