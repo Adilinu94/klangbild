@@ -868,14 +868,18 @@ ML-Portierung. Erst danach analysiert das Handy selbst.
 
 ### 7.2 Beat This! auf Android
 
-- Modell: `small0` als ONNX (~8 MB) im APK (`assets/beat_this_small0.onnx`).
-  Konvertierung mit den Skripten aus `beat_this_cpp` (einmalig am PC).
+- Modell: **final0** als ONNX (79,2 MB) im APK (`engine/src/main/assets/beat_this.onnx`).
+  Es ist derselbe Checkpoint, den der Desktop über `beat_this.Audio2Beats` lädt
+  (`prototyp/klangbild/beats.py`), damit Beats und Profile übereinstimmen.
+- `*.onnx` steht in `.gitignore`; nach dem Klonen einmal
+  `powershell -ExecutionPolicy Bypass -File werkzeuge/hole_beat_this.ps1`
+  (prüft SHA-256 `c5c1466e…9ccbd`).
 - Vorverarbeitung (Mel-Spektrogramm) exakt wie Beat This!. Golden-Test: Python
   exportiert für 10 Titel das Spektrogramm, die Modellausgabe und die Beats.
-- **Achtung Modellwechsel:** Der Desktop nutzt `final0`. Darum Tor G-A in
-  §11: Auf den 332 Desktop-Titeln (aufs Handy kopiert) müssen die
-  Android-Werte zu den Desktop-Werten passen. Fällt `small0` durch, wird
-  `final0` (78 MB) ins APK gelegt. Diese Entscheidung trifft der Nutzer.
+- **Modellentscheidung (Nutzer, erledigt):** `small0` (8 MB) müsste erst mit
+  PyTorch konvertiert werden; `final0` ist sofort einsatzbereit und entspricht
+  dem Desktop, dafür größere APK. Gewählt: `final0`. Tor G-A prüft weiterhin
+  die Übereinstimmung auf den 332 Desktop-Titeln.
 - Ausführung: ONNX Runtime mit XNNPACK-Execution-Provider, 2 Threads. NNAPI
   nicht verwenden (wird von Google abgekündigt; Ergebnisse geräteabhängig).
 
