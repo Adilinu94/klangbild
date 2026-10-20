@@ -128,53 +128,10 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                     analyse?.downbeats.isNullOrEmpty() || analyse?.raster.isNullOrEmpty() ||
                     analyse?.takte.isNullOrEmpty()
                 ) {
-                    val gefunden = withContext(Dispatchers.Default) {
-                        val datei = cache.finde(t.id.toInt()) ?: return@withContext null
-                        PcmDatei.oeffnen(datei)?.use { pcm ->
-                            val tonart = TonartSchaetzung.schaetzen(TonartSchaetzung.chromaAusCache(pcm))
-                            val lufs = Lautheit.ausCache(pcm)
-                            val schlaege = BeatThis.holen(getApplication()).analysiere(Abtastung.mono22050(pcm))
-                            val abstaende = schlaege.beats.toList().zipWithNext { a, b -> b - a }.sorted()
-                            val mittel = abstaende.getOrNull(abstaende.size / 2)
-                            val bpm = if (mittel != null && mittel > 0.25f) (60f / mittel).roundToInt() else null
-                            val raster = if (bpm != null) {
-                                Taktraster.taktraster(
-                                    schlaege.downbeats.map { it.toDouble() },
-                                    bpm.toDouble(),
-                                    pcm.frames().toDouble() / 44100.0,
-                                ).map { it.toFloat() }
-                            } else {
-                                emptyList()
-                            }
-                            // Ganze Spur nur bei kurzen Titeln in den Speicher (Stereo float).
-                            val profil = if (bpm != null && pcm.frames() <= 15_000_000) {
-                                ProfilBau.profil(
-                                    pcm.lese(0, pcm.frames()),
-                                    schlaege.downbeats.map { it.toDouble() },
-                                    bpm.toDouble(),
-                                )
-                            } else {
-                                null
-                            }
-                            TitelAnalyse(
-                                tonart.name,
-                                tonart.camelot,
-                                lufs.takeIf { it.isFinite() },
-                                bpm,
-                                schlaege.beats.toList(),
-                                schlaege.downbeats.toList(),
-                                raster,
-                                profil?.takte?.map { it.toFloat() } ?: emptyList(),
-                                profil?.gesamt?.map { it.toFloat() } ?: emptyList(),
-                                profil?.baender?.map { reihe -> reihe.map { it.toFloat() } } ?: emptyList(),
-                                profil?.chroma?.map { reihe -> reihe.map { it.toFloat() } } ?: emptyList(),
-                            )
-                        }
-                    }
+                    val gefunden = analysiere(t)
                     if (titel?.id == t.id && gefunden != null) {
                         analyse = gefunden
                         profil = gefunden.zuProfil()
-                        analysen.sichere(t.id, gefunden)
                     }
                 }
             } else if (this@Spielmodell.fehler == null) {
@@ -182,6 +139,56 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
             }
             laedt = false
         }
+    }
+
+    /**
+     * Rechnet Tonart, Lautheit, Beats, Raster und Profil eines Titels aus dem PCM-Cache
+     * und legt das Ergebnis ab. Null, wenn kein Cache vorliegt (Titel nie gespielt).
+     */
+    suspend fun analysiere(t: Titel): TitelAnalyse? = withContext(Dispatchers.Default) {
+        val datei = cache.finde(t.id.toInt()) ?: return@withContext null
+        val ergebnis = PcmDatei.oeffnen(datei)?.use { pcm ->
+            val tonart = TonartSchaetzung.schaetzen(TonartSchaetzung.chromaAusCache(pcm))
+            val lufs = Lautheit.ausCache(pcm)
+            val schlaege = BeatThis.holen(getApplication()).analysiere(Abtastung.mono22050(pcm))
+            val abstaende = schlaege.beats.toList().zipWithNext { a, b -> b - a }.sorted()
+            val mittel = abstaende.getOrNull(abstaende.size / 2)
+            val bpm = if (mittel != null && mittel > 0.25f) (60f / mittel).roundToInt() else null
+            val raster = if (bpm != null) {
+                Taktraster.taktraster(
+                    schlaege.downbeats.map { it.toDouble() },
+                    bpm.toDouble(),
+                    pcm.frames().toDouble() / 44100.0,
+                ).map { it.toFloat() }
+            } else {
+                emptyList()
+            }
+            // Ganze Spur nur bei kurzen Titeln in den Speicher (Stereo float).
+            val profil = if (bpm != null && pcm.frames() <= 15_000_000) {
+                ProfilBau.profil(
+                    pcm.lese(0, pcm.frames()),
+                    schlaege.downbeats.map { it.toDouble() },
+                    bpm.toDouble(),
+                )
+            } else {
+                null
+            }
+            TitelAnalyse(
+                tonart.name,
+                tonart.camelot,
+                lufs.takeIf { it.isFinite() },
+                bpm,
+                schlaege.beats.toList(),
+                schlaege.downbeats.toList(),
+                raster,
+                profil?.takte?.map { it.toFloat() } ?: emptyList(),
+                profil?.gesamt?.map { it.toFloat() } ?: emptyList(),
+                profil?.baender?.map { reihe -> reihe.map { it.toFloat() } } ?: emptyList(),
+                profil?.chroma?.map { reihe -> reihe.map { it.toFloat() } } ?: emptyList(),
+            )
+        }
+        if (ergebnis != null) analysen.sichere(t.id, ergebnis)
+        ergebnis
     }
 
     /** RMS-Kurve aus dem PCM-Cache (64 Segmente, auf das Maximum normiert). */
