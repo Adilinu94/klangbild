@@ -19,3 +19,6 @@ local.properties
 
 # Native Build
 build/hosttest/
+
+# Test-Artefakte der C++-Host-Tests (PCM-Cache-Dateien)
+*.pcm
