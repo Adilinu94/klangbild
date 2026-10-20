@@ -24,20 +24,16 @@ def _kicks(zeiten, dauer_s: float) -> np.ndarray:
     return np.stack([x, x], axis=1)
 
 
-def _raster(n=6):
-    return np.round(np.arange(n + 1) * TAKT * RATE)
-
-
-def test_kick_kontrolle_gleich_versetzt_und_ein_takt():
-    viertel = np.arange(0, 6 * TAKT, TAKT / 4)
-    gleich = _kicks(viertel, 6 * TAKT) + _kicks(viertel, 6 * TAKT)
-    assert regie.pruefen_drop(gleich, RATE, _raster(), 2) is None
-    # zweiter Zug anderthalb Sechzehntel daneben (ganze Sechzehntel daneben liegen im Raster: UKG ist synkopiert;
-    # ganze Schlaege daneben faengt _drop_schlag)
-    daneben = _kicks(viertel, 6 * TAKT) + _kicks(viertel + 3 * TAKT / 32, 6 * TAKT)
-    assert regie.pruefen_drop(daneben, RATE, _raster(), 2) is not None
-    takt = _kicks(viertel, 6 * TAKT) + _kicks(viertel + TAKT, 6 * TAKT)       # ein Takt daneben: wieder im Raster
-    assert regie.pruefen_drop(takt, RATE, _raster(), 2) is None
+def test_kick_kontrolle_vergleicht_die_kick_lage_von_a_und_b():
+    viertel = np.arange(0, 8 * TAKT, TAKT / 4)
+    raster = np.arange(9) * TAKT
+    a = _kicks(viertel, 8 * TAKT)
+    assert abs(regie.kick_lage(a, RATE, raster, 2)) < 0.003
+    assert regie.kicks_versetzt(a, raster, 2, _kicks(viertel + 0.005, 8 * TAKT), raster, 2, RATE) is None
+    assert regie.kicks_versetzt(a, raster, 2, _kicks(viertel + 0.025, 8 * TAKT), raster, 2, RATE) is not None
+    # B's Raster hat denselben Fehler wie seine Kicks: passt; ein Takt daneben liegt wieder im Raster (faengt _drop_schlag)
+    assert regie.kicks_versetzt(a, raster, 2, _kicks(viertel + 0.025, 8 * TAKT), raster + 0.025, 2, RATE) is None
+    assert regie.kicks_versetzt(a, raster, 2, a, raster, 3, RATE) is None
 
 
 def _drop_profil(n=16) -> Profil:
@@ -145,3 +141,16 @@ def test_gesang_zuerst_b_hihats_vor_der_uebergabe():
     vorher = y[int(n * (g / 2 + 1) / takte):int(n * g / takte)]
     assert -15.0 < pegel(vorher) - pegel(b["drums"]) < -9.0
     assert pegel(y[:int(n * (g / 2 - 0.5) / takte)]) < -60
+
+
+def test_vorlauf_prueft_das_tempo_an_ausstieg_und_einsatz():
+    # A wird nach dem ersten Drittel langsamer (110 BPM), B 128 BPM: am Songanfang passt der Vorlauf (6 %), am
+    # Ausstieg nicht mehr (16 %) - dann kein Sync-Rezept, das backen ohne Angleich rendern muesste
+    from dataclasses import replace
+
+    pa, pb = _profil(SONG), _profil(SONG)
+    d = np.diff(pa.takte)
+    d[len(d) // 3:] *= 120 / 110
+    pa, pb = replace(pa, takte=np.concatenate([[0.0], np.cumsum(d)])), replace(pb, takte=pb.takte * 120 / 128)
+    ps = regie.planen(None, pa, None, pb, Einstellungen(modus="ausgewogen"), 0.0, sync=False, harmonisch=True)
+    assert ps and all(p.einst.art not in u.SYNC_ARTEN for p in ps)

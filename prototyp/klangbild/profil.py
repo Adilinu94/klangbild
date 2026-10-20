@@ -348,9 +348,9 @@ def gespeichert(track_id: int, cache: Path | None = None) -> Profil | None:
 
 
 def _raster(eintrag, dauer: float) -> np.ndarray:
-    from .uebergang import regulaer
+    from .uebergang import taktraster
 
-    t = regulaer(eintrag.downbeats, eintrag.bpm, dauer)
+    t = taktraster(eintrag, dauer)
     t = t[(t >= -0.5) & (t < dauer - 0.5)]
     return t if len(t) >= 2 else np.array([0.0, dauer])
 

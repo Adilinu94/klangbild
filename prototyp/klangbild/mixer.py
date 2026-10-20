@@ -36,6 +36,7 @@ def bibliothek_laden(conn, version: str, anker_an: bool = True) -> dict[int, liv
 
     tracks, downbeats, pfade, _ = autodj.lade_tracks(conn, version, start=None, laenge=0)
     versatz = anker.laden() if anker_an else {}
+    feine = anker.fein_laden() if anker_an else {}
     extra = {
         int(z["track_id"]): z for z in conn.execute(
             "SELECT track_id, lufs, true_peak, energie_json, abschnitte_json FROM features"
@@ -48,7 +49,7 @@ def bibliothek_laden(conn, version: str, anker_an: bool = True) -> dict[int, liv
         abschnitte = [float(x) for x in json.loads(z["abschnitte_json"] or "[]")] if z else []
         bib[t.id] = live.Eintrag(
             id=t.id, pfad=pfade[t.id], bpm=t.bpm, camelot=t.camelot,
-            downbeats=anker.anwenden(downbeats[t.id], versatz.get(t.id, 0.0)),
+            downbeats=anker.anwenden(downbeats[t.id], versatz.get(t.id, 0.0)), fein=feine.get(t.id, []),
             gain_db=live.gain_db(z["lufs"], z["true_peak"]) if z else 0.0,
             energie=energie, abschnitte=abschnitte)
     return bib
@@ -298,7 +299,7 @@ class _Handler(BaseHTTPRequestHandler):
             elif pfad.startswith("/api/welle/"):
                 self._json(welle.laden(e.id, e.pfad))
             else:
-                takte = uebergang.regulaer(e.downbeats, e.bpm, (e.downbeats[-1] if e.downbeats else 0) + 30)
+                takte = uebergang.taktraster(e, (e.downbeats[-1] if e.downbeats else 0) + 30)
                 from . import profil
 
                 p = profil.gespeichert(e.id)   # Abschnitte (Intro/Drop/...) fuer die Anzeige

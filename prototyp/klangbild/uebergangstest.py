@@ -59,7 +59,8 @@ def faelle_planen(ids: list[int], paare: int, seed: int, stile: tuple[str, ...] 
     rng = random.Random(seed)
     faelle: list[dict] = []
     for k, a in enumerate(rng.sample(sorted(ids), min(paare, len(ids)))):
-        basis = {"a": a, "stil": stile[k % len(stile)], "experimente": experimente[k % len(experimente)], "spielanteil": "schnell" if k % 4 == 3 else "lang",
+        basis = {"a": a, "stil": stile[k % len(stile)], "experimente": experimente[(k + k // len(stile)) % len(experimente)],
+                 "spielanteil": "schnell" if k % 4 == 3 else "lang",
                  "weiter": k % 5 == 4}
         paar = len(faelle)
         faelle.append({**basis, "nr": paar, "rang": 0, "paar": paar})
@@ -124,6 +125,18 @@ def _lesen(datei: Path, vorgabe):
         return vorgabe
 
 
+def wurzeln(ordner: Path) -> list[Path]:
+    """Ordner aus `nur_ordner.txt` (eine Zeile je Ordner); leer = ganze Bibliothek."""
+    try:
+        return [Path(z.strip()) for z in (ordner / "nur_ordner.txt").read_text(encoding="utf-8").splitlines() if z.strip()]
+    except OSError:
+        return []
+
+
+def wurzel(pfad: str, liste: list[Path]) -> Path | None:
+    return next((w for w in liste if Path(pfad).is_relative_to(w)), None)
+
+
 def _bekannte_ids(ordner: Path) -> set[int]:
     """Titel (A und B), die in den archivierten Runden schon zu hoeren waren."""
     ids = set()
@@ -142,6 +155,7 @@ class Test:
         self.bewertungen: dict[str, dict] = _lesen(ordner / "bewertungen.json", {})
         self.w = w
         self.bekannt = _bekannte_ids(ordner)
+        self.wurzeln = wurzeln(ordner)   # mehrere Ordner (Genres): B immer aus dem Ordner von A
         self.lock = threading.Lock()
         self.gestoppt = threading.Event()
         self.backt: str | None = None
@@ -216,8 +230,14 @@ class Test:
         a_spur = Spur.roh(a, w.laden(a))
         ab_s = 0.45 * len(a_spur.puffer) / RATE if f["weiter"] else 20.0   # WEITER: mitten im Song
         if f["rang"] == 0 and not f.get("gemma"):   # Partner: moeglichst ein Lied, das in den Runden davor nicht vorkam
-            bekannt = self.bekannt if len(self.bekannt) < len(w.bibliothek) // 2 else set()
-            b_id = w._autodj_wahl(a_spur, a_spur.bpm_bei(ab_s), ab_s, {a.id} | bekannt, e)
+            r = wurzel(a.pfad, self.wurzeln)
+            fremd = {a.id} | {i for i, x in w.bibliothek.items() if wurzel(x.pfad, self.wurzeln) != r}
+            schon = {(self.meta(x["nr"]) or {}).get("b", {}).get("id") for x in self.faelle if x["nr"] != nr}
+            b_id = None
+            for ohne in (fremd | self.bekannt | schon, fremd | self.bekannt, fremd):
+                b_id = w._autodj_wahl(a_spur, a_spur.bpm_bei(ab_s), ab_s, ohne, e)
+                if b_id is not None:
+                    break
         else:
             basis = self.meta(f["paar"]) or {}
             b_id = basis.get("b", {}).get("id")
@@ -481,29 +501,40 @@ def laufen(args) -> int:
     finally:
         conn.close()
     ordner.mkdir(parents=True, exist_ok=True)
-    # Test nur mit einem Ordner (z. B. DnB): gemerkt, damit ein Neustart ohne Option dabei bleibt
-    nur = ordner / "nur_ordner.txt"
+    # Test nur mit einem oder mehreren Ordnern (z. B. "Chill|Hard UKG"): gemerkt, damit ein Neustart ohne Option
+    # dabei bleibt; mehrere Ordner = Genres, gemischt wird nur innerhalb eines Ordners
     if args.nur_ordner and not (ordner / "faelle.json").exists():
-        nur.write_text(args.nur_ordner, encoding="utf-8")
-    if nur.exists():
-        wurzel = Path(nur.read_text(encoding="utf-8").strip())
-        bib = {i: x for i, x in bib.items() if Path(x.pfad).is_relative_to(wurzel)}
-        print(f"Nur {wurzel}: {len(bib)} Titel", flush=True)
+        (ordner / "nur_ordner.txt").write_text("\n".join(args.nur_ordner.split("|")), encoding="utf-8")
+    liste = wurzeln(ordner)
+    if liste:
+        bib = {i: x for i, x in bib.items() if wurzel(x.pfad, liste) is not None}
+        print(f"Nur {', '.join(map(str, liste))}: {len(bib)} Titel", flush=True)
     if not (ordner / "faelle.json").exists():
-        ids = [i for i in bib if profil.gespeichert(i) is not None] or list(bib)
-        # neue Runde mit anderen Liedern als die archivierten (A und B), solange genug uebrig sind
-        frisch = [i for i in ids if i not in _bekannte_ids(ordner)]
-        ids = frisch if len(frisch) >= 4 * args.paare else ids
-        # ohne Partner im Tempo-Rahmen wird jeder Uebergang ein Schnitt (kleine Ordner wie DnB): nicht als A
-        grenze = einstellungen.Einstellungen().max_bpm
-        ids = [i for i in ids if any(abs(bib[i].bpm - x.bpm) <= grenze for k, x in bib.items() if k != i)] or ids
         stile = tuple(args.stil.split(",")) if args.stil else STILE
-        if args.set:
-            faelle = set_faelle_planen(ids, args.set, args.seed, stile, tuple(args.experimente.split(",")))
-        else:
-            faelle = faelle_planen(ids, args.paare, args.seed, stile, tuple(args.experimente.split(",")),
-                                   gemma=bool(args.gemma or args.kritiker),
-                                   waehler="Kritiker" if args.kritiker else "Gemma")
+        faelle = []
+        for k, r in enumerate(liste or [None]):   # Paare je Ordner aufgeteilt
+            teil = {i: x for i, x in bib.items() if wurzel(x.pfad, liste) == r}
+            ids = [i for i in teil if profil.gespeichert(i) is not None] or list(teil)
+            paare = args.paare // max(1, len(liste)) + (k < args.paare % max(1, len(liste)))
+            # neue Runde mit anderen Liedern als die archivierten (A; B nach Moeglichkeit), solange genug uebrig sind
+            frisch = [i for i in ids if i not in _bekannte_ids(ordner)]
+            ids = frisch if len(frisch) >= paare else ids
+            # ohne Partner im Tempo-Rahmen wird jeder Uebergang ein Schnitt (kleine Ordner wie DnB): nicht als A
+            grenze = einstellungen.Einstellungen().max_bpm
+            ids = [i for i in ids if any(abs(teil[i].bpm - x.bpm) <= grenze for j, x in teil.items() if j != i)] or ids
+            if args.set:
+                neu = set_faelle_planen(ids, args.set, args.seed, stile, tuple(args.experimente.split(",")))
+            else:
+                neu = faelle_planen(ids, paare, args.seed, stile, tuple(args.experimente.split(",")),
+                                    gemma=bool(args.gemma or args.kritiker),
+                                    waehler="Kritiker" if args.kritiker else "Gemma")
+            for f in neu:   # Nummern fortlaufend ueber alle Ordner
+                f.update(nr=f["nr"] + len(faelle), paar=f["paar"] + len(faelle))
+            faelle += neu
+        reihe = list(range(len(faelle)))
+        random.Random(args.seed).shuffle(reihe)
+        for pos, nr in enumerate(reihe):
+            faelle[nr]["reihe"] = pos
         _schreiben(ordner / "faelle.json", faelle)
     url = f"http://{args.host}:{args.port}"
     try:   # Port zuerst: ein zweiter Test darf nicht neben dem alten laufen (alter Stand im Speicher)

@@ -125,7 +125,7 @@ def test_periode_robust_gegen_intro_ausreisser_und_raster():
 
 
 @pytest.mark.parametrize("art", ["eq", "crossfade", "filter", "echo", "schnitt",
-                                 "drums_zuerst", "acapella", "gesangsschutz"])
+                                 "drums_zuerst", "acapella", "gesangsschutz", "melodie_zuerst"])
 def test_kurven_a_geht_b_kommt(art):
     k = u.kurven(art, 4)
     assert k["b"]["lautstaerke"][-1] > 0.95
@@ -250,6 +250,21 @@ def test_eigen_loop_wiederholt_den_schlag():
     assert np.allclose(y[:3 * takt], a[:3 * takt])
     schlag = takt // 4
     assert np.allclose(y[4 * takt + 300:4 * takt + schlag - 300], a[3 * takt + 300:3 * takt + schlag - 300], atol=1e-5)
+
+
+def test_loop_und_echo_folgen_der_tempo_rampe():
+    # Rampe 0,5 -> 0,4 s je Takt; A ist schon auf das Raster gedehnt (Klick auf jedem Schlag)
+    tn = np.round(np.concatenate([[0], np.cumsum(np.linspace(0.5, 0.4, 8))]) * RATE).astype(int)
+    a = np.zeros((tn[-1] + RATE, 2), np.float32)
+    for k in range(8):
+        for s in range(4):
+            a[tn[k] + (tn[k + 1] - tn[k]) * s // 4] = 1.0
+    y = u._loopen(a, tn, u._loop_plan(Einstellungen(art="eigen", loop="4"), 8), keylock=False)
+    # Takt 7 ist Takt 1 nochmal, aber auf seinen eigenen Schlaegen (Runde 19, Fall 40: lief daneben)
+    soll = tn[7] + (tn[8] - tn[7]) * np.arange(4) // 4
+    ist = [soll[s] - 200 + int(np.argmax(y[soll[s] - 200:soll[s] + 200, 0])) for s in range(4)]
+    assert np.max(np.abs(np.array(ist) - soll)) <= 0.002 * RATE
+    assert u._schlag_bei(tn, tn[-1] - 1) == (tn[8] - tn[7]) / 4   # Echo: Schlag am Ende, nicht der Schnitt
 
 
 def test_loop_info_fuer_die_anzeige():

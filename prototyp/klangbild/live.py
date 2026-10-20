@@ -528,15 +528,16 @@ class Wiedergabe:
             lw = g.info.get("loop_wahl")
             pegel = (g.spur.puffer[v:n], RATE, g.info["takte"], pa, pb, plan.aus_s, plan.ein_s,
                      gain(a.eintrag), gain(b), plan.rezept)
-            fehler = (f"Loop nicht sauber (Güte {lw['guete']})" if lw and lw["guete"] < regie.LOOP_GUETE_MIN else
+            fehler = ("Tempo beim Backen nicht angeglichen" if plan.einst.art in uebergang.SYNC_ARTEN and not g.info["sync"]
+                      else f"Loop nicht sauber (Güte {lw['guete']})" if lw and lw["guete"] < regie.LOOP_GUETE_MIN else
                       regie.pruefen(*pegel))
             # Buckel/Loch: erst den Pegel reparieren, nur wenn das nicht reicht den Plan verwerfen
             if fehler is not None and fehler.startswith(("zu laut", "Loch")) and regie.pegel_reparieren(*pegel):
                 g.info["pegel_reparatur"] = fehler
                 fehler = regie.pruefen(*pegel)
             if fehler is None and plan.rezept in ("double_drop", "drop_cuts"):   # §3.2: zwei versetzte Kick-Zuege?
-                raster = np.round(np.asarray(g.info["raster_s"]) * RATE)
-                fehler = regie.pruefen_drop(g.spur.puffer, RATE, raster, regie.PHRASE)
+                fehler = regie.kicks_versetzt(self.roh(a.eintrag), pa.takte, pa.takt_bei(plan.aus_s) + regie.PHRASE,
+                                              self.roh(b), pb.takte, pb.takt_bei(plan.ein_s) + regie.PHRASE, RATE)
             if fehler is None and self.kritiker is not None and einst.kritiker:   # §2.3: Selbstkontrolle "nachher"
                 from . import datensatz, kritiker
 

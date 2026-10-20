@@ -359,9 +359,9 @@ Einstellungsfelder exakt die Felder von `einstellungen.Einstellungen` sind
 {
   "gen": 17,
   "a": {"spur": 5, "trackId": 12, "bpm": 124.0, "camelot": "8A",
-        "downbeats": [0.51, 2.45, ...], "abschnitte": [190.2], "gainDb": -2.1},
+        "downbeats": [0.51, 2.45, ...], "fein": [[4.0, 0.012], ...], "abschnitte": [190.2], "gainDb": -2.1},
   "b": {"trackId": 40, "pcmPath": ".../40_-3100.pcm", "bpm": 125.1, "camelot": "9A",
-        "downbeats": [...], "abschnitte": [...], "gainDb": -3.1},
+        "downbeats": [...], "fein": [...], "abschnitte": [...], "gainDb": -3.1},
   "abS": 182.4, "jetztS": 179.1, "weiter": false,
   "ausS": 190.2, "einS": 0.48,
   "aGesang": [0,0,0,1, ...] ,
@@ -568,7 +568,8 @@ Unterfunktionen und ihre Python-Vorlagen:
 
 | C++ | Python-Vorlage | Hinweise |
 |---|---|---|
-| `regulaer()` | `uebergang.regulaer` | Kreismittel: `atan2(mean(sin), mean(cos))`. `np.round` = Banker's Rounding (`std::nearbyint` mit `FE_TONEAREST`). |
+| `regulaer()` | `uebergang.regulaer` | Seit Runde 17 ohne Ankerpunkt: Schlag-Lage = häufigste von 16 Stufen (±1 geglättet), Kreismittel der Downbeats in ±¼ Schlag darum (`atan2(mean(sin), mean(cos))`), Eins = Schlag mit den meisten Downbeats (`bincount`), Drift = Median der Reste in ±16 s (`np.median`), `np.interp`. `np.round` = Banker's Rounding (`std::nearbyint` mit `FE_TONEAREST`). |
+| `taktraster()` | `uebergang.taktraster` | Seit Runde 19: `regulaer` + `np.interp` der Fein-Anker-Knoten (`Eintrag.fein`, aus `cache/anker.json` → Import M3). Alle Raster (Profil, Regie, Backen, Anzeige) laufen hierüber. |
 | `raster()` | `uebergang.raster` | — |
 | `periode()` | `uebergang._periode` | Median wie numpy (gerade Anzahl: Mittel der beiden mittleren). |
 | `ausstieg()`, `einstieg()` | `uebergang.ausstieg`, `einstieg` | `abar` aus `Spur.buf` von A. |
@@ -578,9 +579,9 @@ Unterfunktionen und ihre Python-Vorlagen:
 | `mischenEigen()` | `uebergang.mischen_eigen` | Reihenfolge: Loop → Sweep (TP, HP) → `_trocken` (Bänder × Fader, `_deckeln`) → Effekt-Sends. |
 | `sweep()` | `uebergang._sweep` | Koeffizienten je 1 024-Block, Zustand läuft durch, Start eingeschwungen (§5.8). |
 | `bandSplit()` | `mix.band_teilen` | Nullphasig wie `sosfiltfilt` (§5.8). |
-| `nass()` | `uebergang._nass` | Hall: FFT-Faltung mit der IR aus dem Asset `hall_ir.f32` (§5.9). |
+| `nass()` | `uebergang._nass` | Hall: FFT-Faltung mit der IR aus dem Asset `hall_ir.f32` (§5.9). Echo-Verzögerung seit Runde 19 aus dem Schlag dort, wo der Send endet (`_schlag_bei`, `_send_ende`; auch `mischen_stems` mit `takt_n`), nicht aus dem Schnitt über die Blende. |
 | `echoArt()` | `uebergang._echo` | — |
-| `loopPlan()`, `loopen()`, `achtel()` | `_loop_plan`, `_loopen`, `_achtel` | — |
+| `loopPlan()`, `loopen()`, `achtel()` | `_loop_plan`, `_loopen`, `_achtel` | Seit Runde 19: weicht die Länge eines Loop-Stücks um > 0,2 % von der Quelle ab (Tempo-Rampe), wird es mit `warp` (Keylock wie eingestellt) auf seinen Platz gedehnt. |
 | `loopWaehlen()` | `uebergang.loop_waehlen`, `_beat_merkmale`, `_aehnlich` | FFT 4 096 mit Hann-Fenster, 16 log. Bänder 40 Hz–16 kHz. |
 | `introLoop()` | `uebergang._intro_loop` | gibt Audio, Raster und Rückrechnung zurück |
 | `deckeln()`, `taktDb()`, `trocken()` | `_deckeln`, `_takt_db`, `_trocken` | — |
@@ -1257,8 +1258,10 @@ Knacken, 1 h Wiedergabe ohne Aussetzer.
 je mischbarem Titel `audio_hash`, Dateiname, Größe, `features` (Zeile mit
 `analyse_version="0.3.0"`), Profil-JSON aus `cache/profil/` **mit Stem-Pegeln**
 (Stufe S1, §9.3; fehlen sie, vorher `profil.laden` mit Stem-Vorrat rechnen),
-Wellenform als `.bin` (§4.2), Cover-JPEG. Eine `index.json` mit Versionen und
-der Zahl der Profile mit Stems.
+Wellenform als `.bin` (§4.2), Cover-JPEG, Raster-Anker aus `cache/anker.json`
+(Versatz auf die Downbeats gerechnet wie `mixer.bibliothek_laden`, dazu die
+Fein-Knoten `fein`). Eine `index.json` mit Versionen und der Zahl der Profile
+mit Stems.
 
 **T3.2 Hash-Port** (`hashutil.py` → `HashUtil.kt`). Golden: 20 Dateien,
 Hash identisch zu Python.
@@ -1317,7 +1320,7 @@ FFT-Spitze bei 440 Hz ±1 Hz (Port aus `tests/test_uebergang.py`).
 dem Zielraster ±1 ms (Desktop 0,8 ms), Länge exakt `ziel[-1]` Frames,
 Golden `warp_keylock` mit Toleranz für Signalsmith (§12.3).
 
-**T6.4 `regulaer`, `raster`, `_periode`, `ausstieg`, `einstieg`, `Spur`
+**T6.4 `regulaer`, `taktraster`, `raster`, `_periode`, `ausstieg`, `einstieg`, `Spur`
 (`zu_puffer`, `zu_original`, `bpm_bei`).** Golden mit 20 echten Titeln.
 
 **T6.5 `backen` komplett** (§5.6), ohne Stems, ohne `b_an_a`-Rest.

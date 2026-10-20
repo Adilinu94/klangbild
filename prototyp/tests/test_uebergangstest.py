@@ -90,3 +90,14 @@ def test_set_faelle_und_clip_mit_pause():
     rand = int(ut.SET_PAUSE_S * ut.RATE)
     assert len(x) == 3 * ut.RATE and x[ut.RATE - 1, 0] == 0.0 and x[ut.RATE, 0] == 0.0   # Pause an der Naht
     assert x[0, 0] == 1.0 and x[-1, 0] == 1.0 and x[ut.RATE + rand, 0] == 1.0          # Raender des Sets bleiben
+
+
+def test_stil_und_experiment_unabhaengig_und_ordner_je_zeile(tmp_path):
+    f = ut.faelle_planen(list(range(100)), 9, seed=3, experimente=("klassisch", "kreativ", "wild"))
+    basis = [x for x in f if x["rang"] == 0]
+    assert len({(x["stil"], x["experimente"]) for x in basis}) == 9
+    (tmp_path / "nur_ordner.txt").write_text("D:\\Music\\Chill\nD:\\Music\\DJ Playlist\\Hard UKG\n", encoding="utf-8")
+    liste = ut.wurzeln(tmp_path)
+    assert ut.wurzel(r"D:\Music\DJ Playlist\Hard UKG\a.mp3", liste) == liste[1]
+    assert ut.wurzel(r"D:\Music\Chill\Neuer Ordner\b.mp3", liste) == liste[0]
+    assert ut.wurzel(r"D:\Music\DnB\c.mp3", liste) is None

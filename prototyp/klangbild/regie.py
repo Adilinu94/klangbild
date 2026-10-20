@@ -14,6 +14,7 @@ Vorgehen wie ein DJ (Belege: KONZEPT-SMART-AUTODJ.md, PLAN-AUTODJ-V2.md):
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 import numpy as np
 
@@ -475,42 +476,39 @@ def _drop_ok(p: Profil, takt: int, audio: np.ndarray | None, rate: int) -> bool:
     return versatz == 0 or sicher < DROP_SICHER_DB
 
 
-def pruefen_drop(blende: np.ndarray, rate: int, raster: np.ndarray, drop_takt: int) -> str | None:
-    """Kick-Kontrolle nach dem Backen: laufen ab dem gemeinsamen Drop zwei versetzte Kick-Zuege?
-    `raster`: Taktanfaenge der Blende in Samples (mindestens bis drop_takt + 2). Tiefband-Einsaetze (Pegel in
-    40-ms-Fenstern, Anstieg ueber 20 ms ueber max(3 dB, Median + 3 MAD)) in 2 Takten ab dem Drop; liegt mehr als
-    ANTEIL davon ueber TOLERANZ_S neben jedem Sechzehntel des Rasters, faellt der Uebergang durch (Sechzehntel,
-    weil UKG-Kicks synkopiert sind)."""
-    from scipy.signal import find_peaks
+def kick_lage(x: np.ndarray, rate: int, raster: np.ndarray, k: int, takte: int = 4) -> float | None:
+    """Lage der Anschlaege (Kick + Snare-Koerper, Faltung wie `anker.versatz`) in `takte` Takten ab Takt k:
+    so viele s liegen sie hinter dem Raster (Taktanfaenge in s). None ohne klares Muster."""
+    from . import anker
 
-    if drop_takt < 0 or drop_takt + 2 >= len(raster):
+    raster = np.asarray(raster, float)
+    if k < 0 or k + takte >= len(raster):
         return None
-    a0, a1 = int(raster[drop_takt]), int(raster[drop_takt + 2])
-    if a1 > len(blende):
+    a0, a1 = int(raster[k] * rate), int(raster[k + takte] * rate)
+    mono = x[a0:a1].mean(axis=1) if x.ndim > 1 else x[a0:a1]
+    if len(mono) < rate:
         return None
-    leistung = _tief(blende[a0:a1], rate)
-    h, w = max(1, int(0.01 * rate)), max(1, int(0.04 * rate))
-    summe = np.concatenate([[0.0], np.cumsum(leistung)])
-    idx = np.arange(0, len(leistung) - w, h)
-    pegel = 10.0 * np.log10((summe[idx + w] - summe[idx]) / w + 1e-10)
-    anstieg = np.maximum(0.0, pegel[2:] - pegel[:-2])
-    if anstieg.size < 8:
-        return None
-    med = float(np.median(anstieg))
-    spitzen, _ = find_peaks(anstieg, height=max(3.0, med + 3.0 * float(np.median(np.abs(anstieg - med)))),
-                            distance=8)
-    if len(spitzen) < 3:
-        return None
-    t = (spitzen + 2) * h + w - VERZUG_S * rate   # Einsatz liegt im 40-ms-Fenster; VERZUG gemessen an reinem B
-    gitter = np.concatenate([np.linspace(raster[k], raster[k + 1], 17)[:-1]
-                             for k in range(drop_takt, drop_takt + 2)] + [[raster[drop_takt + 2]]]) - a0
-    abstand = np.min(np.abs(t[:, None] - gitter[None, :]), axis=1)
-    anteil = float(np.mean(abstand > TOLERANZ_S * rate))
-    return f"zwei Kick-Züge nach dem Drop ({anteil:.0%} der Kicks neben dem Raster)" if anteil > ANTEIL else None
+    f = anker._anschlag(mono, rate, 0, 100) + anker._anschlag(mono, rate, 150, 400)
+    t = raster[k] + np.arange(len(f)) * anker.HOP / rate
+    beats = np.interp(np.arange(4 * takte + 1) / 4, np.arange(takte + 1), raster[k:k + takte + 1])
+    j = np.clip(np.searchsorted(beats, t) - 1, 0, len(beats) - 2)
+    i, klar = anker._faltung(f, ((t - beats[j]) / (beats[j + 1] - beats[j]) + 0.5) % 1.0 - 0.5)
+    return ((i + 0.5) / anker.STUFEN - 0.5) * float(np.median(np.diff(beats))) if klar >= anker.KLAR_MIN else None
 
 
-# kalibriert an den Double Drops/Drop-Cuts der Runden 8-13 (BAUPLAN-UEBERGAENGE §3.2)
-VERZUG_S, TOLERANZ_S, ANTEIL = 0.012, 0.03, 0.5
+def kicks_versetzt(a_roh: np.ndarray, a_raster: np.ndarray, ia: int, b_roh: np.ndarray, b_raster: np.ndarray,
+                   ib: int, rate: int) -> str | None:
+    """Kick-Kontrolle fuer Double Drop/Drop-Cuts: liegen A's Kicks ab Takt ia und B's ab Takt ib (Originale, je eigenes
+    Raster) gleich weit neben ihrem Raster? Sonst laufen nach dem gemeinsamen Drop zwei versetzte Kick-Zuege.
+    Ersetzt die Messung im fertigen Mix (bis Runde 18): deren Einsatz-Erkennung trennt Zuege unter ~80 ms nicht und
+    mass je nach Kick-Form 0-30 ms neben dem Raster - 5 von 13 Double Drops fielen durch, auch einzelne Songs."""
+    la, lb = kick_lage(a_roh, rate, a_raster, ia), kick_lage(b_roh, rate, b_raster, ib)
+    if la is None or lb is None or abs(lb - la) <= FLAM_S:
+        return None
+    return f"Kicks von A und B {abs(lb - la) * 1000:.0f} ms versetzt"
+
+
+FLAM_S = 0.015   # weiter auseinander klingen zwei Kicks doppelt ("nicht im Takt")
 
 
 def _passung(pa: Profil, pb: Profil, d_a: int, d_b: int) -> float:
@@ -558,6 +556,15 @@ def _double_drops(pa: Profil, pb: Profil, e: Einstellungen, ab_takt: int, stems_
                 p = 2.0 * (harm - 0.85 if harm is not None else 0.0) + 1.0 * d_a / pa.n + (0.3 if dauer == 16 else 0.0)
                 aus.append(_Lage(i, j, L, p, ["Double Drop: beide Drops auf denselben Takt"], harm=harm, drop_k=PHRASE))
     return aus
+
+
+def _chill(eintrag, p: Profil) -> bool:
+    """Ruhige elektronische Musik: der Ordner (das Genre der Bibliothek) heisst Chill; ohne Ordner (Upload)
+    das Energielevel (Chill-Median 0,39, UKG/DnB 90 % ueber 0,5)."""
+    ordner = [t.lower() for t in Path(eintrag.pfad).parent.parts] if eintrag is not None else []
+    if ordner and ordner[-1] != "upload":
+        return any("chill" in t for t in ordner)
+    return p.energielevel() < 0.5
 
 
 def _rangliste(pa: Profil, pb: Profil, e: Einstellungen, ab_takt: int, sofort: bool,
@@ -659,6 +666,9 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
     if sync and not vorlauf:   # backen entscheidet am lokalen Tempo der Stelle, nicht am Song-BPM
         from .uebergang import TEMPO_SPIEL, _periode
         sync = abs(240.0 / _periode(pa.takte, i) - 240.0 / _periode(pb.takte, j)) <= max(e.max_bpm, 0.05) + TEMPO_SPIEL
+    elif vorlauf:   # wie backen: Tempo an Ausstieg und Einsatz (Runde 19 vorab: 160 -> 174 BPM fiel erst beim Backen durch)
+        from .uebergang import _periode
+        sync = abs(_periode(pa.takte, i) / _periode(pb.takte, j) - 1.0) <= VORLAUF_MAX
     if lage.drop_k and sync:   # die Lage ist fuer den Double Drop gebaut: nur er passt hier
         # Mit Stems tauscht auch die Stimme auf dem Drop; ohne (oder als Ersatz in backen) die Huellen der Art eigen
         # Runde 9: A's Drop bleibt voll (auch sein Bass), B kommt ohne Bass dazu - beide Drops voll, ein
@@ -671,7 +681,7 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
         echo = e.experimente == "wild"
         return "double_drop", {**basis, "lautstaerke": "doppel", "eq": "bass_takt", "bass_takt": L - 1,
                                **({"art": "double_drop", "gesang_takt": lage.drop_k} if stems_da else {}),
-                               **({"effekt": "echo75_ende_aus"} if echo else {})}, \
+                               **({"effekt": "echo100_ende_aus"} if echo else {})}, \
             ("Stems: " if stems_da else "") + "Double Drop: beide Drops voll, nur A's Bass, " + \
             ("B's Stimme kommt auf dem Drop, " if stems_da else "") + "Bass-Switch am Ende" + \
             (", A geht ins Echo" if echo else "")
@@ -692,13 +702,13 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
         """Kandidat mit Vorzugswert; Effekt nur, wo er hoerbar ist. Experimente: auch normale Blends
         bekommen einen Ausstiegs-Effekt (Runde 9: "fast keinen Effekt gehoert")."""
         dort_hoerbar = loop_hoerbar if felder.get("loop", "keiner") != "keiner" else effekt_hoerbar
-        if mut and dort_hoerbar and felder.get("art", "eigen") == "eigen" and name not in GESANG_REZEPTE \
+        if e.experimente == "wild" and dreh % 2 == 0 and dort_hoerbar and felder.get("art", "eigen") == "eigen" \
+                and name not in GESANG_REZEPTE \
                 and felder.get("effekt", "keiner") == "keiner" and felder.get("trick", "keiner") == "keiner":
-            fx = ("echo75", "pingpong75", "hall")[dreh % 3]
+            fx = ("echo100", "pingpong50")[dreh // 2 % 2]
             felder = {**felder, "effekt": f"{fx}_ende_aus",
                       **({"filter": "hp_aus_reso"} if e.experimente == "wild" and felder.get("filter") == "hp_aus" else {})}
-            text += {"echo75": ", A geht ins Echo", "pingpong75": ", A geht ins Ping-Pong-Delay",
-                     "hall": ", A geht in den Hall"}[fx]
+            text += {"echo100": ", A geht ins Echo", "pingpong50": ", A geht ins Ping-Pong-Delay"}[fx]
         hoerbar = loop_hoerbar if felder.get("loop", "keiner") != "keiner" else effekt_hoerbar
         if felder.get("effekt", "keiner") != "keiner" and not hoerbar:
             return
@@ -746,14 +756,18 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
             for k, (name, felder, text) in enumerate(tricks):
                 if name == "riser_drop" and not stark:
                     continue
+                # Runde 19: Backspin bei Chill 3,0 (n = 7, "passt nicht bei ruhigen Liedern, nur bei UKG, DnB"),
+                # bei UKG/DnB 4,0 (n = 29); "nur wenn bei B dann ein Drop kommt"
+                if name == "spinback_drop" and (not drop_genau or _chill(a, pa) or _chill(b, pb)):
+                    continue
                 if name != "teaser_drop" or L >= 4:
                     kann(name, felder, text + ", B's Drop schlägt ein", mut + 0.05 * ((dreh + k) % len(tricks)))
         if mut and not a_endet:   # A bekommt einen Modulations-Effekt und geht ins Echo/Ping-Pong
             fx = ("flanger", "phaser", "crush")[dreh % 3]
-            echo = ("echo75", "pingpong75")[dreh // 3 % 2]
+            echo = ("echo100", "pingpong50")[dreh // 3 % 2]
             kann("fx_echo", dict(ausklingen, trick=fx, effekt=f"{echo}_ende_aus"),
                  f"A bekommt {dict(flanger='einen Flanger', phaser='einen Phaser', crush='den Bitcrusher')[fx]} "
-                 f"und geht ins {'Echo' if echo == 'echo75' else 'Ping-Pong-Delay'}", mut - 0.6)
+                 f"und geht ins {'Echo' if echo == 'echo100' else 'Ping-Pong-Delay'}", mut - 1.5)
         ueb = _gesang_uebergabe(pa, pb, i, bi) if stems_da and not lage.k_ein else None
         if ueb is not None and harmonisch:   # eine Stimme ueber fremder Musik braucht passende Toene
             kann(ueb[0], dict(art=ueb[0], gesang_takt=ueb[1]),
@@ -784,7 +798,7 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
                  "A loopt, am Ende geht A ins Echo", loop_wert - 0.3)
             if L >= 16:   # ein langer Loop allein wird eintoenig: A wird duenner und geht ins Echo
                 kann("loop_fx", dict(lautstaerke="letzter_takt", eq="bass_mitte", filter="hp_aus", loop="auto",
-                                     effekt="echo75_ende_aus"),
+                                     effekt="echo100_ende_aus"),
                      "A loopt, wird mit dem Hochpass dünner und geht am Ende ins Echo", loop_wert + 0.2)
             if not harmonisch:
                 # A blendet ueber die ganze Blende aus, waehrend der Hochpass schliesst (hart: "endet zu abrupt")
@@ -800,12 +814,12 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
                                           effekt="echo50_mitte_aus"),
                      "beide singen: Schnitt in der Mitte, A geht ins Echo", 3.0)
             if b_drop_danach:   # kurz und knapp wie im DnB: A geht ins Echo, B's Drop schlaegt ein
-                kann("echo_drop", dict(halten, effekt="echo75_ende_aus"), "A geht ins Echo, B's Drop übernimmt", 3.0)
+                kann("echo_drop", dict(halten, effekt="echo100_ende_aus"), "A geht ins Echo, B's Drop übernimmt", 3.0)
             if e.spielanteil == "schnell" and b_drop_danach and harmonisch:
                 # Rolle = Aufbau in einen Drop; ohne Drop dahinter oder mit beissender Tonart klang sie
                 # im Test wie ein Unfall (1,3)
                 kann("rolle", dict(halten, loop="rolle"), "Loop-Rolle in B's Drop", 0.3)   # 14 Runden: 1,33
-                kann("delay_out", dict(halten, effekt="delay75_ende_aus"), "kurzer Blend, A geht ins Delay", 2.0)
+                kann("delay_out", dict(halten, effekt="delay50_ende_aus"), "kurzer Blend, A geht ins Delay", 2.0)
             kann("kurz_eq", {} if harmonisch else dict(lautstaerke="hart_aus", eq="bass_mitte", filter="hp_aus"),
                  "kurzer Profi-Blend" if harmonisch else "Tonarten passen nicht: A dünnt mit Hochpass aus", 1.0)
         if e.modus == "ausgewogen":
@@ -814,8 +828,10 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
             if not harmonisch:
                 kann("filter_blend", dict(kurz8, lautstaerke="hart_aus", eq="bass_mitte", filter="hp_aus"),
                      "Tonarten passen nicht: kurzer Blend, A dünnt mit Hochpass aus", 1.5)
-            if stems_da and harmonisch:
+            if stems_da and harmonisch and not lage.k_ein:   # Stem-Arten loopen B's Intro nicht (Lage waere dafuer gebaut)
                 kann("drums_zuerst", dict(art="drums_zuerst"), "Drums von B zuerst, dann Bass und Rest (Stems)", 2.0)
+                kann("melodie_zuerst", dict(art="melodie_zuerst"),
+                     "Stems: B's Melodie zuerst über A's Groove, dann Drums und Bass, B's Gesang zuletzt", 3.4)
             if beruhigen:
                 kann("tiefpass_aus", dict(lautstaerke="hart_aus", eq="bass_mitte", filter="tp_aus"),
                      "B ruhiger: A wird mit Tiefpass dunkel", 2.0)
@@ -833,8 +849,10 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
             if beruhigen:
                 kann("relaxed", dict(lautstaerke="letzter_takt", eq="bass_mitte", filter="tp_aus", effekt="hall_ende_aus"),
                      "B ruhiger: A wird dunkel und klingt im Hall aus", 2.5)
-            if stems_da and harmonisch:
+            if stems_da and harmonisch and not lage.k_ein:   # Stem-Arten loopen B's Intro nicht (Lage waere dafuer gebaut)
                 kann("drums_zuerst", dict(art="drums_zuerst"), "Drums von B zuerst, dann Bass und Rest (Stems)", 2.0)
+                kann("melodie_zuerst", dict(art="melodie_zuerst"),
+                     "Stems: B's Melodie zuerst über A's Groove, dann Drums und Bass, B's Gesang zuletzt", 3.4)
             kann("profi_eq", {}, "langer Profi-Blend: Höhen → Mitten → Bass-Tausch", 1.0)
     if a_endet:   # A klingt in der Blende aus: ohne Loop bliebe ein Loch
         mit_loop = [k for k in kandidaten if k[1].get("loop", "keiner") != "keiner" or k[0] in GESANG_REZEPTE]
@@ -844,7 +862,7 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
     # Abwechslung: nach einem Loop-Rezept kommt bevorzugt ein anderes (sonst loopt jeder Uebergang)
     nach_loop = vorher in LOOP_REZEPTE
     kandidaten.sort(key=lambda k: -(k[3] - (1.5 if nach_loop and k[0] in LOOP_REZEPTE else 0.0)
-                                    + REZEPT_GEWICHT * (REZEPT_NOTE.get(k[0], 3.15) - 3.15)))   # stabil
+                                    + REZEPT_GEWICHT * (REZEPT_NOTE.get(k[0], REZEPT_MITTEL) - REZEPT_MITTEL)))   # stabil
     vorlieben = vorlieben or {}
     # Abwechslung: nicht zweimal dasselbe; Gelerntes: was du oft abbrichst, nur wenn nichts anderes geht
     for name, felder, text, _ in kandidaten:
@@ -856,13 +874,15 @@ def _rezept(lage: _Lage, pa: Profil, pb: Profil, e: Einstellungen, sync: bool, h
     return kandidaten[0][:3]
 
 
-# Mittlere Note je Rezept aus 16 Hoerrunden (530 Noten, zum Mittel 3,15 hin geschrumpft: +10 Pseudo-Noten).
-# shortcut: fester Stand 17.10.2026; neu ausrechnen, wenn weitere Runden bewertet sind
-REZEPT_NOTE = {"acapella": 3.42, "breakdown": 2.44, "bremse_drop": 3.16, "double_drop": 2.93, "drop_cuts": 2.83,
-               "drums_zuerst": 3.04, "echo_drop": 3.27, "echo_out": 3.05, "fx_echo": 3.25, "gate_drop": 3.12,
-               "gesang_zuerst": 3.58, "gesangsschutz": 3.38, "hochpass_hall": 2.82, "intro_loop_b": 3.23,
-               "kurz_eq": 3.06, "loop_filter": 3.12, "loop_fx": 3.15, "outro_loop": 3.2, "riser_drop": 2.84,
-               "rolle": 2.73, "schnitt": 2.89, "spinback_drop": 3.53, "teaser_drop": 3.04}
+# Mittlere Note je Rezept aus 19 Hoerrunden (662 Noten, zum Mittel 3,27 hin geschrumpft: +10 Pseudo-Noten).
+# shortcut: fester Stand 18.10.2026 (Scratchpad rezept_note.py); neu ausrechnen, wenn weitere Runden bewertet sind
+REZEPT_MITTEL = 3.27
+REZEPT_NOTE = {"acapella": 3.53, "breakdown": 2.49, "bremse_drop": 3.2, "bruecke_beatlos": 3.24, "double_drop": 3.14,
+               "drop_cuts": 2.91, "drums_zuerst": 3.12, "echo_drop": 3.28, "echo_out": 3.15, "echo_out_blend": 3.24,
+               "filter_blend": 3.22, "fx_echo": 3.35, "gate_drop": 3.21, "gesang_zuerst": 3.65, "gesangsschutz": 3.49,
+               "hochpass_hall": 2.91, "intro_loop_b": 3.34, "kurz_eq": 3.14, "loop_filter": 3.19, "loop_fx": 3.17,
+               "melodie_zuerst": 3.42, "outro_loop": 3.31, "riser_drop": 2.92, "rolle": 2.82, "schnitt": 2.97,
+               "schnitt_echo": 3.14, "spinback_drop": 3.71, "teaser_drop": 3.14}
 REZEPT_GEWICHT = 2.0   # je Notenpunkt ueber/unter dem Mittel (profi_eq fehlt: seine Noten sind meist Sicherheits-Blends)
 
 

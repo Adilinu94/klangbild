@@ -437,7 +437,8 @@ def _parser() -> argparse.ArgumentParser:
     p_ut.add_argument("--seed", type=int, default=7, help="Zufall reproduzierbar machen")
     p_ut.add_argument("--neu", action="store_true", help="alten Test archivieren, neuen beginnen")
     p_ut.add_argument("--auswertung", action="store_true", help="nur auswerten (auswertung.md)")
-    p_ut.add_argument("--nur-ordner", default=None, help="nur Titel aus diesem Ordner (A und B)")
+    p_ut.add_argument("--nur-ordner", default=None,
+                      help="nur Titel aus diesem Ordner (A und B); mehrere mit | getrennt: gemischt nur innerhalb eines Ordners")
     p_ut.add_argument("--stil", default=None,
                       help="Stil(e) mit Komma, z. B. kurz,lang: reihum (sonst alle drei)")
     p_ut.add_argument("--experimente", default="klassisch",

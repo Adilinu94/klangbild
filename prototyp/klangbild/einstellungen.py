@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
 
 ARTEN = ("auto", "eigen", "eq", "crossfade", "filter", "echo", "schnitt",
-         "drums_zuerst", "acapella", "gesangsschutz", "gesang_zuerst", "double_drop")
+         "drums_zuerst", "acapella", "gesangsschutz", "gesang_zuerst", "double_drop", "melodie_zuerst")
 # Bausteine der Art "eigen" (wie im DJ.Studio-Transition-Editor kombinierbar):
 LAUTSTAERKE = ("nahtlos", "linear", "ueberlappung", "hart_ein", "hart_aus", "hart_beide",
                "mitte", "frueh", "spaet", "letzter_takt", "drop", "doppel", "mitte_weich")

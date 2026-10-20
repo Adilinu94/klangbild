@@ -31,7 +31,7 @@ SUCHE = 441           # WSOLA: Naht um bis zu ±10 ms auf die beste Uebereinstim
 KONTEXT = 8192        # Eingangsrand je Dehn-Aufruf (> Signalsmith-Latenz 2x2646)
 MAX_LAUF = 30 * RATE  # laengster Dehn-Aufruf (Eingang)
 _DEHN_POOL = None
-STEM_ARTEN = ("drums_zuerst", "acapella", "gesangsschutz", "gesang_zuerst", "double_drop")
+STEM_ARTEN = ("drums_zuerst", "acapella", "gesangsschutz", "gesang_zuerst", "double_drop", "melodie_zuerst")
 SYNC_ARTEN = ("eq", "crossfade", "filter", "eigen") + STEM_ARTEN
 
 
@@ -47,6 +47,7 @@ class Eintrag:
     gain_db: float = 0.0
     energie: list[float] = field(default_factory=list)
     abschnitte: list[float] = field(default_factory=list)
+    fein: list = field(default_factory=list)   # anker.fein: [[t, dt], ...] lokale Kick-Lage
 
     @property
     def titel(self) -> str:
@@ -134,7 +135,7 @@ class Spur:
     @classmethod
     def roh(cls, eintrag: Eintrag, puffer: np.ndarray) -> "Spur":
         dauer = len(puffer) / RATE
-        t = regulaer(eintrag.downbeats, eintrag.bpm, dauer)
+        t = taktraster(eintrag, dauer)
         return cls(eintrag, puffer, t, t.copy())
 
     def zu_puffer(self, t_orig: float) -> float:
@@ -369,6 +370,10 @@ STEM_PLAN = {
                       "other": ((0.5, 0.75), (0.5, 0.75)), "vocals": ((0.0, 0.06), (0.0, 0.06))},
     "double_drop": {"drums": ((0.94, 1.0), (0.5, 0.51)), "bass": ((0.93, 0.95), (0.93, 0.95)),
                     "other": ((0.94, 1.0), (0.0, 0.5)), "vocals": ((0.47, 0.5), (0.5, 0.51))},
+    # Runde 19 (neu, Chill): B's Harmonien/Melodie kommen zuerst ueber A's Groove, dann tauschen Drums und Bass,
+    # B's Gesang kommt zuletzt; A's Stimme geht frueh (zwei Stimmen ueber fremder Harmonie klingen wie ein Unfall)
+    "melodie_zuerst": {"drums": ((0.5, 0.75), (0.5, 0.75)), "bass": ((0.6, 0.65), (0.6, 0.65)),
+                       "other": ((0.5, 0.9), (0.0, 0.4)), "vocals": ((0.0, 0.3), (0.75, 1.0))},
 }
 
 
@@ -681,6 +686,18 @@ def _nass(typ: str, send: np.ndarray, schlag_n: float) -> np.ndarray:
     return NASS[art] * aus
 
 
+def _schlag_bei(takt_n: np.ndarray, p: int) -> float:
+    """Schlaglaenge (Samples) im Takt um Sample p. Mit Tempo-Rampe ist der Schnitt ueber die Blende falsch:
+    Runde 19, Fall 36 (72 -> 68 BPM) - das Echo lag je Wiederholung 24 ms neben B ("nicht im gleichen Takt")."""
+    k = int(np.clip(np.searchsorted(takt_n, p, side="right") - 1, 0, len(takt_n) - 2))
+    return float(takt_n[k + 1] - takt_n[k]) / 4
+
+
+def _send_ende(send: np.ndarray) -> int:
+    nz = np.flatnonzero(send)
+    return int(nz[-1]) if len(nz) else len(send) - 1
+
+
 def _loop_plan(e: Einstellungen, takte: int) -> list[tuple[int, int, int]]:
     """Loop-Abschnitte (von, bis, Groesse) in Achteln der Blende; Quelle ist immer `von`
     des ersten Abschnitts. Wie DJs Loops einsetzen:
@@ -709,19 +726,28 @@ def _achtel(takt_n: np.ndarray) -> np.ndarray:
                                     for i in range(takte)] + [[takt_n[-1]]])).astype(int)
 
 
-def _loopen(a: np.ndarray, takt_n: np.ndarray, plan: list[tuple[int, int, int]]) -> np.ndarray:
-    """A loopt im Taktraster nach `_loop_plan` (Naht je Loop-Sprung equipotent, ~6 ms)."""
+def _loopen(a: np.ndarray, takt_n: np.ndarray, plan: list[tuple[int, int, int]], keylock: bool = True) -> np.ndarray:
+    """A loopt im Taktraster nach `_loop_plan` (Naht je Loop-Sprung equipotent, ~6 ms). Mit Tempo-Rampe
+    wird jedes Stueck auf seinen Platz im Raster gedehnt (Runde 19, Fall 40: der Loop lief bis ~40 ms neben B)."""
     achtel = _achtel(takt_n)
     aus = a.copy()
     f = 256
     rein = np.sin(np.linspace(0, np.pi / 2, f, dtype=np.float32))[:, None]
-    quelle = achtel[plan[0][0]]
+    q0 = plan[0][0]
+    quelle = achtel[q0]
     for von, bis, groesse in plan:
         for j in range(von, bis, groesse):
             ziel, laenge = achtel[j], achtel[min(j + groesse, bis)] - achtel[j]
             if ziel == quelle or laenge <= 0:   # erster Durchlauf = das Original selbst
                 continue
-            stueck = _ausschnitt(a, quelle, laenge + f)
+            # gleich viele Achtel ab der Quelle (am Abschnittsende abgeschnitten = gekuerzt, nicht gedehnt)
+            q_laenge = achtel[min(q0 + min(j + groesse, bis) - j, len(achtel) - 1)] - quelle
+            if abs(q_laenge - laenge) > 0.002 * laenge:
+                qe = quelle + int(round((laenge + f) * q_laenge / laenge))
+                stueck = mix._auffuellen(warp(a, np.array([quelle, qe]) / RATE, np.array([0, laenge + f]) / RATE,
+                                              keylock), laenge + f)
+            else:
+                stueck = _ausschnitt(a, quelle, laenge + f)
             stueck = stueck[:max(0, min(len(stueck), len(aus) - ziel))]
             nf = min(f, len(stueck))
             aus[ziel:ziel + nf] = aus[ziel:ziel + nf] * rein[::-1][:nf] + stueck[:nf] * rein[:nf]
@@ -807,6 +833,15 @@ def loop_waehlen(a: np.ndarray, takt_n: np.ndarray, meiden: np.ndarray | None = 
             if p > best_p:
                 best_p, best = p, (s0, L, guete)
     return best
+
+
+def taktraster(eintrag: Eintrag, bis_s: float) -> np.ndarray:
+    """Das Taktraster eines Songs: `regulaer` plus Fein-Anker (anker.fein, lokale Kick-Lage je Abschnitt)."""
+    t = regulaer(eintrag.downbeats, eintrag.bpm, bis_s)
+    if eintrag.fein:
+        kx, ky = np.asarray(eintrag.fein, float).T
+        t = t + np.interp(t, kx, ky)
+    return t
 
 
 def loop_im_original(puffer: np.ndarray, raster_s: np.ndarray, i: int, takte: int,
@@ -897,7 +932,7 @@ def _spinback(a: np.ndarray, n: int) -> np.ndarray:
     if n < 2:
         return a
     s, t = len(a) - n, np.arange(n) / n
-    v = np.where(t < 0.08, 1 - 5 * t / 0.08, -4 * ((1 - t) / 0.92) ** 2)   # +1 -> -4 -> 0
+    v = np.where(t < 0.08, 1 - 6 * t / 0.08, np.where(t < 0.4, -5.0, -5 * ((1 - t) / 0.6) ** 2))   # +1 -> -5 -> 0
     pos = np.clip(s + np.cumsum(v), 0, len(a) - 1)
     aus = a.copy()   # Runde 11: "Backspin lauter" - haelt den Pegel laenger, statt gleich abzufallen
     aus[s:] = _abspielen(a, pos) * (1.2 * (1 - t) ** 0.3)[:, None].astype(np.float32)
@@ -1010,14 +1045,15 @@ def mischen_eigen(a: np.ndarray, b: np.ndarray, e: Einstellungen, takt_n: np.nda
     takte = len(takt_n) - 1
     h = _huellen(e, takte, n, min(0.25, KANTE_S * RATE / max(1, n)))
     if e.loop not in ("keiner", "auto"):
-        a = _loopen(a, takt_n, _loop_plan(e, takte))
+        a = _loopen(a, takt_n, _loop_plan(e, takte), e.keylock)
     schlag_n = float(takt_n[-1]) / max(1, takte) / 4
+    schlag_ende = _schlag_bei(takt_n, n - 1)
     if e.trick == "flanger":   # schleicht sich ein, am Ende voll
         a = _flanger(a, np.sqrt(np.arange(n) / n), schlag_n)
     elif e.trick == "bremse":
-        a = _bremse(a, int(2 * schlag_n))
+        a = _bremse(a, int(2 * schlag_ende))
     elif e.trick == "spinback":
-        a = _spinback(a, int(3 * schlag_n))
+        a = _spinback(a, int(3 * schlag_ende))
     elif e.trick == "phaser":
         a = _phaser(a, np.sqrt(np.arange(n) / n), schlag_n)
     elif e.trick == "gate":
@@ -1039,7 +1075,7 @@ def mischen_eigen(a: np.ndarray, b: np.ndarray, e: Einstellungen, takt_n: np.nda
     for seite, typ, send in (("a", e.effekt.split("_")[0], h["a_send"]), ("b", "hall", h["b_send"])):
         if send is None:
             continue
-        nass = _nass(typ, (a if seite == "a" else b) * send[:, None], schlag_n)
+        nass = _nass(typ, (a if seite == "a" else b) * send[:, None], _schlag_bei(takt_n, _send_ende(send)))
         if seite == "b":
             nass *= np.float32(0.6)   # B laeuft parallel zu A: Hall-Einstieg dezenter
         if seite == "a" and h["nass_ab"] is not None:   # abschneiden: Fahne endet mit der Blende
@@ -1139,7 +1175,8 @@ def _singt(stems: dict[str, np.ndarray]) -> bool:
 
 
 def mischen_stems(art: str, a: dict[str, np.ndarray], b: dict[str, np.ndarray], takte: int = 1,
-                  gesang_takt: int = -1, mit_fahne: bool = False, echo: bool = False):
+                  gesang_takt: int = -1, mit_fahne: bool = False, echo: bool = False,
+                  takt_n: np.ndarray | None = None):
     """Stem-Uebergaenge: je Stem eigene Ein-/Ausblendung (Anteile der Blendenlaenge).
 
     - drums_zuerst: B-Drums laufen in der ersten Haelfte unter A ein (A-Drums
@@ -1150,8 +1187,11 @@ def mischen_stems(art: str, a: dict[str, np.ndarray], b: dict[str, np.ndarray], 
 
     `mit_fahne`: (Blende, Fahne) - die Echo-Fahne von A's letzten Worten hinter der Blende.
     `echo` (double_drop): A's Musik geht im letzten Takt ins Echo.
+    `takt_n`: Taktgrenzen der Blende (Samples) - das Echo nimmt den Schlag am Ende seines Sends.
     """
     n = len(a["drums"])
+    schlag = (lambda send: _schlag_bei(takt_n, _send_ende(send))) if takt_n is not None else \
+        (lambda send: n / takte / 4)
     aus = np.zeros_like(a["drums"])
     plan = stem_plan(art, takte, gesang_takt)
     # Double Drop: B ohne Tiefen bis zum Bass-Switch (Low-EQ zu) - auch Kick und Bassreste in B's
@@ -1171,7 +1211,7 @@ def mischen_stems(art: str, a: dict[str, np.ndarray], b: dict[str, np.ndarray], 
         va, ba = plan["vocals"][0]
         x = np.arange(n) / n
         send = np.where(x < ba, np.clip((x - (va - 0.5 / takte)) * takte * 2, 0, 1), 0).astype(np.float32)
-        nass = _nass("echo75", a["vocals"][:n] * send[:, None], n / takte / 4)
+        nass = _nass("echo50", a["vocals"][:n] * send[:, None], schlag(send))
         aus += nass[:n]
         fahne = nass[n:]
     elif art == "gesang_zuerst" and 0 < gesang_takt <= takte:
@@ -1186,7 +1226,7 @@ def mischen_stems(art: str, a: dict[str, np.ndarray], b: dict[str, np.ndarray], 
         t = 1 / max(1, takte)
         x = np.arange(n) / n
         send = np.clip((x - (1 - 1.5 * t)) / (0.5 * t), 0, 1).astype(np.float32)   # letzter Takt
-        nass = _nass("echo75", (a["drums"][:n] + a["other"][:n]) * send[:, None], n / takte / 4)
+        nass = _nass("echo100", (a["drums"][:n] + a["other"][:n]) * send[:, None], schlag(send))
         aus += nass[:n]
         fahne = nass[n:]
     else:
@@ -1286,10 +1326,10 @@ def ausstieg(a: Spur, e: Einstellungen, takte: int, ab_s: float, weiter: bool = 
 def einstieg(b: Eintrag, b_samples: int, e: Einstellungen, ein_s: float | None = None):
     """(Taktraster von B in Originalzeit, Index des Takts, an dem B einsetzt)."""
     if ein_s is not None:   # von der Regie: genau dort
-        bbar = regulaer(b.downbeats, b.bpm, b_samples / RATE + 64 * 2.5)
+        bbar = taktraster(b, b_samples / RATE + 64 * 2.5)
         return bbar, int(np.argmin(np.abs(bbar - ein_s)))
     drop_s = b.abschnitte[0] if e.einstieg == "drop" and b.abschnitte else None
-    bbar = regulaer(b.downbeats, b.bpm, b_samples / RATE + 64 * 2.5)
+    bbar = taktraster(b, b_samples / RATE + 64 * 2.5)
     return bbar, (_phrase_bei(bbar, drop_s) if drop_s is not None else 0)
 
 
@@ -1438,7 +1478,8 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
             art = "gesangsschutz" if _singt(wa) and _singt(wb) else "eq"
         if art in STEM_ARTEN:
             blende, nachlauf = mischen_stems(art, wa, wb, takte, e.gesang_takt, mit_fahne=True,
-                                             echo=e.effekt != "keiner")
+                                             echo=e.effekt != "keiner",
+                                             takt_n=np.round((ziel - t0) * RATE).astype(int))
         else:
             blende = mischen(art, a_seg, b_seg, takte)
         # Ende: von der Stem-Summe in B's Gesamtsignal, das nahtlos weiterlaeuft
@@ -1486,7 +1527,7 @@ def backen(a: Spur, b: Eintrag, b_audio: np.ndarray, e: Einstellungen, ab_s: flo
             "b_orig_start": round(float(rueck(bbar[j0:j0 + 1])[0] if rueck is not None else bbar[j0]), 3),
             "a_orig_pro_s": round((a.zu_original(ziel[-1]) - a_start) / gesamt, 5) if gesamt > 0 else 1.0,
             **({"vorlauf_s": round(n_vor / RATE, 3), "vorlauf_takte": vor} if vor else {}),
-            # Taktanfaenge im Puffer von B (s), 4 Takte ueber die Blende hinaus (Kick-Kontrolle, regie.pruefen_drop)
+            # Taktanfaenge im Puffer von B (s), 4 Takte ueber die Blende hinaus
             "raster_s": [round(float(x), 4) for x in np.concatenate(
                 [ziel - t0, ziel[-1] - t0 + p_b * np.arange(1, 5)]) + n_vor / RATE],
             "kurven": kurven(art, takte, e),

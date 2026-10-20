@@ -229,6 +229,15 @@ def test_kein_effekt_auf_ein_ausklingendes_outro():
                 assert plan.einst.effekt == "keiner", plan.rezept
 
 
+def test_chill_nach_ordner_sonst_nach_energie():
+    from types import SimpleNamespace as NS
+
+    ruhig, hart = NS(energielevel=lambda: 0.3), NS(energielevel=lambda: 0.9)
+    assert regie._chill(NS(pfad="D:/Music/Chill/TOBI/a.mp3"), hart)
+    assert not regie._chill(NS(pfad="D:/Music/DJ Playlist/Hard UKG/a.mp3"), ruhig)
+    assert regie._chill(NS(pfad="daten/upload/a.mp3"), ruhig) and not regie._chill(None, hart)
+
+
 @pytest.mark.parametrize("modus,spielanteil", [("kurz", "lang"), ("ausgewogen", "lang"), ("ausgewogen", "schnell"),
                                               ("lang", "lang"), ("lang", "schnell")])
 def test_loops_gehoeren_in_jeden_stil(modus, spielanteil):
@@ -500,3 +509,10 @@ def test_unsauberer_loop_nur_zur_not(monkeypatch):
                           True, False, stems_da=True, anzahl=6, a_audio=np.zeros((10, 2), np.float32))
     ohne = [p.einst.loop == "keiner" for p in plaene]
     assert ohne[0] and ohne == sorted(ohne, reverse=True)       # Loop-Plaene (A endet) erst ganz hinten
+
+
+def test_stem_rezepte_nie_auf_einer_lage_mit_b_intro_loop():
+    # Stem-Arten loopen B's Intro nicht: auf einer dafuer gebauten Lage liefe B in der Blende zu weit
+    for p in _planen(_profil(SONG), _profil(SONG), modus="lang") + _planen(_profil(SONG), _profil(SONG)):
+        if p.einst.art in ("drums_zuerst", "melodie_zuerst"):
+            assert p.einst.loop_ein == 0 and "Intro geloopt" not in p.grund
