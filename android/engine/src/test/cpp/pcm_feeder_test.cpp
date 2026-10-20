@@ -99,6 +99,56 @@ TEST(PcmFeeder, NaechsteDateiLaeuftNahtlosWeiter) {
     std::remove(b.c_str());
 }
 
+TEST(PcmFeeder, GeplanterWechselAbFrame) {
+    const std::string a = "pcm-feeder-plan-a.pcm";
+    const std::string b = "pcm-feeder-plan-b.pcm";
+    ASSERT_TRUE(schreibePcm(a, std::vector<float>(2 * 1000, 0.1f)));
+    ASSERT_TRUE(schreibePcm(b, std::vector<float>(2 * 1000, 0.2f)));
+
+    PlaybackCore core;
+    PcmFeeder feeder(core);
+    ASSERT_TRUE(feeder.oeffne(a, 0, 1));
+    ASSERT_TRUE(feeder.setzeNaechste(b, 500, 2, 300));   // ab Frame 300 in A, B ab Frame 500
+
+    std::vector<float> block(2 * 441);
+    core.process(block.data(), 441);
+    EXPECT_EQ(feeder.fill(), 800u);   // 300 aus A, 500 aus B
+    std::vector<float> aus(2 * 800);
+    ASSERT_EQ(core.ring().read(aus.data(), 800), 800u);
+    EXPECT_NEAR(aus[2 * 299], 0.1f, 1e-4f);
+    EXPECT_NEAR(aus[2 * 300], 0.2f, 1e-4f);   // Wechsel genau an der geplanten Stelle
+    EXPECT_NEAR(aus[2 * 799], 0.2f, 1e-4f);
+    EXPECT_EQ(feeder.spur(), 2);
+    EXPECT_EQ(feeder.position(), 1000);   // B startete bei 500 und lief bis zum Ende
+    std::remove(a.c_str());
+    std::remove(b.c_str());
+}
+
+TEST(PcmFeeder, WechselNachVollerDatei) {
+    const std::string a = "pcm-feeder-voll-a.pcm";
+    const std::string b = "pcm-feeder-voll-b.pcm";
+    ASSERT_TRUE(schreibePcm(a, std::vector<float>(2 * 44100, 0.1f)));
+    ASSERT_TRUE(schreibePcm(b, std::vector<float>(2 * 44100, 0.2f)));
+
+    PlaybackCore core;
+    PcmFeeder feeder(core);
+    ASSERT_TRUE(feeder.oeffne(a, 0, 1));
+    std::vector<float> block(2 * 441);
+    core.process(block.data(), 441);        // Flush bestaetigen
+    EXPECT_GT(feeder.fill(), 0u);           // A fuellt den Ring (1 s)
+    ASSERT_TRUE(feeder.setzeNaechste(b, 0, 2, -1));   // erst danach die Folgedatei
+    core.setPlaying(true);
+
+    for (int i = 0; i < 300; ++i) {
+        core.process(block.data(), 441);
+        feeder.fill();
+    }
+    EXPECT_EQ(feeder.spur(), 2);            // nach A kommt B
+    EXPECT_TRUE(feeder.fertig());
+    std::remove(a.c_str());
+    std::remove(b.c_str());
+}
+
 TEST(PcmFeeder, OhneDateiLaeuftDerSinus) {
     PlaybackCore core;
     PcmFeeder feeder(core);

@@ -71,7 +71,7 @@ class PcmPlaybackTest {
 
         assertTrue("startFile", NativeEngine.startFile(a, 0, 77))
         try {
-            assertTrue("queueFile", NativeEngine.queueFile(b, 0, 78))
+            assertTrue("queueFile", NativeEngine.queueFile(b, 0, 78, -1))
             NativeEngine.setPlaying(true)
             val werte = LongArray(NativeEngine.POLL_SIZE)
             val frist = System.currentTimeMillis() + 5000

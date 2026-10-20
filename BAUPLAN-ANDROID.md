@@ -1644,8 +1644,8 @@ keine Playlist.
 | M6.5 | `backen` ohne Stems | `dsp/backen.*` |
 | M8b | Übergangsplan-JSON (§4.5), `parseBakeAnfrage`, `bakeTransition`, Info-JSON | `bake_api.*`, `json.h` |
 
-**Teststand 20.10.2026:** `dsp_golden_test` 53/53 grün, `playback_core_test` 22/22 grün,
-`klangbild_hosttest` (Golden-Leser) 6/6 grün (zusammen 81).
+**Teststand 20.10.2026:** `dsp_golden_test` 53/53 grün, `playback_core_test` 24/24 grün,
+`klangbild_hosttest` (Golden-Leser) 6/6 grün (zusammen 83).
 
 **Kotlin `:core` (M7, Stand 20.10.2026):**
 
@@ -1665,7 +1665,7 @@ keine Playlist.
 | PCM-Cache | §4.3: Kopf `KBPC`, int16, fortschreitendes Schreiben, LRU (4 Dateien) | Rundlauf, LRU |
 | Decoder-Bausteine | §4.3: PCM16/float → float, auf Stereo, lineares Resampling (ADR-014) | Tests |
 | Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke) | Gerätetest grün |
-| Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen, Folgedatei nahtlos anschließen; Sinus als Rückfall | 4 Host-Tests |
+| Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen, Folgedatei nahtlos (am Dateiende oder ab geplantem Frame) anschließen; Sinus als Rückfall | 6 Host-Tests |
 | Player | `engine/Player.kt`: dekodieren (einmal), Cache suchen, `startFile`, Pause/Weiter/Stopp, Zustand aus `poll` | Gerätetest grün |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
@@ -1693,7 +1693,7 @@ verschluckt sich am AndroidTest-Kotlin-Task; mit `--no-configuration-cache` läu
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| M2 | Timeline mit Mischung/Übergabekurve aus mehreren Quellen und Limiter im Decoder; `PcmFeeder` (Datei + nahtlose Folgedatei) steht | — |
+| M2 | Timeline mit Mischung/Übergabekurve aus mehreren Quellen und Limiter im Decoder; `PcmFeeder` (Datei + Folgedatei, auch ab geplantem Frame) steht | — |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
 | M8c | Vorschau, `weiter` im Auto-DJ und Verwerfen im Player (Warteschlange und Lernen sind fertig) | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |

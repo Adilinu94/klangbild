@@ -67,15 +67,17 @@ public:
         return true;
     }
 
-    /// Haengt eine Datei an, die am Ende der aktuellen ohne Luecke beginnt (kein Flush).
+    /// Haengt eine Datei an, die ab `abFrame` der aktuellen (oder am Dateiende, wenn `abFrame` < 0)
+    /// ohne Luecke und ohne Flush beginnt. `abFrame` ist die Position in der aktuellen Datei.
     /// `false` bei ungueltiger Datei; die Warteschlange bleibt dann leer.
-    bool setzeNaechste(const std::string& pfad, int64_t startFrame = 0, int64_t spur = 0) {
+    bool setzeNaechste(const std::string& pfad, int64_t startFrame = 0, int64_t spur = 0, int64_t abFrame = -1) {
         Quelle neu;
         if (!oeffneQuelle(neu, pfad, startFrame, spur)) return false;
         std::lock_guard<std::mutex> lock(mutex_);
         schliesseQuelle(naechste_);
         naechste_ = neu;
         hatNaechste_ = true;
+        naechsteAb_ = abFrame;
         return true;
     }
 
@@ -99,20 +101,26 @@ public:
                 fertig_ = true;
                 break;
             }
+            if (hatNaechste_ && naechsteAb_ >= 0 && aktuell_.position >= naechsteAb_) {
+                wechsle();
+                continue;
+            }
             const int64_t verfuegbar = gesamtFrames(aktuell_.datei);
             const int64_t rest = verfuegbar - aktuell_.position;
             if (rest <= 0) {
                 if (hatNaechste_) {
-                    schliesseQuelle(aktuell_);
-                    aktuell_ = naechste_;
-                    naechste_ = Quelle{};
-                    hatNaechste_ = false;
+                    wechsle();
                     continue;
                 }
                 fertig_ = true;
                 break;
             }
-            const uint32_t n = static_cast<uint32_t>(std::min<int64_t>(kChunkFrames, rest));
+            int64_t grenze = std::min<int64_t>(rest, kChunkFrames);
+            if (hatNaechste_ && naechsteAb_ >= 0) {
+                grenze = std::min<int64_t>(grenze, naechsteAb_ - aktuell_.position);
+            }
+            if (grenze <= 0) continue;
+            const uint32_t n = static_cast<uint32_t>(grenze);
             if (!leseBlock(aktuell_, n)) {
                 fertig_ = true;
                 break;
@@ -169,6 +177,14 @@ private:
         int64_t position = 0;
         int64_t spur = 0;
     };
+
+    void wechsle() {
+        schliesseQuelle(aktuell_);
+        aktuell_ = naechste_;
+        naechste_ = Quelle{};
+        hatNaechste_ = false;
+        naechsteAb_ = -1;
+    }
 
     static void schliesseQuelle(Quelle& quelle) {
         if (quelle.datei != nullptr) {
@@ -242,6 +258,7 @@ private:
     Quelle aktuell_;
     Quelle naechste_;
     bool hatNaechste_ = false;
+    int64_t naechsteAb_ = -1;
     bool fertig_ = false;
 
     std::vector<float> buffer_;
