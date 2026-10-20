@@ -28,7 +28,9 @@ target_sources(klangbild PRIVATE ${KLANGBILD_DSP_SOURCES})
 # auch oboe::resampler::MultiChannelResampler nutzbar (im Prefab-Paket privat).
 # Liegt unter third_party/oboe (Version 1.11.0). Holen:
 #   git clone --branch 1.11.0 --depth 1 https://github.com/google/oboe third_party/oboe
-# KissFFT (BSD-3) und Signalsmith Stretch (MIT) folgen in M5/M6.
+# Signalsmith Stretch (MIT) liegt unter third_party/signalsmith-stretch (Quelle aus dem
+# python-stretch-0.3.1-Sdist, also dieselbe Version wie die Desktop-Referenz).
+# KissFFT (BSD-3) folgt bei Bedarf.
 set(KLANGBILD_OBOE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/oboe)
 if(NOT EXISTS ${KLANGBILD_OBOE_DIR}/CMakeLists.txt)
     message(FATAL_ERROR
@@ -61,4 +63,5 @@ endif()
 
 target_include_directories(klangbild PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/signalsmith-stretch
 )

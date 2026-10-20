@@ -1036,6 +1036,34 @@ TEST(DspAutomation, StemArtenWerfen) {
 
 // ============================== T6.2 Warp ohne Keylock ==========================================
 
+namespace {
+
+/// Toleranz "warp" aus manifest.json: Laenge exakt, RMS je Abschnitt <= 0,2 dB, Korrelation >= 0,99.
+void expectWarp(Golden& g, const std::string& name, const Json& erwartet, const std::vector<double>& ist) {
+    const std::vector<double> ref = g.values(erwartet);
+    ASSERT_EQ(ist.size(), ref.size()) << name;
+    double kreuz = 0.0, aa = 0.0, bb = 0.0;
+    for (std::size_t i = 0; i < ist.size(); ++i) {
+        kreuz += ist[i] * ref[i];
+        aa += ist[i] * ist[i];
+        bb += ref[i] * ref[i];
+    }
+    EXPECT_GE(kreuz / std::sqrt(std::max(aa * bb, 1e-30)), 0.99) << name;
+    constexpr std::size_t abschnitt = 4096;
+    for (std::size_t von = 0; von < ist.size(); von += abschnitt) {
+        const std::size_t bis = std::min(ist.size(), von + abschnitt);
+        double qa = 0.0, qb = 0.0;
+        for (std::size_t i = von; i < bis; ++i) {
+            qa += ist[i] * ist[i];
+            qb += ref[i] * ref[i];
+        }
+        const double db = 20.0 * std::log10(std::sqrt(std::max(qa, 1e-30)) / std::sqrt(std::max(qb, 1e-30)));
+        EXPECT_LE(std::abs(db), 0.2) << name << " ab Sample " << von << ": " << db << " dB";
+    }
+}
+
+}  // namespace
+
 TEST(DspWarp, WarpVinylMatchesGolden) {
     REQUIRE_BINARIES();
     Golden& g = golden();
@@ -1070,11 +1098,12 @@ TEST(DspWarp, ResampleLinearKnownValuesFromPrototype) {
     EXPECT_EQ(klangbild::dsp::padTo({1, 2, 3, 4}, 1, 2), (std::vector<float>{1, 2}));
 }
 
-TEST(DspWarp, KeylockWirftBisT63) {
-    const std::vector<float> audio(2 * 1000, 0.1f);
+TEST(DspWarp, KeylockDehntStattZuWerfen) {
+    const std::vector<float> audio(2 * 44100, 0.1f);
     const std::vector<double> quell = {0.0, 441.0 / 44100.0};
-    const std::vector<double> stark = {0.0, 485.0 / 44100.0};   // 9 % gedehnt: braucht Keylock
-    EXPECT_THROW(klangbild::dsp::warp(audio, quell, stark, true), std::invalid_argument);
+    const std::vector<double> stark = {0.0, 485.0 / 44100.0};   // 9 % gedehnt: Keylock-Weg
+    const auto gedehnt = klangbild::dsp::warp(audio, quell, stark, true);
+    EXPECT_EQ(gedehnt.size(), 485u * 2);
     const std::vector<double> kaum = {0.0, 441.0 / 44100.0};    // 0 %: Resampling reicht
     EXPECT_NO_THROW(klangbild::dsp::warp(audio, quell, kaum, true));
     EXPECT_TRUE(klangbild::dsp::warp(audio, {}, {}, false).empty());
@@ -1082,6 +1111,19 @@ TEST(DspWarp, KeylockWirftBisT63) {
     const auto stille = klangbild::dsp::warp({}, quell, kaum, false);
     ASSERT_EQ(stille.size(), 2u * static_cast<std::size_t>(std::nearbyint(kaum[1] * 44100.0)));
     for (float v : stille) ASSERT_EQ(v, 0.0f);
+}
+
+TEST(DspWarp, WarpKeylockMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const GoldenCase c = g.case_of("warp_keylock");
+    ASSERT_TRUE(c.inputs.at("keylock").as_bool());
+    const auto audio = floatsOf(g, c.inputs.at("audio"));
+    const auto quell = c.inputs.at("quell_s").numbers();
+    const auto ziel = c.inputs.at("ziel_s").numbers();
+    const auto out = klangbild::dsp::warp(audio, quell, ziel, true);
+    ASSERT_EQ(c.tolerance, "warp");
+    expectWarp(g, "warp_keylock", c.expected, std::vector<double>(out.begin(), out.end()));
 }
 
 // ============================== T5.8 Loops ======================================================
@@ -1433,7 +1475,7 @@ TEST(DspBacken, BackenMatchesGolden) {
     REQUIRE_BINARIES();
     Golden& g = golden();
     const auto ir = floatsOf(g, g.raw("hall_ir").at("expected"));
-    for (const char* eintrag : {"backen_vinyl", "backen_echo", "backen_introloop"}) {
+    for (const char* eintrag : {"backen_vinyl", "backen_echo", "backen_introloop", "backen_keylock"}) {
         const std::string name = eintrag;
         SCOPED_TRACE(name);
         const GoldenCase c = g.case_of(name);
@@ -1451,8 +1493,12 @@ TEST(DspBacken, BackenMatchesGolden) {
 
         const Json& want = c.expected;
         EXPECT_EQ(out.startN, static_cast<long long>(want.at("start_n").as_double()));
-        g.expect_dsp(name + "/audio", want.at("audio"),
-                     std::vector<double>(out.spur.puffer.begin(), out.spur.puffer.end()));
+        const std::vector<double> audio(out.spur.puffer.begin(), out.spur.puffer.end());
+        if (name == "backen_keylock") {
+            expectWarp(g, name + "/audio", want.at("audio"), audio);
+        } else {
+            g.expect_dsp(name + "/audio", want.at("audio"), audio);
+        }
         g.expect_values(name + "/orig", want.at("orig"), out.spur.orig);
         g.expect_values(name + "/buf", want.at("buf"), out.spur.buf);
 

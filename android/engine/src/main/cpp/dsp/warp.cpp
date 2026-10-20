@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "dsp/mixing.h"     // kChannels
 #include "dsp/resample.h"
+#include "dsp/warp_keylock.h"
 
 namespace klangbild::dsp {
 namespace {
@@ -39,9 +39,7 @@ std::vector<float> warp(std::span<const float> audio, std::span<const double> qu
             if (std::abs(faktor - 1.0) > 0.002) dehnen = true;   // < 0,2 % ist Resampling (unhoerbar)
         }
         if (dehnen) {
-            (void)randVorn;
-            (void)randHinten;
-            throw std::invalid_argument("warp mit Keylock folgt mit T6.3 (Signalsmith Stretch).");
+            return warpKeylock(audio, quell, ziel, randVorn, randHinten, rate);
         }
     }
 
