@@ -244,6 +244,14 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
         uebergang = null
     }
 
+    /** Plant den Uebergang auf den naechsten Titel der aktuellen Liste. */
+    fun planeNaechsten() {
+        if (liste.isEmpty() || index < 0) return
+        val ziel = liste[(index + 1) % liste.size]
+        if (ziel.id == titel?.id) return
+        viewModelScope.launch { plane(ziel) }
+    }
+
     /** RMS-Kurve aus dem PCM-Cache (64 Segmente, auf das Maximum normiert). */
     private fun forme(trackId: Long, anzahl: Int = 64): FloatArray? {
         val datei = cache.finde(trackId.toInt()) ?: return null
