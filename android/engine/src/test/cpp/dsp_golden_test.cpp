@@ -9,14 +9,18 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <map>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "dsp/curves.h"
+#include "dsp/automation.h"
 #include "dsp/effects.h"
 #include "dsp/fft.h"
 #include "dsp/envelopes.h"
 #include "dsp/filters.h"
+#include "dsp/level.h"
 #include "dsp/mixing.h"
 #include "dsp/sweep.h"
 #include "golden.h"
@@ -801,4 +805,204 @@ TEST(DspEffects, EdgeCasesRoundingAndPingPong) {
     const auto silent = wetSignal("echo50", {}, 10.0, noIr);
     EXPECT_EQ(silent.size(), 2u * 13 * 5);
     for (float v : silent) ASSERT_EQ(v, 0.0f);
+}
+
+// ============================== T5.7 Pegel und Deckelung ========================================
+
+namespace {
+
+std::vector<int> intsOf(const Json& ref) {
+    std::vector<int> v;
+    for (double d : ref.numbers()) v.push_back(static_cast<int>(d));
+    return v;
+}
+
+std::vector<float> levelSignal(int frames, int channels, double amp = 0.3, double a = 0.05,
+                               double b = 0.5, double phase = 0.0) {
+    std::vector<float> x(static_cast<std::size_t>(frames) * static_cast<std::size_t>(channels));
+    for (int i = 0; i < frames; ++i)
+        for (int c = 0; c < channels; ++c)
+            x[static_cast<std::size_t>(i * channels + c)] =
+                static_cast<float>(amp * std::sin(a * i + b * c + phase));
+    return x;
+}
+
+}  // namespace
+
+TEST(DspLevel, DeckelnMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    for (int gain : {1, 2, 4}) {
+        const std::string name = "deckeln_" + std::to_string(gain);
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const auto y = floatsOf(g, c.inputs.at("y"));
+        const auto ra = floatsOf(g, c.inputs.at("ra"));
+        const auto rb = floatsOf(g, c.inputs.at("rb"));
+        const auto taktN = intsOf(c.inputs.at("takt_n"));
+        const auto out = klangbild::dsp::deckeln(y, ra, rb, taktN);
+        ASSERT_EQ(c.tolerance, "dsp");
+        g.expect_dsp(name, c.expected, std::vector<double>(out.begin(), out.end()));
+    }
+}
+
+TEST(DspLevel, DeckelnLaesstLeisesSignalInRuhe) {
+    const auto laut = levelSignal(512, 2);
+    std::vector<float> leise(laut.size());
+    for (std::size_t i = 0; i < laut.size(); ++i) leise[i] = laut[i] * 0.01f;
+    const std::vector<int> taktN = {0, 256, 512};
+    EXPECT_EQ(klangbild::dsp::deckeln(leise, laut, laut, taktN), leise);
+    EXPECT_EQ(klangbild::dsp::deckeln(leise, laut, laut, {}), leise);   // weniger als zwei Grenzen
+}
+
+// Referenz: uebergang._takt_db des Prototyps (numpy 2.5.3) fuer 2048 Frames 0.3*sin(0.05*i + 0.5*c).
+TEST(DspLevel, TaktDbKnownValuesFromPrototype) {
+    const auto x = levelSignal(2048, 2);
+    const std::vector<int> taktN = {0, 500, 1000, 1500, 2048};
+    const auto db = klangbild::dsp::taktDb(x, taktN);
+    ASSERT_EQ(db.size(), 4u);
+    EXPECT_NEAR(db[0], -13.448738804571992, 1e-9);
+    EXPECT_NEAR(db[1], -13.447762903425534, 1e-9);
+    EXPECT_NEAR(db[2], -13.448193059535026, 1e-9);
+    EXPECT_NEAR(db[3], -13.43142276747756, 1e-9);
+    EXPECT_TRUE(klangbild::dsp::taktDb(x, std::vector<int>{5}).empty());
+}
+
+TEST(DspLevel, TrockenKnownValuesFromPrototype) {
+    // uebergang._trocken mit Einstellungen(eq="drei_band", lautstaerke="nahtlos"), 4 Takte, 2048 Frames.
+    using klangbild::dsp::Settings;
+    const auto a = levelSignal(2048, 2);
+    const auto b = levelSignal(2048, 2, 0.2, 0.03, 0.7, 1.1);
+    const std::vector<int> taktN = {0, 500, 1000, 1500, 2048};
+    Settings drei_band;
+    drei_band.eq = "drei_band";
+    const auto h = klangbild::dsp::envelopes(drei_band, 4, 2048, 0.001);
+    const auto out = klangbild::dsp::trocken(a, b, h, taktN);
+    ASSERT_EQ(out.size(), a.size());
+    EXPECT_NEAR(out[0], 0.0, 1e-6);
+    EXPECT_NEAR(out[1], 0.14382766, 1e-6);
+    EXPECT_NEAR(out[1000], -0.03682142, 1e-6);
+    EXPECT_NEAR(out[1001], 0.099893175, 1e-6);
+    EXPECT_NEAR(out[4000], -0.1972779, 1e-6);
+    EXPECT_NEAR(out[4095], 0.07383977, 1e-6);
+    EXPECT_NEAR(sum(out), -0.27096458548840019, 5e-5);
+
+    // Ohne EQ-Kurven (eq="keiner"): nur Fader, dann deckeln.
+    Settings ohne_eq;
+    ohne_eq.eq = "keiner";
+    const auto h2 = klangbild::dsp::envelopes(ohne_eq, 4, 2048, 0.001);
+    EXPECT_NEAR(sum(klangbild::dsp::trocken(a, b, h2, taktN)), -1.6546463336562738, 5e-5);
+}
+
+// ============================== T5.12 Automationskurven =========================================
+
+namespace {
+
+void expectSide(Golden& g, const std::string& name, const Json& erwartet,
+                const std::map<std::string, klangbild::dsp::Curve>& ist) {
+    ASSERT_EQ(erwartet.members.size(), ist.size()) << name;
+    for (const auto& [key, curve] : ist) {
+        ASSERT_TRUE(erwartet.has(key)) << name << " / " << key;
+        g.expect_values(name + "/" + key, erwartet.at(key), std::vector<double>(curve.begin(), curve.end()));
+    }
+}
+
+}  // namespace
+
+TEST(DspAutomation, KurvenMatchesGolden) {
+    Golden& g = golden();
+    for (const char* art : {"eq", "filter", "echo", "schnitt", "crossfade"}) {
+        const std::string name = std::string("kurven_") + art;
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        ASSERT_EQ(static_cast<int>(c.inputs.at("takte").as_double()), 16);
+        const auto k = klangbild::dsp::automation(art, 16, klangbild::dsp::Settings{});
+        expectSide(g, name + "/a", c.expected.at("a"), k.a);
+        expectSide(g, name + "/b", c.expected.at("b"), k.b);
+    }
+}
+
+TEST(DspAutomation, KurvenEigenMatchesGolden) {
+    using klangbild::dsp::Settings;
+    Golden& g = golden();
+    struct Recipe {
+        const char* name;
+        const char* volume;
+        const char* eq;
+        const char* filter;
+        const char* effect;
+        const char* loop;
+        const char* trick;
+    };
+    // Genau die Rezepte aus golden.py (`_dsp`, `recipes`).
+    const Recipe recipes[] = {
+        {"profi_eq", nullptr, "profi", nullptr, nullptr, nullptr, nullptr},
+        {"outro_loop", nullptr, "profi", nullptr, nullptr, "8", nullptr},
+        {"echo_out", "letzter_takt", nullptr, nullptr, "echo75_ende_aus", nullptr, nullptr},
+        {"hall", nullptr, nullptr, "tp_aus", "hall_ende_aus", nullptr, nullptr},
+        {"rolle", "hart_aus", nullptr, nullptr, nullptr, "rolle", nullptr},
+        {"trick_bremse", "drop", nullptr, nullptr, nullptr, nullptr, "bremse"},
+        {"trick_spinback", "drop", nullptr, nullptr, nullptr, nullptr, "spinback"},
+        {"trick_riser", "drop", nullptr, nullptr, nullptr, nullptr, "riser"},
+        {"trick_flanger", "drop", nullptr, nullptr, nullptr, nullptr, "flanger"},
+        {"trick_teaser", "drop", nullptr, nullptr, nullptr, nullptr, "teaser"},
+        {"trick_phaser", "drop", nullptr, nullptr, nullptr, nullptr, "phaser"},
+        {"trick_gate", "drop", nullptr, nullptr, nullptr, nullptr, "gate"},
+        {"trick_crush", "drop", nullptr, nullptr, nullptr, nullptr, "crush"},
+        {"trick_wechsel", "drop", nullptr, nullptr, nullptr, nullptr, "wechsel"},
+    };
+    int geprueft = 0;
+    for (const Recipe& r : recipes) {
+        Settings s;
+        if (r.volume) s.volume = r.volume;
+        if (r.eq) s.eq = r.eq;
+        if (r.filter) s.filter = r.filter;
+        if (r.effect) s.effect = r.effect;
+        if (r.loop) s.loop = r.loop;
+        if (r.trick) s.trick = r.trick;
+        const std::string name = std::string("kurven_eigen_") + r.name;
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const auto k = klangbild::dsp::automation("eigen", 4, s);
+        expectSide(g, name + "/a", c.expected.at("a"), k.a);
+        expectSide(g, name + "/b", c.expected.at("b"), k.b);
+        ++geprueft;
+    }
+    EXPECT_EQ(geprueft, 14);
+}
+
+// Referenz: uebergang._loop_plan des Prototyps fuer 4 Takte.
+TEST(DspAutomation, LoopPlanKnownValuesFromPrototype) {
+    using klangbild::dsp::loopPlan;
+    using klangbild::dsp::Settings;
+    Settings s;
+    s.loop = "4";
+    auto plan = loopPlan(s, 4);
+    ASSERT_EQ(plan.size(), 1u);
+    EXPECT_EQ(plan[0].from, 0);
+    EXPECT_EQ(plan[0].to, 32);
+    EXPECT_EQ(plan[0].size, 8);
+    s.loop = "32";
+    EXPECT_EQ(loopPlan(s, 4)[0].size, 64);
+    s.loop = "1";
+    plan = loopPlan(s, 4);
+    EXPECT_EQ(plan[0].from, 8);
+    EXPECT_EQ(plan[0].to, 32);
+    EXPECT_EQ(plan[0].size, 2);
+    s.loop = "rolle";
+    plan = loopPlan(s, 4);
+    const int want[5][3] = {{0, 6, 8}, {6, 12, 4}, {12, 18, 2}, {18, 24, 1}, {24, 32, 1}};
+    ASSERT_EQ(plan.size(), 5u);
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_EQ(plan[static_cast<std::size_t>(i)].from, want[i][0]) << i;
+        EXPECT_EQ(plan[static_cast<std::size_t>(i)].to, want[i][1]) << i;
+        EXPECT_EQ(plan[static_cast<std::size_t>(i)].size, want[i][2]) << i;
+    }
+    s.loop = "auto";   // int("auto") im Prototyp
+    EXPECT_THROW(loopPlan(s, 4), std::invalid_argument);
+}
+
+TEST(DspAutomation, StemArtenWerfen) {
+    EXPECT_THROW(klangbild::dsp::automation("drums_zuerst", 16, klangbild::dsp::Settings{}), std::invalid_argument);
+    EXPECT_THROW(klangbild::dsp::automation("unbekannt", 16, klangbild::dsp::Settings{}), std::invalid_argument);
 }

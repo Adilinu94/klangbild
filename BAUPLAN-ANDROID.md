@@ -1611,9 +1611,9 @@ Zahlen liefert und 1 h ohne Aussetzer läuft.
 ### 17.1 Kurzfassung
 
 Android kann noch **keinen Auto-DJ**. Fertig sind der Abspielkern (T1.1/T1.2)
-und sechs DSP-Bausteine (T5.1 bis T5.6), alle gegen Python-Golden geprüft.
-Alles darüber fehlt: `mischen_eigen`, Loops, `_trocken`/`_deckeln`, Limiter,
-Warp, `backen`, Regie, Titelwahl, Oberfläche, Analyse, Stems.
+und acht DSP-Bausteine (T5.1 bis T5.7 und T5.12), alle gegen Python-Golden
+geprüft. Alles darüber fehlt: `mischen_eigen`, Loops, Limiter, Warp, `backen`,
+Regie, Titelwahl, Oberfläche, Analyse, Stems.
 
 Die App selbst ist weiterhin der Diagnose-Screen „GERÜST · M0" und spielt einen
 440-Hz-Testsinus. Es gibt fünf Kotlin-Dateien, keine Bibliothek, keinen Service,
@@ -1630,25 +1630,32 @@ keine Playlist.
 | T5.4 | `_huellen`, alle 83 Varianten aus `AUSWAHL` | `dsp/envelopes.*` |
 | T5.5 | `_biquads`, `_sweep`, `_baender_gewichten` | `dsp/sweep.*` |
 | T5.6 | `_nass` (Hall, Echo, Delay, Ping-Pong), FFT, Hall-IR als Asset | `dsp/effects.*`, `dsp/fft.*`, `assets/hall_ir.f32` |
+| T5.7 | `_takt_db`, `_deckeln`, `_trocken` | `dsp/level.*` |
+| T5.12 | `kurven`, `kurven_eigen`, `_loop_plan` | `dsp/automation.*` |
 
-**Teststand 20.10.2026:** `dsp_golden_test` 24/24 grün, `playback_core_test`
+**Teststand 20.10.2026:** `dsp_golden_test` 32/32 grün, `playback_core_test`
 18/18 grün, `klangbild_hosttest` (Golden-Leser) 6/6 grün.
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| T5.7 | `_takt_db`, `_deckeln`, `_trocken` | `deckeln_*` |
-| T5.8 | `_loop_plan`, `_achtel`, `_loopen`, `loop_info` | `loop_*` |
+| T5.8 | `_achtel`, `_loopen`, `loop_info` (`_loop_plan` ist fertig) | `loop_*` |
 | T5.9 | `_beat_merkmale`, `_aehnlich`, `loop_waehlen` | `loopwahl_*` |
 | T5.10 | `_intro_loop` | `introloop_*` |
 | T5.11 | `mischen_eigen` **und die Trick-Audio-Pfade** (`_bremse`, `_spinback`, `_flanger`, `_phaser`, `_gate`, `_crush`, `_rueckhall`, `_riser`) | `eigen_*` (14) |
-| T5.12 | `kurven`, `kurven_eigen` | `kurven_*` (19) |
 | M6 | Signalsmith, `warp`, `_warp_keylock`, `backen` | `warp_*`, `backen_*` |
 | M7 | `regie.planen`, `_rezept`, `_rangliste`, `pruefen`, `plan.sortiere_alle`, `paarnoten` | `regie_*`, `pruefen_*`, `rangliste_*`, `sortiere_332` |
 | M8 | `live._auto_backen`, `_autodj_wahl`, Energiebogen, Lernen, Dubletten | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_*`, `beatthis_synthetic` |
 | M11 | Stems | — |
+
+**Reihenfolge-Hinweis (neu, 20.10.2026):** `_loopen` ist seit Runde 19 nicht
+mehr eigenstaendig. Weicht die Laenge eines Loop-Stuecks um mehr als 0,2 % von
+der Quelle ab (Tempo-Rampe), ruft es `warp` auf. T5.8 braucht deshalb entweder
+eine Warp-Schnittstelle oder muss nach M6.2 (`warp` ohne Keylock) kommen. Die
+Golden-Fälle `loop_*` laufen mit gleichmaessigem Raster und treffen den
+Warp-Zweig nicht.
 
 **Wichtig für T5.11:** `envelopes.cpp` kennt nur die Tricks `wechsel` und
 `teaser`. Alle anderen Trick-Strings laufen dort ohne Wirkung durch. Die
@@ -1661,11 +1668,12 @@ sie.
 
 - **362 Fälle**, 484 Dateien (mit `.f32`). Erzeugt aus dem Desktop-Stand
   `040887f` (Runden 18/19).
-- In C++ wirklich nachgerechnet werden **rund 120**: `reader_dummy`,
-  `kurven_basis`, `band_*` (7), `mischen_*` (15), `huellen_*` (83), `sweep_*`
-  (4), `nass_*` (9). Der Rest, **rund 242 Fälle**, wird nur geparst.
+- In C++ wirklich nachgerechnet werden **rund 142**: `reader_dummy`,
+  `kurven_basis`, `kurven_*` (19), `band_*` (7), `mischen_*` (15),
+  `huellen_*` (83), `sweep_*` (4), `nass_*` (9), `deckeln_*` (3). Der Rest,
+  **rund 220 Fälle**, wird nur geparst.
   Besonders betroffen: `einstellungen_*` (129), `key_*` (12), `eigen_*` (14),
-  `kurven_*` (19), `regie_*` (6), `loop_*` (7), `limiter_*` (5),
+  `regie_*` (6), `loop_*` (7), `limiter_*` (5),
   `regulaer_*`/`ausstieg_*`/`einstieg_*` (9), `backen_*` (4).
 - Die `.f32`-Referenzarrays sind per `.gitignore` ausgeschlossen (118 Dateien
   lokal, 1 im Repo). **In einem frischen Clone überspringen sich die meisten

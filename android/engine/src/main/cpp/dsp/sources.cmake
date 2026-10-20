@@ -9,6 +9,8 @@ set(KLANGBILD_DSP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/sweep.cpp
     ${CMAKE_CURRENT_LIST_DIR}/fft.cpp
     ${CMAKE_CURRENT_LIST_DIR}/effects.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/level.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/automation.cpp
 )
 
 # numpy verschmilzt a*b + c nie zu einem FMA; Clang auf ARM taete es standardmaessig, und die Haupt-CMake
