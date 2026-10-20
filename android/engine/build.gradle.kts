@@ -62,6 +62,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":core"))
     implementation(libs.media3.common)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.jupiter.engine)

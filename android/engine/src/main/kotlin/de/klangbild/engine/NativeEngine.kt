@@ -39,6 +39,23 @@ object NativeEngine {
      */
     external fun poll(out: LongArray)
 
+    /**
+     * Backt einen Übergang (BAUPLAN §4.5). `plan` ist das JSON des Übergangsplans, die Puffer sind
+     * Stereo interleaved (L,R,...). Liefert ein Handle (> 0) oder 0 bei kaputtem Plan. Das Ergebnis
+     * wird mit [bakeAudio]/[bakeInfo] abgeholt und mit [releaseBake] freigegeben.
+     * Blockiert (Dehnen und Filtern): nicht auf dem Main-Thread aufrufen.
+     */
+    external fun bake(plan: String, aPcm: FloatArray, bPcm: FloatArray, hallIr: FloatArray, riserNoise: FloatArray?): Long
+
+    /** PCM der gebackenen Spur B (Stereo interleaved); null bei Fehlern. */
+    external fun bakeAudio(handle: Long): FloatArray?
+
+    /** Info-JSON des Ergebnisses (`{"fehler": ...}`, wenn das Backen scheiterte). */
+    external fun bakeInfo(handle: Long): String
+
+    /** Gibt den nativen Speicher des Ergebnisses frei. */
+    external fun releaseBake(handle: Long)
+
     /** Anzahl der Felder von [poll]. Gleich `kPollSize` in jni_bridge.cpp. */
     const val POLL_SIZE = 7
     const val POLL_HEARD_SPUR = 0

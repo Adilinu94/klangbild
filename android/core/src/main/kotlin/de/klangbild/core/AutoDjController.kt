@@ -31,6 +31,7 @@ object AutoDjController {
         val pb: Profil,
         val plan: RegiePlanung.Plan,
         val e: Einstellungen,
+        val abS: Double,
         val ausS: Double,
         val einS: Double,
         val weiter: Boolean,
@@ -100,7 +101,7 @@ object AutoDjController {
             if (versuche == maxVersuche) break
             if (plan.rezept in durchgefallen) continue
             versuche++
-            val auftrag = BackAuftrag(a, pa, ziel, pbZiel, plan, e, plan.ausS, plan.einS, weiter)
+            val auftrag = BackAuftrag(a, pa, ziel, pbZiel, plan, e, abS, plan.ausS, plan.einS, weiter)
             val ergebnis = baker.backen(auftrag)
             if (pruefen(plan, ergebnis, a, pa, ziel, pbZiel, e, rate) == null) return ergebnis
             durchgefallen.add(plan.rezept)
@@ -128,7 +129,7 @@ object AutoDjController {
                 gesangTakt = -1,
             ),
         )
-        return baker.backen(BackAuftrag(a, pa, ziel, pbZiel, sicher, e, sicher.ausS, sicher.einS, weiter))
+        return baker.backen(BackAuftrag(a, pa, ziel, pbZiel, sicher, e, abS, sicher.ausS, sicher.einS, weiter))
     }
 
     /** Selbstkontrolle: Tempo, Loop-Sauberkeit, Buckel/Loch. */

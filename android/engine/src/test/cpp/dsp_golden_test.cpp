@@ -33,7 +33,9 @@
 #include "dsp/resample.h"
 #include "dsp/sweep.h"
 #include "dsp/warp.h"
+#include "bake_api.h"
 #include "golden.h"
+#include "json.h"
 
 namespace {
 
@@ -1482,6 +1484,83 @@ TEST(DspRaster, TaktrasterUndHilfenKnownValuesFromPrototype) {
     EXPECT_DOUBLE_EQ(klangbild::dsp::periode(t6, 3), 2.0);
     EXPECT_DOUBLE_EQ(klangbild::dsp::ext(1.5, {0, 2, 4}, {0, 2.5, 4.0}), 1.875);
     EXPECT_DOUBLE_EQ(klangbild::dsp::ext(5.0, {0, 2, 4}, {0, 2.5, 4.0}), 4.75);
+}
+
+// ============================== M8b Bäcker-Schnittstelle ======================================
+
+namespace {
+
+std::string dumpJson(const Json& j) {
+    switch (j.kind) {
+        case Json::Kind::Null: return "null";
+        case Json::Kind::Bool: return j.boolean ? "true" : "false";
+        case Json::Kind::Number: return klangbild::jsonZahl(j.number);
+        case Json::Kind::String: return klangbild::jsonText(j.text);
+        case Json::Kind::Array: {
+            std::string s = "[";
+            for (std::size_t i = 0; i < j.items.size(); ++i) {
+                if (i != 0) s += ",";
+                s += dumpJson(j.items[i]);
+            }
+            s += "]";
+            return s;
+        }
+        case Json::Kind::Object: {
+            std::string s = "{";
+            bool erst = true;
+            for (const auto& [schluessel, wert] : j.members) {
+                if (!erst) s += ",";
+                erst = false;
+                s += klangbild::jsonText(schluessel) + ":" + dumpJson(wert);
+            }
+            s += "}";
+            return s;
+        }
+    }
+    return "null";
+}
+
+}  // namespace
+
+TEST(DspBakeApi, BackenVinylUeberJson) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const GoldenCase c = g.case_of("backen_vinyl");
+    const std::string plan = "{\"a\":" + dumpJson(c.inputs.at("a")) +
+                             ",\"b\":" + dumpJson(c.inputs.at("b")) +
+                             ",\"einst\":" + dumpJson(c.inputs.at("e")) +
+                             ",\"abS\":" + klangbild::jsonZahl(c.inputs.at("ab_s").as_double()) +
+                             ",\"ausS\":" + klangbild::jsonZahl(c.inputs.at("aus_s").as_double()) +
+                             ",\"einS\":" + klangbild::jsonZahl(c.inputs.at("ein_s").as_double()) +
+                             ",\"weiter\":false}";
+
+    const klangbild::BakeAnfrage anfrage = klangbild::parseBakeAnfrage(plan);
+    EXPECT_EQ(anfrage.a.id, 90001);
+    EXPECT_EQ(anfrage.b.id, 90002);
+    EXPECT_FALSE(anfrage.einst.keylock);
+    EXPECT_EQ(anfrage.einst.takte, 1);
+    EXPECT_EQ(anfrage.einst.ausstieg, "phrase");
+    EXPECT_EQ(anfrage.einst.modus, "ausgewogen");
+
+    const auto aAudio = floatsOf(g, c.inputs.at("a_audio"));
+    const auto bAudio = floatsOf(g, c.inputs.at("b_audio"));
+    const auto ir = floatsOf(g, g.raw("hall_ir").at("expected"));
+    const auto ergebnis = klangbild::bakeTransition(anfrage, aAudio, bAudio, ir, {});
+    ASSERT_TRUE(ergebnis.ok) << ergebnis.fehler;
+
+    const Json& want = c.expected;
+    EXPECT_EQ(ergebnis.startN, static_cast<long long>(want.at("start_n").as_double()));
+    g.expect_dsp("bake/audio", want.at("audio"),
+                 std::vector<double>(ergebnis.audio.begin(), ergebnis.audio.end()));
+    g.expect_values("bake/orig", want.at("orig"), ergebnis.orig);
+    g.expect_values("bake/buf", want.at("buf"), ergebnis.buf);
+
+    const klangbild::Json info = klangbild::parseJson(ergebnis.info);
+    ASSERT_TRUE(info.istObjekt());
+    EXPECT_EQ(info.at("art").alsText(), want.at("info").at("art").as_string());
+    EXPECT_EQ(info.at("takte").alsZahl(), want.at("info").at("takte").as_double());
+    EXPECT_EQ(info.at("sync").alsWahr(), want.at("info").at("sync").as_bool());
+    EXPECT_NEAR(info.at("blende_s").alsZahl(), want.at("info").at("blende_s").as_double(), 1e-9);
 }
 
 // ============================== M6.5 backen =====================================================

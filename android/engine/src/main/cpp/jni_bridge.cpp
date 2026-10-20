@@ -13,7 +13,12 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
+#include "bake_api.h"
+#include "json.h"
 #include "oboe_output.h"
 #include "playback_core.h"
 #include "sine_feeder.h"
@@ -23,7 +28,7 @@ namespace {
 // Version der nativen Schnittstelle. Steigt, wenn sich das Vertrag zwischen
 // Kotlin und C++ ändert (andernfalls bleibt die App bei alter .so stillstehen).
 // 2: start/stop/setPlaying/poll (M1).
-constexpr int kAbiVersion = 2;
+constexpr int kAbiVersion = 3;   // 3: Bäcker (M8b)
 
 // Anzahl der Felder von poll() (BAUPLAN §5.4); steht gleich in NativeEngine.POLL_SIZE.
 constexpr jsize kPollSize = 7;
@@ -38,6 +43,11 @@ struct Engine {
 
 std::mutex gMutex;
 std::unique_ptr<Engine> gEngine;
+
+// Gebackene Uebergaenge: Handle -> Ergebnis. Kotlin holt Audio und Info ab und gibt das
+// Handle wieder frei (jedes bake hat ein releaseBake).
+std::unordered_map<jlong, klangbild::BakeErgebnis> gBakes;
+jlong gNaechsteBake = 1;
 
 void stopLocked() {
     if (!gEngine) return;
@@ -93,4 +103,79 @@ Java_de_klangbild_engine_NativeEngine_poll(JNIEnv* env, jclass /*typ*/, jlongArr
         }
     }
     env->SetLongArrayRegion(out, 0, kPollSize, werte);
+}
+
+// --- Bäcker (M8b) ------------------------------------------------------------
+
+namespace {
+
+std::vector<float> liesFloats(JNIEnv* env, jfloatArray array) {
+    std::vector<float> werte;
+    if (array == nullptr) return werte;
+    const jsize laenge = env->GetArrayLength(array);
+    werte.resize(static_cast<std::size_t>(laenge));
+    env->GetFloatArrayRegion(array, 0, laenge, werte.data());
+    return werte;
+}
+
+}  // namespace
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_de_klangbild_engine_NativeEngine_bake(JNIEnv* env, jclass /*typ*/, jstring plan, jfloatArray aAudio,
+                                          jfloatArray bAudio, jfloatArray hallIr, jfloatArray riserNoise) {
+    if (plan == nullptr || aAudio == nullptr || bAudio == nullptr || hallIr == nullptr) return 0;
+    const char* text = env->GetStringUTFChars(plan, nullptr);
+    const std::string planText = text != nullptr ? std::string(text) : std::string();
+    if (text != nullptr) env->ReleaseStringUTFChars(plan, text);
+
+    const std::vector<float> a = liesFloats(env, aAudio);
+    const std::vector<float> b = liesFloats(env, bAudio);
+    const std::vector<float> ir = liesFloats(env, hallIr);
+    const std::vector<float> rauschen = liesFloats(env, riserNoise);
+
+    klangbild::BakeErgebnis ergebnis;
+    try {
+        const klangbild::BakeAnfrage anfrage = klangbild::parseBakeAnfrage(planText);
+        ergebnis = klangbild::bakeTransition(anfrage, a, b, ir, rauschen);
+    } catch (const std::exception& fehler) {
+        ergebnis.ok = false;
+        ergebnis.fehler = fehler.what();
+    }
+
+    std::lock_guard<std::mutex> lock(gMutex);
+    const jlong handle = gNaechsteBake++;
+    gBakes[handle] = std::move(ergebnis);
+    return handle;
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_de_klangbild_engine_NativeEngine_bakeAudio(JNIEnv* env, jclass /*typ*/, jlong handle) {
+    std::lock_guard<std::mutex> lock(gMutex);
+    auto it = gBakes.find(handle);
+    if (it == gBakes.end() || !it->second.ok) return nullptr;
+    const std::vector<float>& audio = it->second.audio;
+    jfloatArray aus = env->NewFloatArray(static_cast<jsize>(audio.size()));
+    if (aus != nullptr && !audio.empty()) {
+        env->SetFloatArrayRegion(aus, 0, static_cast<jsize>(audio.size()), audio.data());
+    }
+    return aus;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_de_klangbild_engine_NativeEngine_bakeInfo(JNIEnv* env, jclass /*typ*/, jlong handle) {
+    std::lock_guard<std::mutex> lock(gMutex);
+    auto it = gBakes.find(handle);
+    if (it == gBakes.end()) return env->NewStringUTF("{\"fehler\":\"unbekanntes Handle\"}");
+    const klangbild::BakeErgebnis& ergebnis = it->second;
+    if (!ergebnis.ok) {
+        const std::string text = "{\"fehler\":" + klangbild::jsonText(ergebnis.fehler) + "}";
+        return env->NewStringUTF(text.c_str());
+    }
+    return env->NewStringUTF(ergebnis.info.c_str());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_de_klangbild_engine_NativeEngine_releaseBake(JNIEnv* /*env*/, jclass /*typ*/, jlong handle) {
+    std::lock_guard<std::mutex> lock(gMutex);
+    gBakes.erase(handle);
 }

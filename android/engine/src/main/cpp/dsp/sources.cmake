@@ -23,6 +23,7 @@ set(KLANGBILD_DSP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/backen.cpp
     ${CMAKE_CURRENT_LIST_DIR}/stretch.cpp
     ${CMAKE_CURRENT_LIST_DIR}/warp_keylock.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../bake_api.cpp
 )
 
 # numpy verschmilzt a*b + c nie zu einem FMA; Clang auf ARM taete es standardmaessig, und die Haupt-CMake

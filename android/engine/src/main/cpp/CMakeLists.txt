@@ -38,6 +38,11 @@ if(NOT EXISTS ${KLANGBILD_OBOE_DIR}/CMakeLists.txt)
         "git clone --branch 1.11.0 --depth 1 https://github.com/google/oboe ${KLANGBILD_OBOE_DIR}")
 endif()
 add_subdirectory(${KLANGBILD_OBOE_DIR} oboe-build)
+# NDK r28 meldet in Oboes OpenSLES-Code Sign-Vergleiche, die Oboe selbst mit -Werror
+# baut. Nur diese Warnung entschaerfen, nicht -Werror insgesamt (Fremdcode bleibt streng).
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(oboe PRIVATE -Wno-error=sign-compare)
+endif()
 target_link_libraries(klangbild oboe)
 
 set(KLANGBILD_SIGNALSMITH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/signalsmith-stretch)

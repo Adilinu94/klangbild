@@ -1642,8 +1642,9 @@ keine Playlist.
 | M6.4 | `_ext`, `raster`, `regulaer`, `taktraster`, `_periode`, `ausstieg`, `einstieg`, `Spur` | `dsp/raster.*` |
 | M6.3 | `_warp_keylock` mit Signalsmith Stretch und WSOLA-Nähten | `dsp/warp_keylock.*`, `dsp/stretch.*` |
 | M6.5 | `backen` ohne Stems | `dsp/backen.*` |
+| M8b | Übergangsplan-JSON (§4.5), `parseBakeAnfrage`, `bakeTransition`, Info-JSON | `bake_api.*`, `json.h` |
 
-**Teststand 20.10.2026:** `dsp_golden_test` 52/52 grün, `playback_core_test`
+**Teststand 20.10.2026:** `dsp_golden_test` 53/53 grün, `playback_core_test`
 18/18 grün, `klangbild_hosttest` (Golden-Leser) 6/6 grün.
 
 **Kotlin `:core` (M7, Stand 20.10.2026):**
@@ -1660,16 +1661,16 @@ keine Playlist.
 | Titelwahl (Auto-DJ) | `live._autodj_wahl`, `_plan_track`, `_gleicher_titel` mit Energiebogen und Stimmung | Fingerabdruck |
 | Controller (Auto-DJ) | `live._auto_backen`-Ablauf (3 Pläne, bis zu 5 Versuche, Selbstkontrolle, Sicherheits-Blend), `profil.tempo_mal` | Doppel-Baker-Tests |
 | Warteschlange und Lernen | `live.einreihen/entfernen/verschieben/leeren/weiter`, `_lernen`, `bewerten`, `sortieren` | Fingerabdruck |
+| JNI-Bäcker | `BakePlan` (§4.5-JSON), `NativeBaker`, `NativeEngine.bake/bakeAudio/bakeInfo/releaseBake` | Plan-JSON und Info-Felder |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
-`./gradlew :core:test` grün (28 Tests, 146 Golden-Fälle plus Fingerabdrücke).
+`./gradlew :core:test` grün (30 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
-| M8b | JNI-Bäcker: Übergangsplan (§4.5) an `dsp/backen.*` reichen, PCM zurück | — |
 | M8c | Vorschau, `weiter` im Auto-DJ und Verwerfen im Player (Warteschlange und Lernen sind fertig) | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |
 | M11 | Stems | — |
@@ -1690,6 +1691,11 @@ pip download python-stretch==0.3.1 --no-deps --no-binary :all: -d <tmp>
 ```
 
 Fehlt der Ordner, bricht CMake mit genau diesem Hinweis ab.
+
+**Gerätebuild (20.10.2026):** `./gradlew :engine:assembleDebug` baut `libklangbild.so`
+für arm64-v8a und x86_64 mit NDK 28.2. Oboe 1.11.0 meldet mit NDK r28 Sign-Vergleiche
+im OpenSLES-Teil; der Bau entschärft nur diese Warnung (`-Wno-error=sign-compare`),
+`-Werror` bleibt sonst stehen.
 
 **Eine bewusste Abweichung (20.10.2026):**
 
