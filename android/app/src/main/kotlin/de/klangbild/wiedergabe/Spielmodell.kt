@@ -10,6 +10,7 @@ import de.klangbild.bibliothek.Titel
 import de.klangbild.core.Lautheit
 import de.klangbild.core.PcmCache
 import de.klangbild.core.PcmDatei
+import de.klangbild.core.TitelAnalyse
 import de.klangbild.core.TonartSchaetzung
 import de.klangbild.engine.AutoDjPlayer
 import de.klangbild.engine.Player
@@ -27,6 +28,7 @@ import java.io.File
 class Spielmodell(app: Application) : AndroidViewModel(app) {
 
     private val cache = PcmCache(File(app.filesDir, "pcm"))
+    private val analysen = AnalyseSpeicher(File(app.filesDir, "analyse"))
     private val player = Player(cache)
     val autoDj = AutoDjPlayer(player, cache)
 
@@ -43,12 +45,8 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
     var wellenform by mutableStateOf<FloatArray?>(null)
         private set
 
-    /** Tonart des laufenden Titels; null, solange die Analyse laeuft. */
-    var tonart by mutableStateOf<TonartSchaetzung.Tonart?>(null)
-        private set
-
-    /** Integrierte Lautheit des laufenden Titels (LUFS); null, solange die Analyse laeuft. */
-    var lufs by mutableStateOf<Double?>(null)
+    /** Tonart und Lautheit des laufenden Titels; null, solange keine Analyse vorliegt. */
+    var analyse by mutableStateOf<TitelAnalyse?>(null)
         private set
 
     private var liste: List<Titel> = emptyList()
@@ -101,8 +99,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
         fehler = null
         titel = t
         wellenform = null
-        tonart = null
-        lufs = null
+        analyse = analysen.lade(t.id)
         zustand = Player.Zustand(0, 0, 0, false, 0)
         viewModelScope.launch {
             val ok = try {
@@ -116,15 +113,19 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
             if (ok) {
                 zustand = player.zustand()
                 wellenform = withContext(Dispatchers.Default) { forme(t.id) }
-                val gefunden = withContext(Dispatchers.Default) {
-                    val datei = cache.finde(t.id.toInt()) ?: return@withContext null
-                    PcmDatei.oeffnen(datei)?.use { pcm ->
-                        TonartSchaetzung.schaetzen(TonartSchaetzung.chromaAusCache(pcm)) to Lautheit.ausCache(pcm)
+                if (analyse == null) {
+                    val gefunden = withContext(Dispatchers.Default) {
+                        val datei = cache.finde(t.id.toInt()) ?: return@withContext null
+                        PcmDatei.oeffnen(datei)?.use { pcm ->
+                            val tonart = TonartSchaetzung.schaetzen(TonartSchaetzung.chromaAusCache(pcm))
+                            val lufs = Lautheit.ausCache(pcm)
+                            TitelAnalyse(tonart.name, tonart.camelot, lufs.takeIf { it.isFinite() })
+                        }
                     }
-                }
-                if (titel?.id == t.id) {
-                    tonart = gefunden?.first
-                    lufs = gefunden?.second?.takeIf { it.isFinite() }
+                    if (titel?.id == t.id && gefunden != null) {
+                        analyse = gefunden
+                        analysen.sichere(t.id, gefunden)
+                    }
                 }
             } else if (this@Spielmodell.fehler == null) {
                 this@Spielmodell.fehler = "Titel laesst sich nicht oeffnen"
