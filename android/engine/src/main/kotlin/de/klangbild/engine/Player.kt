@@ -30,7 +30,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
      * Spielt [datei] ab [startFrame]. Beim ersten Mal wird dekodiert; die Wiedergabe startet
      * bereits nach der ersten Sekunde Cache, der Rest wird im Hintergrund weitergeschrieben.
      */
-    fun spiele(datei: File, spurId: Long, startFrame: Long = 0): Boolean {
+    fun spiele(datei: File, spurId: Long, startFrame: Long = 0, nurDekodieren: Boolean = false): Boolean {
         val vorhanden = cache.finde(spurId.toInt())
         if (vorhanden != null) {
             dauer = PcmDatei.oeffnen(vorhanden)?.use { it.frames().toLong() } ?: 0
@@ -42,7 +42,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
         var gestartet = false
         val ergebnis = try {
             decoder.dekodiere(datei, cache, spurId.toInt(), beiBlock = { frames ->
-                if (!gestartet && frames >= 44100) {
+                if (!nurDekodieren && !gestartet && frames >= 44100) {
                     gestartet = NativeEngine.startFile(ziel.absolutePath, 0, spurId, true)
                     if (gestartet) {
                         dateiWaechst = true
@@ -58,6 +58,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
         }
         dauer = ergebnis.frames.toLong()
         cache.aufraeumen(behalten = listOf(ziel.name))
+        if (nurDekodieren) return true
         if (!gestartet) return starte(ziel, spurId, 0)
         NativeEngine.quelleFertig()
         dateiWaechst = false

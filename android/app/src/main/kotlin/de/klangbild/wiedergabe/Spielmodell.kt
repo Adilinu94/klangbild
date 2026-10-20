@@ -207,7 +207,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
     suspend fun plane(naechster: Titel): Uebergang? = withContext(Dispatchers.Default) {
         val a = analyse ?: return@withContext null
         val pa = profil ?: return@withContext null
-        val analyseB = analysen.lade(naechster.id) ?: analysiere(naechster) ?: return@withContext null
+        val analyseB = analysen.lade(naechster.id) ?: analysiereOhneWiedergabe(naechster) ?: return@withContext null
         val pb = analyseB.zuProfil() ?: return@withContext null
         val e = Einstellungen()
 
@@ -250,6 +250,19 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
         val ziel = liste[(index + 1) % liste.size]
         if (ziel.id == titel?.id) return
         viewModelScope.launch { plane(ziel) }
+    }
+
+    /**
+     * Fuer die Konsole: Titel ohne Wiedergabe in den Cache dekodieren (falls noetig) und
+     * analysieren. So laesst sich der Uebergang planen, ohne vorher hin- und herzuspringen.
+     */
+    suspend fun analysiereOhneWiedergabe(t: Titel): TitelAnalyse? {
+        withContext(Dispatchers.Default) {
+            if (cache.finde(t.id.toInt()) == null) {
+                player.spiele(File(t.pfad), t.id, nurDekodieren = true)
+            }
+        }
+        return analysiere(t)
     }
 
     /** RMS-Kurve aus dem PCM-Cache (64 Segmente, auf das Maximum normiert). */
