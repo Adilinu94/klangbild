@@ -25,6 +25,7 @@ data class TitelAnalyse(
     val bpm: Int? = null,
     val beats: List<Float> = emptyList(),
     val downbeats: List<Float> = emptyList(),
+    val raster: List<Float> = emptyList(),
     val version: Int = VERSION,
 ) {
 
@@ -36,6 +37,7 @@ data class TitelAnalyse(
         put("bpm", bpm)
         put("beats", buildJsonArray { beats.forEach { add(JsonPrimitive(it)) } })
         put("downbeats", buildJsonArray { downbeats.forEach { add(JsonPrimitive(it)) } })
+        put("raster", buildJsonArray { raster.forEach { add(JsonPrimitive(it)) } })
     }.toString()
 
     companion object {
@@ -60,6 +62,9 @@ data class TitelAnalyse(
                         ?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }
                         ?: emptyList(),
                     downbeats = (o["downbeats"] as? JsonArray)
+                        ?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }
+                        ?: emptyList(),
+                    raster = (o["raster"] as? JsonArray)
                         ?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }
                         ?: emptyList(),
                 )

@@ -11,6 +11,7 @@ import de.klangbild.core.Abtastung
 import de.klangbild.core.Lautheit
 import de.klangbild.core.PcmCache
 import de.klangbild.core.PcmDatei
+import de.klangbild.core.Taktraster
 import de.klangbild.core.TitelAnalyse
 import de.klangbild.core.TonartSchaetzung
 import de.klangbild.engine.AutoDjPlayer
@@ -116,7 +117,9 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
             if (ok) {
                 zustand = player.zustand()
                 wellenform = withContext(Dispatchers.Default) { forme(t.id) }
-                if (analyse == null || analyse?.beats.isNullOrEmpty() || analyse?.downbeats.isNullOrEmpty()) {
+                if (analyse == null || analyse?.beats.isNullOrEmpty() ||
+                    analyse?.downbeats.isNullOrEmpty() || analyse?.raster.isNullOrEmpty()
+                ) {
                     val gefunden = withContext(Dispatchers.Default) {
                         val datei = cache.finde(t.id.toInt()) ?: return@withContext null
                         PcmDatei.oeffnen(datei)?.use { pcm ->
@@ -126,6 +129,15 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                             val abstaende = schlaege.beats.toList().zipWithNext { a, b -> b - a }.sorted()
                             val mittel = abstaende.getOrNull(abstaende.size / 2)
                             val bpm = if (mittel != null && mittel > 0.25f) (60f / mittel).roundToInt() else null
+                            val raster = if (bpm != null) {
+                                Taktraster.taktraster(
+                                    schlaege.downbeats.map { it.toDouble() },
+                                    bpm.toDouble(),
+                                    pcm.frames().toDouble() / 44100.0,
+                                ).map { it.toFloat() }
+                            } else {
+                                emptyList()
+                            }
                             TitelAnalyse(
                                 tonart.name,
                                 tonart.camelot,
@@ -133,6 +145,7 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                                 bpm,
                                 schlaege.beats.toList(),
                                 schlaege.downbeats.toList(),
+                                raster,
                             )
                         }
                     }
