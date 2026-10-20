@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace klangbild::dsp {
@@ -42,6 +43,13 @@ std::optional<std::vector<double>> sosfiltfilt(const Sos& sos, const std::vector
 /// Signale (<= 15 Samples) laufen ueber das kausale `sosfilt`. Eine leere `sos` (der Prototyp bekommt dort
 /// None) gibt das Signal unveraendert zurueck. Gerechnet wird in double, das Ergebnis ist float32.
 std::vector<float> filterSignal(const Sos& sos, const float* signal, std::size_t frames, int channels);
+
+/// `scipy.signal.sosfilt(sos, block, axis=0, zi=state)` fuer einen Block (interleaved): filtert jeden
+/// Kanal kausal mit fortgeschriebenem Zustand. `state` hat `2 * sections * channels` Werte, Layout
+/// (Abschnitt, z0/z1, Kanal) wie scipys `zi`; bei falscher Groesse wird er mit Nullen begonnen.
+/// Ergebnis float32 (der Prototyp weist in ein float32-Array zu).
+std::vector<float> sosfiltBlock(const Sos& sos, std::span<const float> block, std::size_t frames, int channels,
+                                std::vector<double>& state);
 
 /// Ergebnis von `band_teilen`: Tief- und Hochband im Format der Eingabe (interleaved).
 struct BandSplit {

@@ -158,6 +158,31 @@ std::vector<float> filterSignal(const Sos& sos, const float* signal, std::size_t
     return out;
 }
 
+std::vector<float> sosfiltBlock(const Sos& sos, std::span<const float> block, std::size_t frames, int channels,
+                                std::vector<double>& state) {
+    const std::size_t anzahl = sos.size();
+    const std::size_t kan = static_cast<std::size_t>(channels);
+    const std::size_t noetig = 2 * anzahl * kan;
+    if (state.size() != noetig) state.assign(noetig, 0.0);
+    std::vector<float> aus(block.begin(), block.end());
+    std::vector<double> x(frames);
+    std::vector<double> zi(2 * anzahl);
+    for (std::size_t c = 0; c < kan; ++c) {
+        for (std::size_t i = 0; i < frames; ++i) x[i] = static_cast<double>(block[i * kan + c]);
+        for (std::size_t s = 0; s < anzahl; ++s) {
+            zi[2 * s] = state[(2 * s) * kan + c];
+            zi[2 * s + 1] = state[(2 * s + 1) * kan + c];
+        }
+        run(sos, x, zi);
+        for (std::size_t s = 0; s < anzahl; ++s) {
+            state[(2 * s) * kan + c] = zi[2 * s];
+            state[(2 * s + 1) * kan + c] = zi[2 * s + 1];
+        }
+        for (std::size_t i = 0; i < frames; ++i) aus[i * kan + c] = static_cast<float>(x[i]);
+    }
+    return aus;
+}
+
 BandSplit bandSplit(const float* signal, std::size_t frames, int channels, int rate, double splitHz) {
     BandSplit out;
     const std::size_t total = frames * static_cast<std::size_t>(channels);

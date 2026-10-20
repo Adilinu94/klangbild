@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <stdexcept>
@@ -20,9 +21,15 @@
 #include "dsp/fft.h"
 #include "dsp/envelopes.h"
 #include "dsp/filters.h"
+#include "dsp/introloop.h"
 #include "dsp/level.h"
+#include "dsp/loop.h"
+#include "dsp/loopchoice.h"
+#include "dsp/mischen_eigen.h"
 #include "dsp/mixing.h"
+#include "dsp/resample.h"
 #include "dsp/sweep.h"
+#include "dsp/warp.h"
 #include "golden.h"
 
 namespace {
@@ -907,6 +914,45 @@ void expectSide(Golden& g, const std::string& name, const Json& erwartet,
     }
 }
 
+/// Die Rezepte aus golden.py (`_dsp`, `recipes`): 5 benannte Blenden und 9 Tricks.
+struct Recipe {
+    const char* name;
+    const char* volume;
+    const char* eq;
+    const char* filter;
+    const char* effect;
+    const char* loop;
+    const char* trick;
+};
+
+constexpr Recipe kRecipes[] = {
+    {"profi_eq", nullptr, "profi", nullptr, nullptr, nullptr, nullptr},
+    {"outro_loop", nullptr, "profi", nullptr, nullptr, "8", nullptr},
+    {"echo_out", "letzter_takt", nullptr, nullptr, "echo75_ende_aus", nullptr, nullptr},
+    {"hall", nullptr, nullptr, "tp_aus", "hall_ende_aus", nullptr, nullptr},
+    {"rolle", "hart_aus", nullptr, nullptr, nullptr, "rolle", nullptr},
+    {"trick_bremse", "drop", nullptr, nullptr, nullptr, nullptr, "bremse"},
+    {"trick_spinback", "drop", nullptr, nullptr, nullptr, nullptr, "spinback"},
+    {"trick_riser", "drop", nullptr, nullptr, nullptr, nullptr, "riser"},
+    {"trick_flanger", "drop", nullptr, nullptr, nullptr, nullptr, "flanger"},
+    {"trick_teaser", "drop", nullptr, nullptr, nullptr, nullptr, "teaser"},
+    {"trick_phaser", "drop", nullptr, nullptr, nullptr, nullptr, "phaser"},
+    {"trick_gate", "drop", nullptr, nullptr, nullptr, nullptr, "gate"},
+    {"trick_crush", "drop", nullptr, nullptr, nullptr, nullptr, "crush"},
+    {"trick_wechsel", "drop", nullptr, nullptr, nullptr, nullptr, "wechsel"},
+};
+
+klangbild::dsp::Settings settingsOf(const Recipe& r) {
+    klangbild::dsp::Settings s;
+    if (r.volume) s.volume = r.volume;
+    if (r.eq) s.eq = r.eq;
+    if (r.filter) s.filter = r.filter;
+    if (r.effect) s.effect = r.effect;
+    if (r.loop) s.loop = r.loop;
+    if (r.trick) s.trick = r.trick;
+    return s;
+}
+
 }  // namespace
 
 TEST(DspAutomation, KurvenMatchesGolden) {
@@ -923,47 +969,13 @@ TEST(DspAutomation, KurvenMatchesGolden) {
 }
 
 TEST(DspAutomation, KurvenEigenMatchesGolden) {
-    using klangbild::dsp::Settings;
     Golden& g = golden();
-    struct Recipe {
-        const char* name;
-        const char* volume;
-        const char* eq;
-        const char* filter;
-        const char* effect;
-        const char* loop;
-        const char* trick;
-    };
-    // Genau die Rezepte aus golden.py (`_dsp`, `recipes`).
-    const Recipe recipes[] = {
-        {"profi_eq", nullptr, "profi", nullptr, nullptr, nullptr, nullptr},
-        {"outro_loop", nullptr, "profi", nullptr, nullptr, "8", nullptr},
-        {"echo_out", "letzter_takt", nullptr, nullptr, "echo75_ende_aus", nullptr, nullptr},
-        {"hall", nullptr, nullptr, "tp_aus", "hall_ende_aus", nullptr, nullptr},
-        {"rolle", "hart_aus", nullptr, nullptr, nullptr, "rolle", nullptr},
-        {"trick_bremse", "drop", nullptr, nullptr, nullptr, nullptr, "bremse"},
-        {"trick_spinback", "drop", nullptr, nullptr, nullptr, nullptr, "spinback"},
-        {"trick_riser", "drop", nullptr, nullptr, nullptr, nullptr, "riser"},
-        {"trick_flanger", "drop", nullptr, nullptr, nullptr, nullptr, "flanger"},
-        {"trick_teaser", "drop", nullptr, nullptr, nullptr, nullptr, "teaser"},
-        {"trick_phaser", "drop", nullptr, nullptr, nullptr, nullptr, "phaser"},
-        {"trick_gate", "drop", nullptr, nullptr, nullptr, nullptr, "gate"},
-        {"trick_crush", "drop", nullptr, nullptr, nullptr, nullptr, "crush"},
-        {"trick_wechsel", "drop", nullptr, nullptr, nullptr, nullptr, "wechsel"},
-    };
     int geprueft = 0;
-    for (const Recipe& r : recipes) {
-        Settings s;
-        if (r.volume) s.volume = r.volume;
-        if (r.eq) s.eq = r.eq;
-        if (r.filter) s.filter = r.filter;
-        if (r.effect) s.effect = r.effect;
-        if (r.loop) s.loop = r.loop;
-        if (r.trick) s.trick = r.trick;
+    for (const Recipe& r : kRecipes) {
         const std::string name = std::string("kurven_eigen_") + r.name;
         SCOPED_TRACE(name);
         const GoldenCase c = g.case_of(name);
-        const auto k = klangbild::dsp::automation("eigen", 4, s);
+        const auto k = klangbild::dsp::automation("eigen", 4, settingsOf(r));
         expectSide(g, name + "/a", c.expected.at("a"), k.a);
         expectSide(g, name + "/b", c.expected.at("b"), k.b);
         ++geprueft;
@@ -1005,4 +1017,287 @@ TEST(DspAutomation, LoopPlanKnownValuesFromPrototype) {
 TEST(DspAutomation, StemArtenWerfen) {
     EXPECT_THROW(klangbild::dsp::automation("drums_zuerst", 16, klangbild::dsp::Settings{}), std::invalid_argument);
     EXPECT_THROW(klangbild::dsp::automation("unbekannt", 16, klangbild::dsp::Settings{}), std::invalid_argument);
+}
+
+// ============================== T6.2 Warp ohne Keylock ==========================================
+
+TEST(DspWarp, WarpVinylMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const GoldenCase c = g.case_of("warp_vinyl");
+    ASSERT_FALSE(c.inputs.at("keylock").as_bool());
+    const auto audio = floatsOf(g, c.inputs.at("audio"));
+    const auto quell = c.inputs.at("quell_s").numbers();
+    const auto ziel = c.inputs.at("ziel_s").numbers();
+    const auto out = klangbild::dsp::warp(audio, quell, ziel, false);
+    ASSERT_EQ(c.tolerance, "dsp");
+    g.expect_dsp("warp_vinyl", c.expected, std::vector<double>(out.begin(), out.end()));
+}
+
+TEST(DspWarp, ResampleLinearKnownValuesFromPrototype) {
+    // resample.resample_linear(arange(8, float32), 2.0) liest jeden zweiten Wert.
+    std::vector<float> acht(8);
+    for (int i = 0; i < 8; ++i) acht[static_cast<std::size_t>(i)] = static_cast<float>(i);
+    const auto halb = klangbild::dsp::resampleLinear(acht, 2.0);
+    ASSERT_EQ(halb.size(), 4u);
+    for (int i = 0; i < 4; ++i) EXPECT_EQ(halb[static_cast<std::size_t>(i)], 2.0f * i) << i;
+    // Faktor 0,5 verdoppelt die Laenge und interpoliert linear; das Ende bleibt beim letzten Wert.
+    const auto doppelt = klangbild::dsp::resampleLinear(acht, 0.5);
+    ASSERT_EQ(doppelt.size(), 16u);
+    EXPECT_EQ(doppelt[0], 0.0f);
+    EXPECT_EQ(doppelt[1], 0.5f);
+    EXPECT_EQ(doppelt[15], 7.0f);
+    // Faktor 1 kopiert, leere Eingabe bleibt leer.
+    EXPECT_EQ(klangbild::dsp::resampleLinear(acht, 1.0), acht);
+    EXPECT_TRUE(klangbild::dsp::resampleLinear({}, 2.0).empty());
+    // Auffuellen und Kuerzen: exakt n Frames.
+    EXPECT_EQ(klangbild::dsp::padTo({1, 2}, 3, 2).size(), 6u);
+    EXPECT_EQ(klangbild::dsp::padTo({1, 2, 3, 4}, 1, 2), (std::vector<float>{1, 2}));
+}
+
+TEST(DspWarp, KeylockWirftBisT63) {
+    const std::vector<float> audio(2 * 1000, 0.1f);
+    const std::vector<double> quell = {0.0, 441.0 / 44100.0};
+    const std::vector<double> stark = {0.0, 485.0 / 44100.0};   // 9 % gedehnt: braucht Keylock
+    EXPECT_THROW(klangbild::dsp::warp(audio, quell, stark, true), std::invalid_argument);
+    const std::vector<double> kaum = {0.0, 441.0 / 44100.0};    // 0 %: Resampling reicht
+    EXPECT_NO_THROW(klangbild::dsp::warp(audio, quell, kaum, true));
+    EXPECT_TRUE(klangbild::dsp::warp(audio, {}, {}, false).empty());
+    // Leeres Audio, aber ein Ziel: der Prototyp liefert Stille in Ziel-Laenge (quell wird auf 0 geklemmt).
+    const auto stille = klangbild::dsp::warp({}, quell, kaum, false);
+    ASSERT_EQ(stille.size(), 2u * static_cast<std::size_t>(std::nearbyint(kaum[1] * 44100.0)));
+    for (float v : stille) ASSERT_EQ(v, 0.0f);
+}
+
+// ============================== T5.8 Loops ======================================================
+
+TEST(DspLoop, LoopenMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    for (const char* size : {"1", "2", "4", "8", "16", "32", "rolle"}) {
+        const std::string name = std::string("loop_") + size;
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const auto a = floatsOf(g, c.inputs.at("a"));
+        const auto taktN = c.inputs.at("takt_n").numbers();
+        const auto werte = c.inputs.at("plan").numbers();
+        ASSERT_EQ(werte.size() % 3, 0u);
+        std::vector<klangbild::dsp::LoopSection> plan;
+        for (std::size_t i = 0; i + 2 < werte.size(); i += 3) {
+            plan.push_back({static_cast<int>(werte[i]), static_cast<int>(werte[i + 1]),
+                            static_cast<int>(werte[i + 2])});
+        }
+        ASSERT_EQ(plan.size(), werte.size() / 3);
+        const auto out = klangbild::dsp::loopen(a, taktN, plan);
+        ASSERT_EQ(c.tolerance, "dsp");
+        g.expect_dsp(name, c.expected, std::vector<double>(out.begin(), out.end()));
+    }
+}
+
+TEST(DspLoop, AchtelKnownValuesFromPrototype) {
+    // uebergang._achtel(arange(5) * 88200): 8 Achtel je Takt, letzte Grenze schliesst den Takt.
+    std::vector<double> taktN = {0, 88200, 176400, 264600, 352800};
+    const auto achtel = klangbild::dsp::eighthGrid(taktN);
+    ASSERT_EQ(achtel.size(), 33u);
+    EXPECT_EQ(achtel[0], 0);
+    EXPECT_EQ(achtel[1], 11025);
+    EXPECT_EQ(achtel[8], 88200);
+    EXPECT_EQ(achtel[32], 352800);
+    EXPECT_TRUE(klangbild::dsp::eighthGrid(std::vector<double>{1.0}).empty());
+}
+
+TEST(DspLoop, LoopInfoKnownValuesFromPrototype) {
+    using klangbild::dsp::Settings;
+    const std::vector<double> taktS = {0, 2, 4, 6, 8};
+    Settings s;
+    s.art = "eigen";
+    s.loop = "8";
+    auto info = klangbild::dsp::loopInfo(s, taktS);
+    ASSERT_EQ(info.size(), 1u);
+    EXPECT_DOUBLE_EQ(info[0].von, 0.0);
+    EXPECT_DOUBLE_EQ(info[0].bis, 8.0);
+    EXPECT_DOUBLE_EQ(info[0].quelle, 0.0);
+    EXPECT_DOUBLE_EQ(info[0].laenge, 4.0);
+
+    s.loop = "rolle";
+    info = klangbild::dsp::loopInfo(s, taktS);
+    const double want[5][4] = {{0.0, 1.5, 0.0, 2.0}, {1.5, 3.0, 0.0, 1.0}, {3.0, 4.5, 0.0, 0.5},
+                               {4.5, 6.0, 0.0, 0.25}, {6.0, 8.0, 0.0, 0.25}};
+    ASSERT_EQ(info.size(), 5u);
+    for (std::size_t i = 0; i < 5; ++i) {
+        EXPECT_DOUBLE_EQ(info[i].von, want[i][0]) << i;
+        EXPECT_DOUBLE_EQ(info[i].bis, want[i][1]) << i;
+        EXPECT_DOUBLE_EQ(info[i].quelle, want[i][2]) << i;
+        EXPECT_DOUBLE_EQ(info[i].laenge, want[i][3]) << i;
+    }
+
+    s.loop = "1";
+    info = klangbild::dsp::loopInfo(s, taktS);
+    ASSERT_EQ(info.size(), 1u);
+    EXPECT_DOUBLE_EQ(info[0].von, 2.0);
+    EXPECT_DOUBLE_EQ(info[0].bis, 8.0);
+    EXPECT_DOUBLE_EQ(info[0].quelle, 2.0);
+    EXPECT_DOUBLE_EQ(info[0].laenge, 0.5);
+
+    s.art = "auto";
+    EXPECT_TRUE(klangbild::dsp::loopInfo(s, taktS).empty());
+    Settings leer;
+    leer.art = "eigen";
+    leer.loop = "keiner";
+    EXPECT_TRUE(klangbild::dsp::loopInfo(leer, taktS).empty());
+}
+
+// ============================== T5.9 Loop-Wahl ==================================================
+
+TEST(DspLoopChoice, ChooseLoopMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    for (const char* name : {"loopwahl_frei", "loopwahl_gesang", "loopwahl_alle"}) {
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const auto a = floatsOf(g, c.inputs.at("a"));
+        const auto taktN = c.inputs.at("takt_n").numbers();
+        std::vector<int> meiden;
+        std::optional<std::span<const int>> sperre;
+        const Json& roh = c.inputs.at("meiden");
+        if (!roh.is_null()) {
+            for (double d : roh.numbers()) meiden.push_back(static_cast<int>(d));
+            sperre = std::span<const int>(meiden);
+        }
+        const auto out = klangbild::dsp::chooseLoop(a, taktN, sperre);
+        const auto want = c.expected.numbers();
+        ASSERT_EQ(want.size(), 3u);
+        EXPECT_EQ(out.start, static_cast<int>(want[0]));
+        EXPECT_EQ(out.bars, static_cast<int>(want[1]));
+        EXPECT_NEAR(out.quality, want[2], 1e-6);
+        ASSERT_EQ(c.tolerance, "values");
+    }
+}
+
+TEST(DspLoopChoice, BeatFeaturesKnownValuesFromPrototype) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const auto a = floatsOf(g, g.raw("loopwahl_frei").at("inputs").at("a"));
+    const std::vector<double> taktN = {0, 88200, 176400, 264600, 352800};
+    const auto f = klangbild::dsp::beatFeatures(a, taktN);
+    ASSERT_EQ(f.size(), 16u);
+    const double want[16] = {8.935666,  38.444125, 37.569673, 0.41072,  4.738242,  7.25541,  40.014991, 7.679253,
+                             10.348574, 11.678174, 13.607413, 15.882915, 17.103924, 17.997111, 19.640347, 21.129469};
+    for (std::size_t i = 0; i < 16; ++i) EXPECT_NEAR(f[0][i], want[i], 1e-4) << i;
+}
+
+TEST(DspLoopChoice, LoopInOriginalKnownValuesFromPrototype) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const auto puffer = floatsOf(g, g.raw("loopwahl_frei").at("inputs").at("a"));
+    const std::vector<double> raster = {0, 2, 4, 6, 8};
+    const auto frei = klangbild::dsp::loopInOriginal(puffer, raster, 0, 4);
+    EXPECT_EQ(frei.start, 0);
+    EXPECT_EQ(frei.bars, 2);
+    EXPECT_NEAR(frei.quality, 0.9757748671003617, 1e-6);
+
+    const std::vector<int> meiden = {1, 1, 0, 0};
+    const auto gesperrt = klangbild::dsp::loopInOriginal(puffer, raster, 0, 4, std::span<const int>(meiden));
+    EXPECT_EQ(gesperrt.start, 0);
+    EXPECT_EQ(gesperrt.bars, 3);
+    EXPECT_DOUBLE_EQ(gesperrt.quality, 0.0);
+}
+
+// ============================== T5.10 Intro-Loop ================================================
+
+TEST(DspIntroLoop, IntroLoopMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    for (int repeats : {1, 2}) {
+        const std::string name = "introloop_" + std::to_string(repeats);
+        SCOPED_TRACE(name);
+        const GoldenCase c = g.case_of(name);
+        const auto b = floatsOf(g, c.inputs.at("b_audio"));
+        const auto bbar = c.inputs.at("bbar").numbers();
+        const auto points = c.inputs.at("points").numbers();
+        const int j0 = static_cast<int>(c.inputs.at("j0").as_double());
+        const int k = static_cast<int>(c.inputs.at("k").as_double());
+        const int mal = static_cast<int>(c.inputs.at("mal").as_double());
+        const auto loop = klangbild::dsp::introLoop(b, bbar, j0, k, mal);
+        ASSERT_EQ(c.tolerance, "dsp");
+        g.expect_dsp(name + "/audio", c.expected.at("audio"),
+                     std::vector<double>(loop.audio.begin(), loop.audio.end()));
+        g.expect_values(name + "/raster", c.expected.at("raster"), loop.raster);
+        g.expect_values(name + "/rueck", c.expected.at("rueck"), klangbild::dsp::introLoopBack(loop, points));
+    }
+}
+
+// ============================== T5.11 mischen_eigen =============================================
+
+namespace {
+
+std::vector<float> readF32(const std::string& pfad) {
+    std::ifstream datei(pfad, std::ios::binary);
+    if (!datei.good()) return {};
+    std::vector<char> roh((std::istreambuf_iterator<char>(datei)), std::istreambuf_iterator<char>());
+    std::vector<float> aus(roh.size() / 4);
+    std::memcpy(aus.data(), roh.data(), aus.size() * 4);
+    return aus;
+}
+
+}  // namespace
+
+TEST(DspEigen, MischenEigenMatchesGolden) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const auto ir = floatsOf(g, g.raw("hall_ir").at("expected"));
+    // Rauschen fuer den Riser: der Prototyp zieht es aus default_rng(3). Zufall ist nicht bitgleich
+    // portierbar, darum liegt die Python-Folge als Testeingabe daneben (nur lokal, wie alle .f32).
+    const std::vector<float> rauschen = readF32(goldenDir() + "/riser_noise.f32");
+    int geprueft = 0, uebersprungen = 0;
+    for (const Recipe& r : kRecipes) {
+        const std::string name = std::string("eigen_") + r.name;
+        SCOPED_TRACE(name);
+        if (std::string(r.name) == "trick_riser" && rauschen.empty()) {
+            ++uebersprungen;   // ohne die Python-Rauschfolge nicht vergleichbar
+            continue;
+        }
+        const GoldenCase c = g.case_of(name);
+        const auto a = floatsOf(g, c.inputs.at("a"));
+        const auto b = floatsOf(g, c.inputs.at("b"));
+        const auto taktN = c.inputs.at("takt_n").numbers();
+        const auto out = klangbild::dsp::mischenEigen(a, b, settingsOf(r), taktN, ir, rauschen);
+        std::vector<double> ist(out.blende.begin(), out.blende.end());
+        ist.insert(ist.end(), out.nachlauf.begin(), out.nachlauf.end());
+        if (c.tolerance == "reverb") {
+            g.expect_reverb(name, c.expected, ist);
+        } else {
+            ASSERT_EQ(c.tolerance, "dsp");
+            g.expect_dsp(name, c.expected, ist);
+        }
+        ++geprueft;
+    }
+    EXPECT_EQ(geprueft + uebersprungen, 14);
+}
+
+// Referenz: uebergang.mischen_eigen mit effekt_ein="rueckhall" (kein eigener Golden-Fall).
+TEST(DspEigen, RueckhallKnownValuesFromPrototype) {
+    REQUIRE_BINARIES();
+    Golden& g = golden();
+    const auto a = floatsOf(g, g.raw("eigen_outro_loop").at("inputs").at("a"));
+    const auto b = floatsOf(g, g.raw("eigen_outro_loop").at("inputs").at("b"));
+    const std::vector<double> taktN = {0, 88200, 176400, 264600, 352800};
+    const auto ir = floatsOf(g, g.raw("hall_ir").at("expected"));
+    klangbild::dsp::Settings s;
+    s.effectIn = "rueckhall";
+    s.volume = "drop";
+    const auto out = klangbild::dsp::mischenEigen(a, b, s, taktN, ir);
+    ASSERT_EQ(out.blende.size(), 352800u * 2);
+    EXPECT_TRUE(out.nachlauf.empty());
+    EXPECT_NEAR(out.blende[0], 0.3905813694000244, 1e-5);
+    EXPECT_NEAR(out.blende[1], 0.45651981234550476, 1e-5);
+    EXPECT_NEAR(out.blende[100000 * 2], 0.09504580497741699, 1e-5);
+    EXPECT_NEAR(out.blende[100000 * 2 + 1], -0.14963111281394958, 1e-5);
+    double quadrat = 0.0, spitze = 0.0;
+    for (float v : out.blende) {
+        quadrat += static_cast<double>(v) * static_cast<double>(v);
+        spitze = std::max(spitze, std::abs(static_cast<double>(v)));
+    }
+    EXPECT_NEAR(std::sqrt(quadrat / static_cast<double>(out.blende.size())), 0.12655517347961429, 1e-5);
+    EXPECT_NEAR(spitze, 0.7355132699012756, 1e-5);
 }

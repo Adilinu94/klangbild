@@ -11,6 +11,7 @@
 namespace klangbild::dsp {
 
 struct Settings {
+    std::string art = "auto";         // art: Uebergangsart (nur loop_info liest sie)
     std::string volume = "nahtlos";   // lautstaerke: Verlauf der Fader (nahtlos, linear, hart_aus, drop, ...)
     std::string eq = "bass_mitte";    // eq: Bass-/Band-Tausch (profi, bass_mitte, drei_band, ...); Standard wie Python
     std::string filter = "keiner";    // filter: tp_aus, hp_ein, hp_aus_reso, ...
@@ -23,6 +24,7 @@ struct Settings {
     int loopStart = -1;               // loop_start
     int loopIn = 0;                   // loop_ein: B-Intro-Schleife, Takte
     int loopInTimes = 0;              // loop_ein_mal: Wiederholungen
+    bool keylock = true;              // keylock: Tonhoehe halten beim Dehnen (Warp/Loop)
 };
 
 }  // namespace klangbild::dsp
