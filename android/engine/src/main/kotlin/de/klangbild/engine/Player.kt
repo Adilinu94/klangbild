@@ -48,8 +48,8 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
         )
     }
 
-    /** Cache-Datei des Titels, notfalls vorher dekodieren. */
-    private fun pfadFuer(spurId: Long, datei: File): File? {
+    /** Cache-Datei des Titels, notfalls vorher dekodieren. Blockiert beim ersten Mal. */
+    fun vorbereiten(datei: File, spurId: Long): File? {
         val vorhanden = cache.finde(spurId.toInt())
         if (vorhanden != null) {
             dauer = PcmDatei.oeffnen(vorhanden)?.use { it.frames().toLong() } ?: 0
@@ -60,4 +60,7 @@ class Player(private val cache: PcmCache, private val decoder: Decoder = Decoder
         dauer = ergebnis.frames.toLong()
         return cache.datei(spurId.toInt(), 0, ergebnis.frames)
     }
+
+    /** Cache-Datei des Titels, notfalls vorher dekodieren. */
+    private fun pfadFuer(spurId: Long, datei: File): File? = vorbereiten(datei, spurId)
 }

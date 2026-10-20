@@ -139,6 +139,12 @@ class PcmCache(val ordner: File, val maxDateien: Int = 4) {
     fun anlegen(trackId: Int, startFrame: Int, frames: Int, rate: Int = 44100): PcmDatei =
         PcmDatei.anlegen(datei(trackId, startFrame, frames), rate, 2)
 
+    /** Gebackene Blende zwischen zwei Titeln; eigener Name, kollidiert nicht mit Titel-IDs. */
+    fun blendeDatei(aId: Int, bId: Int): File = File(ordner, "blende_${aId}_${bId}.pcm")
+
+    fun anlegenBlende(aId: Int, bId: Int, rate: Int = 44100): PcmDatei =
+        PcmDatei.anlegen(blendeDatei(aId, bId), rate, 2)
+
     fun oeffnen(trackId: Int, startFrame: Int, frames: Int): PcmDatei? =
         PcmDatei.oeffnen(datei(trackId, startFrame, frames))
 

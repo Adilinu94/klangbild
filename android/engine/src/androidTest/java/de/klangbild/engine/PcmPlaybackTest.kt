@@ -85,4 +85,36 @@ class PcmPlaybackTest {
             NativeEngine.stop()
         }
     }
+
+    @Test
+    fun ketteAutoDjMitGebackenerBlende() {
+        val kontext = InstrumentationRegistry.getInstrumentation().targetContext
+        val ordner = File(kontext.cacheDir, "pcm-playback-autodj").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val cache = PcmCache(ordner)
+        val ton = FloatArray(44100 * 2) { i -> if (i % 2 == 0) 0.3f else -0.3f }
+        for (id in listOf(77, 78)) {
+            cache.anlegen(id, 0, 44100).use { it.schreibeBlock(ton, 2) }
+        }
+        val autoDj = AutoDjPlayer(Player(cache), cache)
+        val blende = FloatArray(2 * 44100) { i -> if (i % 2 == 0) 0.1f else -0.1f }
+
+        assertTrue("startFile", autoDj.spiele(cache.datei(77, 0, 44100), 77))
+        try {
+            assertTrue("Blende anhaengen", autoDj.haengeBlendeAn(77, 78, blende, 44100, cache.datei(78, 0, 44100)))
+            val werte = LongArray(NativeEngine.POLL_SIZE)
+            val frist = System.currentTimeMillis() + 8000
+            while (System.currentTimeMillis() < frist && werte[NativeEngine.POLL_FEEDER_SPUR] != 78L) {
+                Thread.sleep(50)
+                autoDj.aktualisiere()
+                NativeEngine.poll(werte)
+            }
+            assertEquals("Spur: ${werte.joinToString()}", 78L, werte[NativeEngine.POLL_FEEDER_SPUR])
+        } finally {
+            autoDj.zuruecksetzen()
+            NativeEngine.stop()
+        }
+    }
 }
