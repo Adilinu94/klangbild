@@ -30,7 +30,8 @@ namespace {
 // 2: start/stop/setPlaying/poll (M1).
 // 3: Bäcker (M8b).
 // 4: startFile und belegte Feeder-Felder in poll (M2).
-constexpr int kAbiVersion = 4;
+// 5: queueFile (nahtlose Folgedatei).
+constexpr int kAbiVersion = 5;
 
 // Anzahl der Felder von poll() (BAUPLAN §5.4); steht gleich in NativeEngine.POLL_SIZE.
 constexpr jsize kPollSize = 7;
@@ -112,6 +113,22 @@ Java_de_klangbild_engine_NativeEngine_startFile(JNIEnv* env, jclass /*typ*/, jst
     gEngine->core.setPlaying(true);
     gEngine->feeder.start();
     return JNI_TRUE;
+}
+
+// Haengt eine Datei an, die am Ende der aktuellen nahtlos beginnt (M2). Kein Flush: der Ring
+// laeuft weiter. Fuer die Uebergangskette A-Rest -> gebackene Blende -> B-Rest.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_de_klangbild_engine_NativeEngine_queueFile(JNIEnv* env, jclass /*typ*/, jstring pfad, jlong startFrame,
+                                                jlong spur) {
+    if (pfad == nullptr) return JNI_FALSE;
+    const char* text = env->GetStringUTFChars(pfad, nullptr);
+    const std::string pfadText = text != nullptr ? std::string(text) : std::string();
+    if (text != nullptr) env->ReleaseStringUTFChars(pfad, text);
+    if (pfadText.empty()) return JNI_FALSE;
+
+    std::lock_guard<std::mutex> lock(gMutex);
+    if (!gEngine) return JNI_FALSE;
+    return gEngine->feeder.setzeNaechste(pfadText, startFrame, spur) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Felder wie BAUPLAN §5.4. Belegt: [1] Frames, die der Callback gelesen hat, [2] Spur des

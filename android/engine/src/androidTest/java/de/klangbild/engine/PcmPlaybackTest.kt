@@ -51,4 +51,38 @@ class PcmPlaybackTest {
             NativeEngine.stop()
         }
     }
+
+    @Test
+    fun spieltZweiDateienNacheinander() {
+        val kontext = InstrumentationRegistry.getInstrumentation().targetContext
+        val ordner = File(kontext.cacheDir, "pcm-playback-kette").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val cache = PcmCache(ordner)
+        val block = FloatArray(44100 * 2) { i -> if (i % 2 == 0) 0.2f else -0.2f }
+        for (id in listOf(77, 78)) {
+            val datei = cache.anlegen(id, 0, 44100)
+            datei.schreibeBlock(block, 2)
+            datei.close()
+        }
+        val a = cache.datei(77, 0, 44100).absolutePath
+        val b = cache.datei(78, 0, 44100).absolutePath
+
+        assertTrue("startFile", NativeEngine.startFile(a, 0, 77))
+        try {
+            assertTrue("queueFile", NativeEngine.queueFile(b, 0, 78))
+            NativeEngine.setPlaying(true)
+            val werte = LongArray(NativeEngine.POLL_SIZE)
+            val frist = System.currentTimeMillis() + 5000
+            while (System.currentTimeMillis() < frist && werte[NativeEngine.POLL_FEEDER_SPUR] != 78L) {
+                Thread.sleep(50)
+                NativeEngine.poll(werte)
+            }
+            assertEquals("Spur wechselt nicht: ${werte.joinToString()}", 78L, werte[NativeEngine.POLL_FEEDER_SPUR])
+            assertTrue("Kein Callback", werte[NativeEngine.POLL_HEARD_FRAME] > 0)
+        } finally {
+            NativeEngine.stop()
+        }
+    }
 }

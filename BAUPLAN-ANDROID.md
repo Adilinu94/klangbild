@@ -1644,8 +1644,8 @@ keine Playlist.
 | M6.5 | `backen` ohne Stems | `dsp/backen.*` |
 | M8b | Übergangsplan-JSON (§4.5), `parseBakeAnfrage`, `bakeTransition`, Info-JSON | `bake_api.*`, `json.h` |
 
-**Teststand 20.10.2026:** `dsp_golden_test` 53/53 grün, `playback_core_test` 21/21 grün,
-`klangbild_hosttest` (Golden-Leser) 6/6 grün (zusammen 80).
+**Teststand 20.10.2026:** `dsp_golden_test` 53/53 grün, `playback_core_test` 22/22 grün,
+`klangbild_hosttest` (Golden-Leser) 6/6 grün (zusammen 81).
 
 **Kotlin `:core` (M7, Stand 20.10.2026):**
 
@@ -1665,19 +1665,21 @@ keine Playlist.
 | PCM-Cache | §4.3: Kopf `KBPC`, int16, fortschreitendes Schreiben, LRU (4 Dateien) | Rundlauf, LRU |
 | Decoder-Bausteine | §4.3: PCM16/float → float, auf Stereo, lineares Resampling (ADR-014) | Tests |
 | Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke) | Gerätetest grün |
-| Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen; Sinus als Rückfall | 3 Host-Tests |
+| Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen, Folgedatei nahtlos anschließen; Sinus als Rückfall | 4 Host-Tests |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
 `./gradlew :core:test` grün (37 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 **Gerätetests (20.10.2026, Xiaomi 21081111RG, Android 14):**
-`am instrument` grün (3/3):
+`am instrument` grün (4/4):
 - `DecoderTest.dekodiertWavInDenCache`: WAV mit bekanntem Inhalt → PCM-Cache, Werte stimmen.
 - `JniBakeTest.backtUeberJni`: synthetischer Übergang über `NativeEngine.bake`, Info `sync:true`,
   Audio kommt zurück. Die .so lädt auf dem Gerät, der Vertrag hält.
 - `PcmPlaybackTest.spieltPcmCacheUeberOboe`: PCM-Cache → `NativeEngine.startFile` → Oboe-Callback
   liest Frames, `poll` meldet Spur 77 und eine Feeder-Position > 0. Die Wiedergabekette steht
   damit auf echter Hardware.
+- `PcmPlaybackTest.spieltZweiDateienNacheinander`: `queueFile` hängt Spur 78 an, der Feeder
+  wechselt ohne Flush; `poll` meldet danach 78.
 
 Fällt die Installation mit `INSTALL_FAILED_USER_RESTRICTED` aus (MIUI), in den Entwickleroptionen
 „Installieren über USB“ einschalten und den Dialog am Handy bestätigen; zusätzlich hilft
@@ -1688,7 +1690,7 @@ verschluckt sich am AndroidTest-Kotlin-Task; mit `--no-configuration-cache` läu
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| M2 | Timeline (mehrere Spuren, Übergabe an der Blende) und Limiter im Decoder; `PcmFeeder` (eine Datei ab Startframe) und PCM-Cache/Konverter stehen | — |
+| M2 | Timeline mit Mischung/Übergabekurve aus mehreren Quellen und Limiter im Decoder; `PcmFeeder` (Datei + nahtlose Folgedatei) steht | — |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
 | M8c | Vorschau, `weiter` im Auto-DJ und Verwerfen im Player (Warteschlange und Lernen sind fertig) | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |

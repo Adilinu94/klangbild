@@ -39,6 +39,13 @@ object NativeEngine {
     external fun startFile(pfad: String, startFrame: Long, spur: Long): Boolean
 
     /**
+     * Hängt eine Datei an, die am Ende der aktuellen nahtlos beginnt (kein Flush). Damit spielt
+     * der Auto-DJ die Kette A-Rest → gebackene Blende → B-Rest als drei Cache-Dateien.
+     * `false`, wenn keine Engine läuft oder die Datei ungültig ist.
+     */
+    external fun queueFile(pfad: String, startFrame: Long, spur: Long): Boolean
+
+    /**
      * Schreibt die Diagnosewerte in [out] (mindestens [POLL_SIZE] Felder), Reihenfolge wie BAUPLAN §5.4.
      * Billig und nicht blockierend; 10-mal pro Sekunde aufrufen, nicht je Frame. Im Spike belegt:
      * [POLL_HEARD_FRAME] (Frames, die der Callback gelesen hat), [POLL_PLAYING], [POLL_UNDERFLOWS].
