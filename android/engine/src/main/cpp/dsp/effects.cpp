@@ -17,7 +17,7 @@ constexpr std::size_t ch = static_cast<std::size_t>(kChannels);
 
 /// uebergang.NASS: Pegel der Effektfahnen.
 float wetLevel(std::string_view kind) {
-    if (kind == "hall") return static_cast<float>(0.8);
+    if (kind == "hall") return static_cast<float>(0.55);   // Runde 16, Fall 36: Hall am Ende "zu laut"
     if (kind == "echo") return static_cast<float>(1.3);
     if (kind == "delay") return static_cast<float>(1.1);
     if (kind == "pingpong") return static_cast<float>(1.4);

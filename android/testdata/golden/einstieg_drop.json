@@ -1,8 +1,8 @@
 {
   "expected": [
     [
-      9.277251101332018e-17,
-      1.951219512195122,
+      3.148171159383515e-16,
+      1.9512195121951221,
       3.902439024390244,
       5.853658536585366,
       7.804878048780488,
@@ -109,6 +109,7 @@
         5.853658536585366
       ],
       "energie": [],
+      "fein": [],
       "gain_db": 0.0,
       "id": 90002,
       "pfad": "synthetic-b"
@@ -127,6 +128,7 @@
       "gesang_takt": -1,
       "harmonie": "locker",
       "keylock": true,
+      "kritiker": false,
       "lautheit": true,
       "lautstaerke": "nahtlos",
       "loop": "keiner",
@@ -135,6 +137,7 @@
       "loop_start": -1,
       "max_bpm": 5.0,
       "modus": "ausgewogen",
+      "set_bogen": "gleichmaessig",
       "spielanteil": "lang",
       "stems": true,
       "stems_vorrat": "alle",

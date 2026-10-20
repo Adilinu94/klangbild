@@ -14,8 +14,7 @@
   "inputs": {
     "bis_s": 12,
     "bpm": 0,
-    "downbeats": [],
-    "um_s": 6
+    "downbeats": []
   },
   "tolerance": "values"
 }

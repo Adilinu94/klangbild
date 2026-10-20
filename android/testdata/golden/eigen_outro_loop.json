@@ -5,7 +5,7 @@
       "dtype": "float32-le",
       "file": "eigen_outro_loop_expected_0.f32",
       "offset": 0,
-      "sha256": "e826c18fbb0ef8660dddf11a973bb77ab55b7a106a0ec0937afff2d90093bcca",
+      "sha256": "105a2b7e15a32e62e7ea9107beada1d5aa52110a6d8ed5f61aecc25a4a50fe58",
       "shape": [
         352800,
         2
@@ -51,6 +51,7 @@
       "gesang_takt": -1,
       "harmonie": "locker",
       "keylock": true,
+      "kritiker": false,
       "lautheit": true,
       "lautstaerke": "nahtlos",
       "loop": "8",
@@ -59,6 +60,7 @@
       "loop_start": -1,
       "max_bpm": 5.0,
       "modus": "ausgewogen",
+      "set_bogen": "gleichmaessig",
       "spielanteil": "lang",
       "stems": true,
       "stems_vorrat": "alle",

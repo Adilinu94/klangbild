@@ -5,7 +5,7 @@
       "dtype": "float32-le",
       "file": "huellen_eq_profi_expected_a_hoch.f32",
       "offset": 0,
-      "sha256": "d3fc6b3d995dc1f88b54cf66ed85c718d7ef51c879947f67bd25d5d3d0755b5d",
+      "sha256": "119d48f0a9487a0c9c53a67ecba3c9d14c5b02ca42caae4b8deb2a4eb824487c",
       "shape": [
         1000
       ]
@@ -14,9 +14,9 @@
     "a_mitte": {
       "count": 1000,
       "dtype": "float32-le",
-      "file": "huellen_eq_profi_expected_a_mitte.f32",
+      "file": "huellen_lautstaerke_nahtlos_expected_a_tief.f32",
       "offset": 0,
-      "sha256": "54d3b2507c0b4b328b08999f72a13155e641dcc903c93bae83a1b68b52a4f728",
+      "sha256": "d5e83ba7c2b9448b176acc9e8c565a47981ce99499fb7eeeab65b4d5e883d15d",
       "shape": [
         1000
       ]
@@ -25,9 +25,9 @@
     "a_tief": {
       "count": 1000,
       "dtype": "float32-le",
-      "file": "huellen_lautstaerke_nahtlos_expected_a_tief.f32",
+      "file": "huellen_eq_profi_expected_a_tief.f32",
       "offset": 0,
-      "sha256": "d5e83ba7c2b9448b176acc9e8c565a47981ce99499fb7eeeab65b4d5e883d15d",
+      "sha256": "cc8cf445c9d8a536256d1de7c96bf7210b79e1a3000c09903a6907564b571731",
       "shape": [
         1000
       ]
@@ -48,7 +48,7 @@
       "dtype": "float32-le",
       "file": "huellen_eq_profi_expected_b_hoch.f32",
       "offset": 0,
-      "sha256": "82fbe1c7b5014630618c99d68480d326279eed8f9b08d7d4076660614076265a",
+      "sha256": "3bab94676346242ac869221479015183ae68381b54e45317ea9e1493db02c7be",
       "shape": [
         1000
       ]
@@ -57,9 +57,9 @@
     "b_mitte": {
       "count": 1000,
       "dtype": "float32-le",
-      "file": "huellen_eq_profi_expected_b_mitte.f32",
+      "file": "huellen_lautstaerke_nahtlos_expected_b_tief.f32",
       "offset": 0,
-      "sha256": "3f85a95f5d47c5a6a5340cce009738a4e8a160a66a8425cb58d1a66b1f18085a",
+      "sha256": "1b99769aba59c9aefd50bc9fbad76164ba9436c168ab769767c6ad65c99648b9",
       "shape": [
         1000
       ]
@@ -69,9 +69,9 @@
     "b_tief": {
       "count": 1000,
       "dtype": "float32-le",
-      "file": "huellen_lautstaerke_nahtlos_expected_b_tief.f32",
+      "file": "huellen_eq_profi_expected_b_tief.f32",
       "offset": 0,
-      "sha256": "1b99769aba59c9aefd50bc9fbad76164ba9436c168ab769767c6ad65c99648b9",
+      "sha256": "289424963b79d15c489352eefd0944d54dd03fa8802a50e9aa3cdd22e3809ad4",
       "shape": [
         1000
       ]
@@ -105,6 +105,7 @@
       "gesang_takt": -1,
       "harmonie": "locker",
       "keylock": true,
+      "kritiker": false,
       "lautheit": true,
       "lautstaerke": "nahtlos",
       "loop": "keiner",
@@ -113,6 +114,7 @@
       "loop_start": -1,
       "max_bpm": 5.0,
       "modus": "ausgewogen",
+      "set_bogen": "gleichmaessig",
       "spielanteil": "lang",
       "stems": true,
       "stems_vorrat": "alle",

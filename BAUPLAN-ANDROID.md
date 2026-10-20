@@ -1603,3 +1603,125 @@ die Golden-Tests vergleichen sie wörtlich.
 Der wichtigste Satz: **Nichts schätzen, alles gegen den Desktop prüfen.** Der
 Desktop klingt gut und hat 308 Tests. Android ist fertig, wenn es dieselben
 Zahlen liefert und 1 h ohne Aussetzer läuft.
+
+---
+
+## 17 · Stand der Portierung (20.10.2026)
+
+### 17.1 Kurzfassung
+
+Android kann noch **keinen Auto-DJ**. Fertig sind der Abspielkern (T1.1/T1.2)
+und sechs DSP-Bausteine (T5.1 bis T5.6), alle gegen Python-Golden geprüft.
+Alles darüber fehlt: `mischen_eigen`, Loops, `_trocken`/`_deckeln`, Limiter,
+Warp, `backen`, Regie, Titelwahl, Oberfläche, Analyse, Stems.
+
+Die App selbst ist weiterhin der Diagnose-Screen „GERÜST · M0" und spielt einen
+440-Hz-Testsinus. Es gibt fünf Kotlin-Dateien, keine Bibliothek, keinen Service,
+keine Playlist.
+
+### 17.2 Fertig und geprüft
+
+| Aufgabe | Inhalt | Dateien |
+|---|---|---|
+| T1.1/T1.2 | Oboe-Stream, OutputRing, Callback, 10-ms-Rampen, Flush, Unterläufe | `oboe_output.*`, `output_ring.h`, `playback_core.h`, `jni_bridge.cpp` |
+| T5.1 | `equal_power_blende`, `_rampe`, `_bass_rampen` | `dsp/curves.h` |
+| T5.2 | Butterworth, `sosfilt`, `sosfiltfilt`, `band_teilen` | `dsp/filters.*` |
+| T5.3 | `_fade_segment`, `mischen` (eq, filter, echo, schnitt, crossfade) | `dsp/mixing.*` |
+| T5.4 | `_huellen`, alle 83 Varianten aus `AUSWAHL` | `dsp/envelopes.*` |
+| T5.5 | `_biquads`, `_sweep`, `_baender_gewichten` | `dsp/sweep.*` |
+| T5.6 | `_nass` (Hall, Echo, Delay, Ping-Pong), FFT, Hall-IR als Asset | `dsp/effects.*`, `dsp/fft.*`, `assets/hall_ir.f32` |
+
+**Teststand 20.10.2026:** `dsp_golden_test` 24/24 grün, `playback_core_test`
+18/18 grün, `klangbild_hosttest` (Golden-Leser) 6/6 grün.
+
+### 17.3 Offen
+
+| Aufgabe | Python-Vorlage | Golden-Fälle |
+|---|---|---|
+| T5.7 | `_takt_db`, `_deckeln`, `_trocken` | `deckeln_*` |
+| T5.8 | `_loop_plan`, `_achtel`, `_loopen`, `loop_info` | `loop_*` |
+| T5.9 | `_beat_merkmale`, `_aehnlich`, `loop_waehlen` | `loopwahl_*` |
+| T5.10 | `_intro_loop` | `introloop_*` |
+| T5.11 | `mischen_eigen` **und die Trick-Audio-Pfade** (`_bremse`, `_spinback`, `_flanger`, `_phaser`, `_gate`, `_crush`, `_rueckhall`, `_riser`) | `eigen_*` (14) |
+| T5.12 | `kurven`, `kurven_eigen` | `kurven_*` (19) |
+| M6 | Signalsmith, `warp`, `_warp_keylock`, `backen` | `warp_*`, `backen_*` |
+| M7 | `regie.planen`, `_rezept`, `_rangliste`, `pruefen`, `plan.sortiere_alle`, `paarnoten` | `regie_*`, `pruefen_*`, `rangliste_*`, `sortiere_332` |
+| M8 | `live._auto_backen`, `_autodj_wahl`, Energiebogen, Lernen, Dubletten | — |
+| M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_*`, `beatthis_synthetic` |
+| M11 | Stems | — |
+
+**Wichtig für T5.11:** `envelopes.cpp` kennt nur die Tricks `wechsel` und
+`teaser`. Alle anderen Trick-Strings laufen dort ohne Wirkung durch. Die
+eigentliche Klangwirkung steckt im Desktop in `mischen_eigen` (Audio-Ebene) und
+muss mit portiert werden. Ebenso sind `loop`, `loopStart`, `loopIn`,
+`loopInTimes` in `settings.h` noch ein toter Vertrag: keine DSP-Funktion liest
+sie.
+
+### 17.4 Golden-Satz
+
+- **362 Fälle**, 484 Dateien (mit `.f32`). Erzeugt aus dem Desktop-Stand
+  `040887f` (Runden 18/19).
+- In C++ wirklich nachgerechnet werden **rund 120**: `reader_dummy`,
+  `kurven_basis`, `band_*` (7), `mischen_*` (15), `huellen_*` (83), `sweep_*`
+  (4), `nass_*` (9). Der Rest, **rund 242 Fälle**, wird nur geparst.
+  Besonders betroffen: `einstellungen_*` (129), `key_*` (12), `eigen_*` (14),
+  `kurven_*` (19), `regie_*` (6), `loop_*` (7), `limiter_*` (5),
+  `regulaer_*`/`ausstieg_*`/`einstieg_*` (9), `backen_*` (4).
+- Die `.f32`-Referenzarrays sind per `.gitignore` ausgeschlossen (118 Dateien
+  lokal, 1 im Repo). **In einem frischen Clone überspringen sich die meisten
+  DSP-Tests selbst.** Vor dem Testlauf einmal exportieren:
+
+  ```
+  cd prototyp
+  .venv/Scripts/python -m klangbild golden ../android/testdata/golden
+  ```
+
+- Der Export verlangt einen **leeren** Zielordner. Vorher die `.json` und
+  `.f32` löschen, `.gitignore` behalten.
+- `sos_44100.json` und `sos_22050.json` sind keine Manifest-Fälle, werden aber
+  vom DSP-Test direkt gelesen.
+- Zwei verwaiste Dateien entfernt: `huellen_eq_profi_expected_a_mitte.f32` und
+  `..._b_mitte.f32` (im Manifest nicht referenziert).
+
+### 17.5 Gefundene Abweichungen, bereits behoben
+
+| Abweichung | Befund | Korrektur |
+|---|---|---|
+| Hall-Pegel | C++ `wetSignal` nutzte `0.8`, der Desktop seit Runde 16 aber `0.55` (`NASS["hall"]`). `nass_hall` fiel mit RMS −6,85 dB durch. | `dsp/effects.cpp` auf `0.55` gesetzt, Test grün. |
+| Manifest-Quellhash | `sources["paarnoten.py"]` war veraltet (Export vor der letzten Änderung). | Golden-Satz neu erzeugt, Manifest übernommen. |
+| Golden-Zeilenenden | Der Arbeitsstand hatte CRLF, der Export schreibt LF. | Inhaltlich identisch, kein Handlungsbedarf. |
+
+Nach der Korrektur: **keine weiteren Abweichungen in den portierten Modulen.**
+Alle Golden-Tests der sechs Bausteine sind grün.
+
+### 17.6 Desktop ist eingefroren
+
+Der Desktop gilt als fertig und wird **nicht mehr geändert**. Portier-Basis ist
+Commit `040887f` („Runden 18/19: Fein-Anker, Kick-Kontrolle, Loop und Echo mit
+der Rampe").
+
+Golden-Daten werden nur neu erzeugt, wenn sich der Desktop ändert. Android-Code
+wird **nie** angepasst, um einen Test zu bestehen, ohne dass die Ursache geklärt
+ist.
+
+### 17.7 Zwei Fälle ohne Golden-Referenz
+
+`anker.fein` und `uebergang.taktraster` sind mit Runde 18/19 neu dazugekommen
+und haben **keinen** Golden-Fall. Damit fehlt dem Android-Port der Zielwert für
+den Fein-Anker.
+
+Der Fall kann nur auf der Desktop-Seite ergänzt werden (`golden.py`, Funktionen
+`anker.fein`, `anker.versatz`, `anker.taktphase`, `uebergang.taktraster` mit
+einem synthetischen Kick-Signal). Bis dahin gilt: nicht blind nachbauen, sondern
+den Desktop einfrieren und den Fall nachziehen. Ein brauchbares Testsignal ist
+eine Kick-Folge bei 120 BPM (Schlag 0,5 s, Takt 2 s), erste Hälfte auf dem
+Raster, zweite Hälfte 30 ms später.
+
+### 17.8 Messlatte „exakt gleich"
+
+Es gibt **keinen einzigen Golden-Fall mit einer echten Musikdatei**
+(`manifest.json`: `"real_tracks": []`). Parität lässt sich damit nur für
+Bausteine belegen, nicht für den ganzen Übergang. Für den Beweis „klingt wie der
+Desktop" fehlen Aufnahmen mindestens je einer pro Übergangsart und pro Trick,
+erzeugt über `python -m klangbild golden <ziel> --mit-echten-titeln` in den
+separaten, ignorierten Ordner `<ziel>-real`.

@@ -1,8 +1,8 @@
 {
   "expected": [
     13,
-    14,
-    2
+    2,
+    14
   ],
   "format_version": 1,
   "function": "plan.rangliste",
@@ -10,7 +10,9 @@
     "aktuell": {
       "bpm": 119,
       "camelot": "2A",
+      "energie": null,
       "energie_db": -13,
+      "genre": null,
       "id": 1,
       "pfad": "synthetic-1",
       "vektor": null
@@ -20,7 +22,9 @@
       {
         "bpm": 120,
         "camelot": "3A",
+        "energie": null,
         "energie_db": -14,
+        "genre": null,
         "id": 2,
         "pfad": "synthetic-2",
         "vektor": null
@@ -28,7 +32,9 @@
       {
         "bpm": 121,
         "camelot": "4A",
+        "energie": null,
         "energie_db": -15,
+        "genre": null,
         "id": 3,
         "pfad": "synthetic-3",
         "vektor": null
@@ -36,7 +42,9 @@
       {
         "bpm": 122,
         "camelot": "5A",
+        "energie": null,
         "energie_db": -16,
+        "genre": null,
         "id": 4,
         "pfad": "synthetic-4",
         "vektor": null
@@ -44,7 +52,9 @@
       {
         "bpm": 123,
         "camelot": "6A",
+        "energie": null,
         "energie_db": -12,
+        "genre": null,
         "id": 5,
         "pfad": "synthetic-5",
         "vektor": null
@@ -52,7 +62,9 @@
       {
         "bpm": 124,
         "camelot": "7A",
+        "energie": null,
         "energie_db": -13,
+        "genre": null,
         "id": 6,
         "pfad": "synthetic-6",
         "vektor": null
@@ -60,7 +72,9 @@
       {
         "bpm": 125,
         "camelot": "8A",
+        "energie": null,
         "energie_db": -14,
+        "genre": null,
         "id": 7,
         "pfad": "synthetic-7",
         "vektor": null
@@ -68,7 +82,9 @@
       {
         "bpm": 126,
         "camelot": "9A",
+        "energie": null,
         "energie_db": -15,
+        "genre": null,
         "id": 8,
         "pfad": "synthetic-8",
         "vektor": null
@@ -76,7 +92,9 @@
       {
         "bpm": 127,
         "camelot": "10A",
+        "energie": null,
         "energie_db": -16,
+        "genre": null,
         "id": 9,
         "pfad": "synthetic-9",
         "vektor": null
@@ -84,7 +102,9 @@
       {
         "bpm": 128,
         "camelot": "11A",
+        "energie": null,
         "energie_db": -12,
+        "genre": null,
         "id": 10,
         "pfad": "synthetic-10",
         "vektor": null
@@ -92,7 +112,9 @@
       {
         "bpm": 129,
         "camelot": "12A",
+        "energie": null,
         "energie_db": -13,
+        "genre": null,
         "id": 11,
         "pfad": "synthetic-11",
         "vektor": null
@@ -100,7 +122,9 @@
       {
         "bpm": 130,
         "camelot": "1A",
+        "energie": null,
         "energie_db": -14,
+        "genre": null,
         "id": 12,
         "pfad": "synthetic-12",
         "vektor": null
@@ -108,7 +132,9 @@
       {
         "bpm": 118,
         "camelot": "2A",
+        "energie": null,
         "energie_db": -15,
+        "genre": null,
         "id": 13,
         "pfad": "synthetic-13",
         "vektor": null
@@ -116,7 +142,9 @@
       {
         "bpm": 119,
         "camelot": "3A",
+        "energie": null,
         "energie_db": -16,
+        "genre": null,
         "id": 14,
         "pfad": "synthetic-14",
         "vektor": null
@@ -124,7 +152,9 @@
       {
         "bpm": 120,
         "camelot": "4A",
+        "energie": null,
         "energie_db": -12,
+        "genre": null,
         "id": 15,
         "pfad": "synthetic-15",
         "vektor": null
@@ -132,7 +162,9 @@
       {
         "bpm": 121,
         "camelot": "5A",
+        "energie": null,
         "energie_db": -13,
+        "genre": null,
         "id": 16,
         "pfad": "synthetic-16",
         "vektor": null
@@ -140,7 +172,9 @@
       {
         "bpm": 122,
         "camelot": "6A",
+        "energie": null,
         "energie_db": -14,
+        "genre": null,
         "id": 17,
         "pfad": "synthetic-17",
         "vektor": null
@@ -148,7 +182,9 @@
       {
         "bpm": 123,
         "camelot": "7A",
+        "energie": null,
         "energie_db": -15,
+        "genre": null,
         "id": 18,
         "pfad": "synthetic-18",
         "vektor": null
@@ -156,7 +192,9 @@
       {
         "bpm": 124,
         "camelot": "8A",
+        "energie": null,
         "energie_db": -16,
+        "genre": null,
         "id": 19,
         "pfad": "synthetic-19",
         "vektor": null
@@ -164,7 +202,9 @@
       {
         "bpm": 125,
         "camelot": "9A",
+        "energie": null,
         "energie_db": -12,
+        "genre": null,
         "id": 20,
         "pfad": "synthetic-20",
         "vektor": null

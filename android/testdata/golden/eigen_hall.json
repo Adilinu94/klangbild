@@ -5,7 +5,7 @@
       "dtype": "float32-le",
       "file": "eigen_hall_expected_0.f32",
       "offset": 0,
-      "sha256": "e9316a1ac8f3f04d1e431b66cace1536699d149d2bddc36a7985d624be8249a0",
+      "sha256": "93acdc3988d4a8058a59336566b44bb414eed750c97cd1013356b5deca432786",
       "shape": [
         352800,
         2
@@ -16,7 +16,7 @@
       "dtype": "float32-le",
       "file": "eigen_hall_expected_1.f32",
       "offset": 0,
-      "sha256": "2fcc0add7412af028f778365e0992fa30660c31014f2cc0b87367a2d7d98dd89",
+      "sha256": "6df53c8cdb0a79c068b667040c966d9d8fdc98c9de096a6e4d7557b550fa1d81",
       "shape": [
         106721,
         2
@@ -61,6 +61,7 @@
       "gesang_takt": -1,
       "harmonie": "locker",
       "keylock": true,
+      "kritiker": false,
       "lautheit": true,
       "lautstaerke": "nahtlos",
       "loop": "keiner",
@@ -69,6 +70,7 @@
       "loop_start": -1,
       "max_bpm": 5.0,
       "modus": "ausgewogen",
+      "set_bogen": "gleichmaessig",
       "spielanteil": "lang",
       "stems": true,
       "stems_vorrat": "alle",

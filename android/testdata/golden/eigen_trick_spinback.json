@@ -5,7 +5,7 @@
       "dtype": "float32-le",
       "file": "eigen_trick_spinback_expected_0.f32",
       "offset": 0,
-      "sha256": "46b4fd8baee3105505af69951022f40fde0152903f1998c38d356b67ddd168e5",
+      "sha256": "c99db3f6e0408fdd73aa887b37cabc3208330d2860d6e3319239ed62173a6cd4",
       "shape": [
         352800,
         2
@@ -51,6 +51,7 @@
       "gesang_takt": -1,
       "harmonie": "locker",
       "keylock": true,
+      "kritiker": false,
       "lautheit": true,
       "lautstaerke": "drop",
       "loop": "keiner",
@@ -59,6 +60,7 @@
       "loop_start": -1,
       "max_bpm": 5.0,
       "modus": "ausgewogen",
+      "set_bogen": "gleichmaessig",
       "spielanteil": "lang",
       "stems": true,
       "stems_vorrat": "alle",

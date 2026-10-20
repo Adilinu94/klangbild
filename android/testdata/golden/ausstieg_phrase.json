@@ -115,6 +115,7 @@
       "gesang_takt": -1,
       "harmonie": "locker",
       "keylock": true,
+      "kritiker": false,
       "lautheit": true,
       "lautstaerke": "nahtlos",
       "loop": "keiner",
@@ -123,6 +124,7 @@
       "loop_start": -1,
       "max_bpm": 5.0,
       "modus": "ausgewogen",
+      "set_bogen": "gleichmaessig",
       "spielanteil": "lang",
       "stems": true,
       "stems_vorrat": "alle",
@@ -147,6 +149,7 @@
         6
       ],
       "energie": [],
+      "fein": [],
       "gain_db": 0.0,
       "id": 90001,
       "pfad": "synthetic-a"
