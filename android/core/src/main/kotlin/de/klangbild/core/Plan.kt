@@ -122,6 +122,26 @@ object Planer {
         bonus: ((Track, Track) -> Double)? = null,
     ): Track? = rangliste(aktuell, kandidaten, maxBpm, harmonie, 1, bonus).firstOrNull()
 
+    /** Start der Reihenfolge: `startId` oder der groesste Tempo-Cluster (gerundetes BPM). */
+    fun startTitel(tracks: List<Track>, startId: Int?): Int? {
+        if (tracks.isEmpty()) return null
+        startId?.let { id -> if (tracks.any { it.id == id }) return id }
+        val zaehler = LinkedHashMap<Long, Int>()
+        for (t in tracks) {
+            val gerundet = rint(t.bpm ?: 0.0).toLong()   // Python round: halbe Werte zur geraden Zahl
+            zaehler[gerundet] = (zaehler[gerundet] ?: 0) + 1
+        }
+        var bestesBpm = 0L
+        var besteZahl = -1
+        for ((bpm, zahl) in zaehler) {
+            if (zahl > besteZahl) {
+                besteZahl = zahl
+                bestesBpm = bpm
+            }
+        }
+        return tracks.first { rint(it.bpm ?: 0.0).toLong() == bestesBpm }.id
+    }
+
     /**
      * `plan.sortiere_alle` ohne Paarnoten: gierig ueber [rangliste]. Start ist `startId` oder
      * der groesste Tempo-Cluster (gerundetes BPM, wie `autodj.lade_tracks`).
@@ -135,23 +155,7 @@ object Planer {
     ): List<Int> {
         if (tracks.isEmpty()) return emptyList()
         val index = tracks.associateBy { it.id }
-        var start = startId?.takeIf { it in index }
-        if (start == null) {
-            val zaehler = LinkedHashMap<Long, Int>()
-            for (t in tracks) {
-                val gerundet = rint(t.bpm ?: 0.0).toLong()   // Python round: halbe Werte zur geraden Zahl
-                zaehler[gerundet] = (zaehler[gerundet] ?: 0) + 1
-            }
-            var bestesBpm = 0L
-            var besteZahl = -1
-            for ((bpm, zahl) in zaehler) {
-                if (zahl > besteZahl) {
-                    besteZahl = zahl
-                    bestesBpm = bpm
-                }
-            }
-            start = tracks.first { rint(it.bpm ?: 0.0).toLong() == bestesBpm }.id
-        }
+        val start = startTitel(tracks, startId)!!
         var aktuell = index.getValue(start)
         val uebrig = tracks.filter { it.id != start }.toMutableList()
         val folge = mutableListOf(start)
