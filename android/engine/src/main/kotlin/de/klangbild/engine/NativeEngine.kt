@@ -32,6 +32,13 @@ object NativeEngine {
     external fun setPlaying(playing: Boolean)
 
     /**
+     * Spielt eine PCM-Cache-Datei (BAUPLAN §4.3) ab [startFrame]. Startet den Stream beim ersten
+     * Aufruf. [spur] ist die Kennung, die [poll] als [POLL_FEEDER_SPUR] meldet.
+     * `false`, wenn die Datei fehlt oder keinen gültigen Kopf hat.
+     */
+    external fun startFile(pfad: String, startFrame: Long, spur: Long): Boolean
+
+    /**
      * Schreibt die Diagnosewerte in [out] (mindestens [POLL_SIZE] Felder), Reihenfolge wie BAUPLAN §5.4.
      * Billig und nicht blockierend; 10-mal pro Sekunde aufrufen, nicht je Frame. Im Spike belegt:
      * [POLL_HEARD_FRAME] (Frames, die der Callback gelesen hat), [POLL_PLAYING], [POLL_UNDERFLOWS].

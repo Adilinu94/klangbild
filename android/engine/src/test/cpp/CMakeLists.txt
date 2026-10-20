@@ -71,6 +71,7 @@ gtest_discover_tests(klangbild_hosttest)
 find_package(Threads REQUIRED)
 add_executable(playback_core_test
     playback_core_test.cpp
+    pcm_feeder_test.cpp
 )
 target_compile_definitions(playback_core_test PRIVATE KLINGBILD_TEST=1)
 target_include_directories(playback_core_test PRIVATE

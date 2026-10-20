@@ -20,15 +20,17 @@
 #include "bake_api.h"
 #include "json.h"
 #include "oboe_output.h"
+#include "pcm_feeder.h"
 #include "playback_core.h"
-#include "sine_feeder.h"
 
 namespace {
 
 // Version der nativen Schnittstelle. Steigt, wenn sich das Vertrag zwischen
 // Kotlin und C++ ändert (andernfalls bleibt die App bei alter .so stillstehen).
 // 2: start/stop/setPlaying/poll (M1).
-constexpr int kAbiVersion = 3;   // 3: Bäcker (M8b)
+// 3: Bäcker (M8b).
+// 4: startFile und belegte Feeder-Felder in poll (M2).
+constexpr int kAbiVersion = 4;
 
 // Anzahl der Felder von poll() (BAUPLAN §5.4); steht gleich in NativeEngine.POLL_SIZE.
 constexpr jsize kPollSize = 7;
@@ -37,7 +39,7 @@ constexpr jsize kPollSize = 7;
 // kommt nie hier vorbei (§0 Regel 4).
 struct Engine {
     klangbild::PlaybackCore core;
-    klangbild::SineFeeder feeder{core};
+    klangbild::PcmFeeder feeder{core};
     std::shared_ptr<klangbild::OboeOutput> output;
 };
 
@@ -88,8 +90,32 @@ Java_de_klangbild_engine_NativeEngine_setPlaying(JNIEnv* /*env*/, jclass /*typ*/
     if (gEngine) gEngine->core.setPlaying(playing == JNI_TRUE);
 }
 
-// Felder wie BAUPLAN §5.4. Im Spike belegt: [1] Frames, die der Callback gelesen hat, [4] playing,
-// [5] underflows. Die Spur-Felder und die Latenz folgen mit T1.4/T2.4; bis dahin -1.
+// Spielt eine PCM-Cache-Datei ab `startFrame` (M2). Startet den Stream beim ersten Aufruf.
+// `spur` ist die Kennung fuer poll(); der Feeder liest ab dem naechsten Flush.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_de_klangbild_engine_NativeEngine_startFile(JNIEnv* env, jclass /*typ*/, jstring pfad, jlong startFrame,
+                                                jlong spur) {
+    if (pfad == nullptr) return JNI_FALSE;
+    const char* text = env->GetStringUTFChars(pfad, nullptr);
+    const std::string pfadText = text != nullptr ? std::string(text) : std::string();
+    if (text != nullptr) env->ReleaseStringUTFChars(pfad, text);
+    if (pfadText.empty()) return JNI_FALSE;
+
+    std::lock_guard<std::mutex> lock(gMutex);
+    if (!gEngine) {
+        auto engine = std::make_unique<Engine>();
+        engine->output = std::make_shared<klangbild::OboeOutput>(engine->core);
+        if (!engine->output->start()) return JNI_FALSE;
+        gEngine = std::move(engine);
+    }
+    if (!gEngine->feeder.oeffne(pfadText, startFrame, spur)) return JNI_FALSE;
+    gEngine->core.setPlaying(true);
+    gEngine->feeder.start();
+    return JNI_TRUE;
+}
+
+// Felder wie BAUPLAN §5.4. Belegt: [1] Frames, die der Callback gelesen hat, [2] Spur des
+// Feeders, [3] Leseposition des Feeders, [4] playing, [5] underflows. Latenz folgt mit T2.4.
 extern "C" JNIEXPORT void JNICALL
 Java_de_klangbild_engine_NativeEngine_poll(JNIEnv* env, jclass /*typ*/, jlongArray out) {
     if (out == nullptr || env->GetArrayLength(out) < kPollSize) return;
@@ -98,6 +124,8 @@ Java_de_klangbild_engine_NativeEngine_poll(JNIEnv* env, jclass /*typ*/, jlongArr
         std::lock_guard<std::mutex> lock(gMutex);
         if (gEngine) {
             werte[1] = static_cast<jlong>(gEngine->core.framesPlayed());
+            werte[2] = static_cast<jlong>(gEngine->feeder.spur());
+            werte[3] = static_cast<jlong>(gEngine->feeder.position());
             werte[4] = gEngine->core.playing() ? 1 : 0;
             werte[5] = static_cast<jlong>(gEngine->core.underflows());
         }

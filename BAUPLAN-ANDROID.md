@@ -1644,8 +1644,8 @@ keine Playlist.
 | M6.5 | `backen` ohne Stems | `dsp/backen.*` |
 | M8b | Übergangsplan-JSON (§4.5), `parseBakeAnfrage`, `bakeTransition`, Info-JSON | `bake_api.*`, `json.h` |
 
-**Teststand 20.10.2026:** `dsp_golden_test` 53/53 grün, `playback_core_test`
-18/18 grün, `klangbild_hosttest` (Golden-Leser) 6/6 grün.
+**Teststand 20.10.2026:** `dsp_golden_test` 53/53 grün, `playback_core_test` 21/21 grün,
+`klangbild_hosttest` (Golden-Leser) 6/6 grün (zusammen 80).
 
 **Kotlin `:core` (M7, Stand 20.10.2026):**
 
@@ -1665,6 +1665,7 @@ keine Playlist.
 | PCM-Cache | §4.3: Kopf `KBPC`, int16, fortschreitendes Schreiben, LRU (4 Dateien) | Rundlauf, LRU |
 | Decoder-Bausteine | §4.3: PCM16/float → float, auf Stereo, lineares Resampling (ADR-014) | Tests |
 | Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke) | Gerätetest grün |
+| Feeder (PCM) | `pcm_feeder.h`: Cache ab Startframe lesen, Flush abwarten, Ring füllen; Sinus als Rückfall | 3 Host-Tests |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
 `./gradlew :core:test` grün (37 Tests, 146 Golden-Fälle plus Fingerabdrücke).
@@ -1674,16 +1675,20 @@ keine Playlist.
 - `DecoderTest.dekodiertWavInDenCache`: WAV mit bekanntem Inhalt → PCM-Cache, Werte stimmen.
 - `JniBakeTest.backtUeberJni`: synthetischer Übergang über `NativeEngine.bake`, Info `sync:true`,
   Audio kommt zurück. Die .so lädt auf dem Gerät, der Vertrag hält.
+- `PcmPlaybackTest.spieltPcmCacheUeberOboe` (vorbereitet): PCM-Cache → `startFile` → Callback liest,
+  `poll` meldet Spur und Feeder-Position. Das Handy verweigert gerade die Neuinstallation
+  (`INSTALL_FAILED_USER_RESTRICTED`); Test liegt bereit.
 
-Fällt die Installation mit `INSTALL_FAILED_USER_RESTRICTED` aus (MIUI), einmalig
-`adb shell settings put global adb_install_need_confirm 0` setzen. Der Configuration-Cache
+Fällt die Installation mit `INSTALL_FAILED_USER_RESTRICTED` aus (MIUI), in den Entwickleroptionen
+„Installieren über USB“ einschalten und den Dialog am Handy bestätigen; zusätzlich hilft
+`adb shell settings put global adb_install_need_confirm 0`. Der Configuration-Cache
 verschluckt sich am AndroidTest-Kotlin-Task; mit `--no-configuration-cache` läuft es.
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
-| M2 | Timeline/Feeder und Limiter im Decoder; MediaCodec-Decoder, PCM-Cache und Konverter stehen | — |
+| M2 | Timeline (mehrere Spuren, Übergabe an der Blende) und Limiter im Decoder; `PcmFeeder` (eine Datei ab Startframe) und PCM-Cache/Konverter stehen | — |
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
 | M8c | Vorschau, `weiter` im Auto-DJ und Verwerfen im Player (Warteschlange und Lernen sind fertig) | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |
