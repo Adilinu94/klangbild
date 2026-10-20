@@ -1,6 +1,7 @@
 package de.klangbild.core
 
 import kotlin.math.log10
+import kotlin.math.log2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -96,7 +97,116 @@ object ProfilBau {
                 naechst < 0.07
             }
         }
-        return Profil(takte, baender, gesamt, null, rasterOk, dauer)
+        return Profil(takte, baender, gesamt, null, rasterOk, dauer, chroma(mono, grenzen))
+    }
+
+    /**
+     * Chroma je Takt (`profil._chroma_je_takt`): FFT 8192, Hann, 65–2100 Hz, je Rahmen auf
+     * Summe 1 normiert, dann Mittel ueber die Rahmen, deren Mitte im Takt liegt.
+     */
+    fun chroma(mono: FloatArray, grenzen: IntArray): Array<DoubleArray> {
+        val fN = 8192
+        val hop = 4096
+        val rate = 44100.0
+        val x = FloatArray(max(mono.size, fN)) { if (it < mono.size) mono[it] else 0f }
+        val rahmenAnzahl = 1 + (x.size - fN) / hop
+        val fenster = FloatArray(fN) { (0.5 - 0.5 * kotlin.math.cos(2.0 * Math.PI * it / (fN - 1))).toFloat() }
+
+        val bins = ArrayList<Int>()
+        val klassen = ArrayList<Int>()
+        for (k in 0..fN / 2) {
+            val f = k * rate / fN
+            if (f < 65.0 || f > 2100.0) continue
+            bins.add(k)
+            var klasse = Math.rint(69.0 + 12.0 * log2(f / 440.0)).toInt() % 12
+            if (klasse < 0) klasse += 12
+            klassen.add(klasse)
+        }
+
+        val beatAnzahl = grenzen.size - 1
+        val summe = Array(beatAnzahl) { DoubleArray(12) }
+        val zaehler = IntArray(beatAnzahl)
+        val rahmen = DoubleArray(fN)
+
+        for (fi in 0 until rahmenAnzahl) {
+            val start = fi * hop
+            for (i in 0 until fN) rahmen[i] = (x[start + i] * fenster[i]).toDouble()
+            val leistung = Fft.leistung(rahmen)
+            val ch = DoubleArray(12)
+            for (b in bins.indices) ch[klassen[b]] += leistung[bins[b]]
+            val teiler = max(ch.sum(), 1e-12)
+            for (k in 0 until 12) ch[k] /= teiler
+
+            val mitte = start + fN / 2
+            var lo = 0
+            var hi = grenzen.size
+            while (lo < hi) {
+                val mid = (lo + hi) ushr 1
+                if (grenzen[mid] <= mitte) lo = mid + 1 else hi = mid
+            }
+            val takt = lo - 1
+            if (takt in 0 until beatAnzahl) {
+                for (k in 0 until 12) summe[takt][k] += ch[k]
+                zaehler[takt]++
+            }
+        }
+        return Array(beatAnzahl) { i ->
+            DoubleArray(12) { k -> summe[i][k] / max(zaehler[i], 1) }
+        }
+    }
+
+    /** Iterative Radix-2-FFT; liefert das Betragsquadrat der positiven Frequenzen. */
+    private object Fft {
+        fun leistung(rahmen: DoubleArray): DoubleArray {
+            val n = rahmen.size
+            val re = rahmen.copyOf()
+            val im = DoubleArray(n)
+
+            var j = 0
+            for (i in 1 until n) {
+                var bit = n shr 1
+                while (j and bit != 0) {
+                    j = j xor bit
+                    bit = bit shr 1
+                }
+                j = j xor bit
+                if (i < j) {
+                    val tr = re[i]; re[i] = re[j]; re[j] = tr
+                    val ti = im[i]; im[i] = im[j]; im[j] = ti
+                }
+            }
+
+            var laenge = 2
+            while (laenge <= n) {
+                val winkel = -2.0 * Math.PI / laenge
+                val wr = kotlin.math.cos(winkel)
+                val wi = kotlin.math.sin(winkel)
+                var i = 0
+                while (i < n) {
+                    var cr = 1.0
+                    var ci = 0.0
+                    for (k in 0 until laenge / 2) {
+                        val aR = re[i + k]
+                        val aI = im[i + k]
+                        val bR = re[i + k + laenge / 2]
+                        val bI = im[i + k + laenge / 2]
+                        val vR = bR * cr - bI * ci
+                        val vI = bR * ci + bI * cr
+                        re[i + k] = aR + vR
+                        im[i + k] = aI + vI
+                        re[i + k + laenge / 2] = aR - vR
+                        im[i + k + laenge / 2] = aI - vI
+                        val nr = cr * wr - ci * wi
+                        ci = cr * wi + ci * wr
+                        cr = nr
+                    }
+                    i += laenge
+                }
+                laenge = laenge shl 1
+            }
+
+            return DoubleArray(n / 2 + 1) { k -> re[k] * re[k] + im[k] * im[k] }
+        }
     }
 
     // --- scipy-Nachbau: sosfiltfilt ------------------------------------------------

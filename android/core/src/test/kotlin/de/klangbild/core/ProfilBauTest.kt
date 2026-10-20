@@ -46,5 +46,13 @@ class ProfilBauTest {
         for (i in 0 until profil.n) {
             assertEquals(gesamt[i], profil.gesamt[i], 1e-6, "Gesamt, Takt $i")
         }
+
+        val chromaErwartet = g.values(erwartet.getValue("chroma"))
+        assertEquals(profil.n * 12, chromaErwartet.size, "Chroma-Anzahl")
+        for (i in 0 until profil.n) {
+            for (k in 0 until 12) {
+                assertEquals(chromaErwartet[i * 12 + k], profil.chroma!![i][k], 1e-6, "Chroma $k, Takt $i")
+            }
+        }
     }
 }
