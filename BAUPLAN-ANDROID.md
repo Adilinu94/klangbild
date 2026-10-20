@@ -1664,10 +1664,20 @@ keine Playlist.
 | JNI-Bäcker | `BakePlan` (§4.5-JSON), `NativeBaker`, `NativeEngine.bake/bakeAudio/bakeInfo/releaseBake` | Plan-JSON und Info-Felder |
 | PCM-Cache | §4.3: Kopf `KBPC`, int16, fortschreitendes Schreiben, LRU (4 Dateien) | Rundlauf, LRU |
 | Decoder-Bausteine | §4.3: PCM16/float → float, auf Stereo, lineares Resampling (ADR-014) | Tests |
-| Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke) | baut für beide ABIs, Gerätetest offen |
+| Decoder | MediaCodec → float → Stereo → 44,1 kHz → `gain_db` → PCM-Cache (1-s-Blöcke) | Gerätetest grün |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
 `./gradlew :core:test` grün (37 Tests, 146 Golden-Fälle plus Fingerabdrücke).
+
+**Gerätetests (20.10.2026, Xiaomi 21081111RG, Android 14):**
+`./gradlew :engine:connectedDebugAndroidTest --no-configuration-cache` grün (2/2):
+- `DecoderTest.dekodiertWavInDenCache`: WAV mit bekanntem Inhalt → PCM-Cache, Werte stimmen.
+- `JniBakeTest.backtUeberJni`: synthetischer Übergang über `NativeEngine.bake`, Info `sync:true`,
+  Audio kommt zurück. Die .so lädt auf dem Gerät, der Vertrag hält.
+
+Fällt die Installation mit `INSTALL_FAILED_USER_RESTRICTED` aus (MIUI), einmalig
+`adb shell settings put global adb_install_need_confirm 0` setzen. Der Configuration-Cache
+verschluckt sich am AndroidTest-Kotlin-Task; mit `--no-configuration-cache` läuft es.
 
 ### 17.3 Offen
 

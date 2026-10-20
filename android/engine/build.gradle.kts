@@ -16,6 +16,7 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // NDK r28 oder neuer: 16-KB-Seitenausrichtung ist ab r28 Standard (BAUPLAN §3.3)
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -64,6 +65,8 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     implementation(libs.media3.common)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)
