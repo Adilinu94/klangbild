@@ -65,6 +65,8 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     implementation(libs.media3.common)
+    // Beat This! (M10): ONNX Runtime, XNNPACK-Provider (BAUPLAN §7.2).
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
     testImplementation(libs.junit.jupiter)
