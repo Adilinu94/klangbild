@@ -320,3 +320,43 @@ class Profil(
         }
     }
 }
+
+/**
+ * `profil.tempo_mal`: Profil im doppelten (2.0: jeder Takt wird zwei) oder halben Taktraster
+ * (0.5: jeder zweite Takt), fuer Doppel-/Halbtempo-Uebergaenge.
+ */
+fun tempoMal(p: Profil, faktor: Double): Profil {
+    if (p.n == 0) return p
+    val takte: DoubleArray
+    val zu: (DoubleArray) -> DoubleArray
+    val zuBool: (BooleanArray) -> BooleanArray
+    val zuReihen: (Array<DoubleArray>) -> Array<DoubleArray>
+    if (faktor > 1.0) {
+        takte = DoubleArray(p.n * 2)
+        for (i in 0 until p.n) {
+            takte[2 * i] = p.takte[i]
+            takte[2 * i + 1] = p.takte[i]
+        }
+        for (i in 0 until p.n) {
+            val naechste = if (i + 1 < p.n) p.takte[i + 1] else 2.0 * p.takte[p.n - 1] - p.takte[p.n - 2]
+            takte[2 * i + 1] += (naechste - p.takte[i]) / 2.0
+        }
+        zu = { x -> DoubleArray(x.size * 2) { j -> x[j / 2] } }
+        zuBool = { x -> BooleanArray(x.size * 2) { j -> x[j / 2] } }
+        zuReihen = { x -> Array(x.size * 2) { j -> x[j / 2] } }
+    } else {
+        takte = DoubleArray((p.n + 1) / 2) { p.takte[it * 2] }
+        zu = { x -> DoubleArray((x.size + 1) / 2) { j -> x[j * 2] } }
+        zuBool = { x -> BooleanArray((x.size + 1) / 2) { j -> x[j * 2] } }
+        zuReihen = { x -> Array((x.size + 1) / 2) { j -> x[j * 2] } }
+    }
+    return Profil(
+        takte,
+        zuReihen(p.baender),
+        zu(p.gesamt),
+        p.stems?.mapValues { (_, v) -> zu(v) },
+        zuBool(p.rasterOk),
+        p.dauer,
+        p.chroma?.let { zuReihen(it) },
+    )
+}

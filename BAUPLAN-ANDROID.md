@@ -1658,17 +1658,18 @@ keine Playlist.
 | Reihenfolge mit Paarnoten | `plan.set_planen`, `_set_schritt`, `_set_kosten`, `_zwei_opt`, `bogen_ziel` | Fingerabdrücke |
 | Paarnoten | `paarnoten.Paarnoten`, `im_tempo`, `rechnen` (ohne Kritiker) | Cache-Rundlauf, Rundung wie Python |
 | Titelwahl (Auto-DJ) | `live._autodj_wahl`, `_plan_track`, `_gleicher_titel` mit Energiebogen und Stimmung | Fingerabdruck |
+| Controller (Auto-DJ) | `live._auto_backen`-Ablauf (3 Pläne, bis zu 5 Versuche, Selbstkontrolle, Sicherheits-Blend), `profil.tempo_mal` | Doppel-Baker-Tests |
 | Selbstkontrolle | `regie._pegel_soll`, `regie.pruefen` | `pruefen_*` (4) |
 
-`./gradlew :core:test` grün (20 Tests, 146 Golden-Fälle plus Fingerabdrücke).
+`./gradlew :core:test` grün (24 Tests, 146 Golden-Fälle plus Fingerabdrücke).
 
 ### 17.3 Offen
 
 | Aufgabe | Python-Vorlage | Golden-Fälle |
 |---|---|---|
 | M7d | `regie.pegel_reparieren` (Limiter im Baker) | — |
-| M8a | Controller: `live._auto_backen`-Ablauf (Versuche, Selbstkontrolle, Sicherheits-Blend), Warteschlange, Lernen, Dubletten | — |
 | M8b | JNI-Bäcker: Übergangsplan (§4.5) an `dsp/backen.*` reichen, PCM zurück | — |
+| M8c | Warteschlange, Lernen, Vorschau und Dubletten im Controller | — |
 | M10 | `beats`, `anker.versatz`/`fein`/`taktphase`, `profil.berechnen`, `keyestimate`, `lufs`, `energy`, `welle` | `key_*`, `lufs_*`, `energie_*`, `welle_*`, `profil_berechnen`, `beatthis_synthetic` |
 | M11 | Stems | — |
 

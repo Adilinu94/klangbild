@@ -53,6 +53,30 @@ class ProfilTest {
         }
     }
 
+    @Test
+    fun `tempoMal verdoppelt und halbiert das Raster`() {
+        if (!goldenDir.isDirectory) return
+        val golden = Golden(goldenDir)
+        val p = liesProfil(golden, golden.case("profil_synthetic_0").inputs["profile"]!! as JsonObject)
+
+        val doppelt = tempoMal(p, 2.0)
+        assertEquals(128, doppelt.n)
+        val takte2 = doubleArrayOf(0.0, 1.0, 2.0, 3.0, 4.0, 5.0)
+        for (i in takte2.indices) assertEquals(takte2[i], doppelt.takte[i], 1e-9, "takte2[$i]")
+        assertEquals(-24.0, doppelt.baender[0][0], 1e-9)
+        assertEquals(-22.0, doppelt.gesamt[3], 1e-9)
+        assertEquals(-65.0, doppelt.stems!!.getValue("vocals")[2], 1e-9)
+        assertEquals(true, doppelt.rasterOk[3])
+
+        val halb = tempoMal(p, 0.5)
+        assertEquals(32, halb.n)
+        val takte05 = doubleArrayOf(0.0, 4.0, 8.0, 12.0)
+        for (i in takte05.indices) assertEquals(takte05[i], halb.takte[i], 1e-9, "takte05[$i]")
+        assertEquals(-24.0, halb.baender[0][0], 1e-9)
+        assertEquals(-22.0, halb.gesamt[3], 1e-9)
+        assertEquals(true, halb.rasterOk[3])
+    }
+
     private fun vergleicheReihe(name: String, feld: String, erwartet: JsonObject, ist: DoubleArray) {
         val ref = Golden.toDoubles(erwartet.getValue(feld))
         assertEquals(ref.size, ist.size, "$name/$feld Laenge")
