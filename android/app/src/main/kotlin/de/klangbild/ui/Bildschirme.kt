@@ -251,12 +251,10 @@ fun PlayerBildschirm(modell: Spielmodell, onZurueck: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             Text(
                 text = modell.analyse?.let { a ->
-                    val l = a.lufs
-                    if (l != null) {
-                        String.format(Locale.US, "%s · %s · %.1f LUFS", a.tonart, a.camelot, l)
-                    } else {
-                        "${a.tonart} · ${a.camelot}"
-                    }
+                    val teile = mutableListOf(a.tonart, a.camelot)
+                    a.bpm?.let { teile.add("$it BPM") }
+                    a.lufs?.let { teile.add(String.format(Locale.US, "%.1f LUFS", it)) }
+                    teile.joinToString(" · ")
                 } ?: "TONART …",
                 fontFamily = MONO,
                 fontSize = 11.sp,

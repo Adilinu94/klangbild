@@ -7,18 +7,21 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.klangbild.bibliothek.Titel
+import de.klangbild.core.Abtastung
 import de.klangbild.core.Lautheit
 import de.klangbild.core.PcmCache
 import de.klangbild.core.PcmDatei
 import de.klangbild.core.TitelAnalyse
 import de.klangbild.core.TonartSchaetzung
 import de.klangbild.engine.AutoDjPlayer
+import de.klangbild.engine.BeatThis
 import de.klangbild.engine.Player
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * Bruecke zwischen Oberflaeche und Engine (M9): haelt den Player, den Auto-DJ und den
@@ -113,13 +116,23 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
             if (ok) {
                 zustand = player.zustand()
                 wellenform = withContext(Dispatchers.Default) { forme(t.id) }
-                if (analyse == null) {
+                if (analyse == null || analyse?.beats.isNullOrEmpty()) {
                     val gefunden = withContext(Dispatchers.Default) {
                         val datei = cache.finde(t.id.toInt()) ?: return@withContext null
                         PcmDatei.oeffnen(datei)?.use { pcm ->
                             val tonart = TonartSchaetzung.schaetzen(TonartSchaetzung.chromaAusCache(pcm))
                             val lufs = Lautheit.ausCache(pcm)
-                            TitelAnalyse(tonart.name, tonart.camelot, lufs.takeIf { it.isFinite() })
+                            val schlaege = BeatThis.holen(getApplication()).analysiere(Abtastung.mono22050(pcm))
+                            val abstaende = schlaege.beats.toList().zipWithNext { a, b -> b - a }.sorted()
+                            val mittel = abstaende.getOrNull(abstaende.size / 2)
+                            val bpm = if (mittel != null && mittel > 0.25f) (60f / mittel).roundToInt() else null
+                            TitelAnalyse(
+                                tonart.name,
+                                tonart.camelot,
+                                lufs.takeIf { it.isFinite() },
+                                bpm,
+                                schlaege.beats.toList(),
+                            )
                         }
                     }
                     if (titel?.id == t.id && gefunden != null) {
