@@ -1764,4 +1764,6 @@ Raster, zweite Hälfte 30 ms später.
 Es gibt **keinen einzigen Golden-Fall mit einer echten Musikdatei**
 (`manifest.json`: `"real_tracks": []`). Parität lässt sich damit nur für
 Bausteine belegen, nicht für den ganzen Übergang. Für den Beweis „klingt wie der
-Desktop" fehl
+Desktop" fehlen Aufnahmen mindestens je einer pro Übergangsart und pro Trick,
+erzeugt über `python -m klangbild golden <ziel> --mit-echten-titeln` in den
+separaten, ignorierten Ordner `<ziel>-real`.
