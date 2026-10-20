@@ -36,6 +36,27 @@ class TitelAnalyseTest {
     }
 
     @Test
+    fun `Profil uebersteht den Rueckweg`() {
+        val a = TitelAnalyse(
+            tonart = "Am",
+            camelot = "8A",
+            lufs = -5.2,
+            bpm = 124,
+            beats = listOf(0.5f, 0.98f),
+            downbeats = listOf(0.5f),
+            raster = listOf(0.5f),
+            takte = listOf(0.5f, 2.44f),
+            gesamt = listOf(-10.5f, -8.25f),
+            baender = listOf(listOf(-20f, -18f), listOf(-25f, -24f), listOf(-30f, -29f)),
+            chroma = listOf(listOf(0.1f, 0.2f, 0.3f), listOf(0.4f, 0.5f, 0.6f)),
+        )
+        val gelesen = TitelAnalyse.aus(a.json())
+        assertEquals(a, gelesen)
+        assertEquals(3, gelesen?.baender?.size)
+        assertEquals(2, gelesen?.chroma?.size)
+    }
+
+    @Test
     fun `fremde Version und kaputter Text ergeben null`() {
         assertNull(TitelAnalyse.aus("""{"version":2,"tonart":"Am","camelot":"8A","lufs":-5.2}"""))
         assertNull(TitelAnalyse.aus("""{"version":1,"tonart":"Am"}"""))

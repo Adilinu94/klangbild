@@ -26,6 +26,10 @@ data class TitelAnalyse(
     val beats: List<Float> = emptyList(),
     val downbeats: List<Float> = emptyList(),
     val raster: List<Float> = emptyList(),
+    val takte: List<Float> = emptyList(),
+    val gesamt: List<Float> = emptyList(),
+    val baender: List<List<Float>> = emptyList(),
+    val chroma: List<List<Float>> = emptyList(),
     val version: Int = VERSION,
 ) {
 
@@ -38,7 +42,17 @@ data class TitelAnalyse(
         put("beats", buildJsonArray { beats.forEach { add(JsonPrimitive(it)) } })
         put("downbeats", buildJsonArray { downbeats.forEach { add(JsonPrimitive(it)) } })
         put("raster", buildJsonArray { raster.forEach { add(JsonPrimitive(it)) } })
+        put("takte", buildJsonArray { takte.forEach { add(JsonPrimitive(it)) } })
+        put("gesamt", buildJsonArray { gesamt.forEach { add(JsonPrimitive(it)) } })
+        put("baender", reihen(baender))
+        put("chroma", reihen(chroma))
     }.toString()
+
+    private fun reihen(werte: List<List<Float>>) = buildJsonArray {
+        werte.forEach { reihe ->
+            add(buildJsonArray { reihe.forEach { add(JsonPrimitive(it)) } })
+        }
+    }
 
     companion object {
 
@@ -67,10 +81,20 @@ data class TitelAnalyse(
                     raster = (o["raster"] as? JsonArray)
                         ?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }
                         ?: emptyList(),
+                    takte = reihe(o["takte"]),
+                    gesamt = reihe(o["gesamt"]),
+                    baender = reihenAus(o["baender"]),
+                    chroma = reihenAus(o["chroma"]),
                 )
             }
         } catch (e: Exception) {
             null
         }
+
+        private fun reihe(element: kotlinx.serialization.json.JsonElement?): List<Float> =
+            (element as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull } ?: emptyList()
+
+        private fun reihenAus(element: kotlinx.serialization.json.JsonElement?): List<List<Float>> =
+            (element as? JsonArray)?.map { reihe(it) } ?: emptyList()
     }
 }

@@ -11,6 +11,7 @@ import de.klangbild.core.Abtastung
 import de.klangbild.core.Lautheit
 import de.klangbild.core.PcmCache
 import de.klangbild.core.PcmDatei
+import de.klangbild.core.ProfilBau
 import de.klangbild.core.Taktraster
 import de.klangbild.core.TitelAnalyse
 import de.klangbild.core.TonartSchaetzung
@@ -118,7 +119,8 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                 zustand = player.zustand()
                 wellenform = withContext(Dispatchers.Default) { forme(t.id) }
                 if (analyse == null || analyse?.beats.isNullOrEmpty() ||
-                    analyse?.downbeats.isNullOrEmpty() || analyse?.raster.isNullOrEmpty()
+                    analyse?.downbeats.isNullOrEmpty() || analyse?.raster.isNullOrEmpty() ||
+                    analyse?.takte.isNullOrEmpty()
                 ) {
                     val gefunden = withContext(Dispatchers.Default) {
                         val datei = cache.finde(t.id.toInt()) ?: return@withContext null
@@ -138,6 +140,16 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                             } else {
                                 emptyList()
                             }
+                            // Ganze Spur nur bei kurzen Titeln in den Speicher (Stereo float).
+                            val profil = if (bpm != null && pcm.frames() <= 15_000_000) {
+                                ProfilBau.profil(
+                                    pcm.lese(0, pcm.frames()),
+                                    schlaege.downbeats.map { it.toDouble() },
+                                    bpm.toDouble(),
+                                )
+                            } else {
+                                null
+                            }
                             TitelAnalyse(
                                 tonart.name,
                                 tonart.camelot,
@@ -146,6 +158,10 @@ class Spielmodell(app: Application) : AndroidViewModel(app) {
                                 schlaege.beats.toList(),
                                 schlaege.downbeats.toList(),
                                 raster,
+                                profil?.takte?.map { it.toFloat() } ?: emptyList(),
+                                profil?.gesamt?.map { it.toFloat() } ?: emptyList(),
+                                profil?.baender?.map { reihe -> reihe.map { it.toFloat() } } ?: emptyList(),
+                                profil?.chroma?.map { reihe -> reihe.map { it.toFloat() } } ?: emptyList(),
                             )
                         }
                     }
